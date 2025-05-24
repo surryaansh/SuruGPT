@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { IconHeart, IconSend } from '../constants'; // IconPlus removed, IconHeart added
 
@@ -42,7 +43,7 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({ onSendMessage, isLoading, i
           onChange={(e) => setInputValue(e.target.value)}
           onKeyPress={handleKeyPress}
           placeholder={isChatAvailable ? "Chat with SuruGPT..." : "Chat unavailable (API key missing)"}
-          className="flex-grow bg-transparent text-[#EAE6F0] placeholder-[#A09CB0] focus:outline-none px-3 py-2.5 text-sm sm:text-base"
+          className="flex-grow bg-transparent text-[#EAE6F0] placeholder-[#A09CB0] focus:outline-none px-3 py-2.5 text-base" // Changed text-sm sm:text-base to text-base
           disabled={isLoading || !isChatAvailable}
         />
         <button
