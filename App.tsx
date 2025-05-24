@@ -253,7 +253,7 @@ const App: React.FC = () => {
           aria-hidden="true"
         ></div>
       )}
-      <div className="relative z-10 flex flex-col flex-grow h-full bg-[#393641]">
+      <div className="relative z-10 flex flex-col flex-grow h-full w-full bg-[#393641]"> {/* Added w-full */}
         <Header onToggleSidebar={handleToggleSidebar} onNewChat={handleNewChat} />
         <main className="flex-grow flex flex-col overflow-hidden">
           {isMessagesLoading && (
