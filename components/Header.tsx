@@ -1,11 +1,12 @@
 import React from 'react';
-import { IconMenu, IconChevronDown } from '../constants';
+import { IconMenu, IconChevronDown, IconHeart } from '../constants';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
+  onNewChat: () => void; // Added prop for handling new chat
 }
 
-const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
+const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onNewChat }) => {
   return (
     <header className="bg-[#393641] p-3 sm:p-4 flex items-center justify-between sticky top-0 z-20 border-b border-[#5A5666]">
       <button 
@@ -19,8 +20,13 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
         <span>SuruGPT</span>
         <IconChevronDown className="w-5 h-5 ml-1 mt-1 text-[#EAE6F0]" />
       </div>
-      {/* Placeholder for potential right-side icon, e.g., New Chat */}
-      <div className="w-10 h-10"></div> 
+      <button
+        onClick={onNewChat}
+        className="p-2 text-[#EAE6F0] hover:text-[#FF8DC7]"
+        aria-label="Start new chat"
+      >
+        <IconHeart className="w-6 h-6" />
+      </button>
     </header>
   );
 };
