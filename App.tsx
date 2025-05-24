@@ -236,7 +236,7 @@ const App: React.FC = () => {
   const showWelcome = !activeChatId && currentMessages.length === 0 && chatReady && !isSessionsLoading && !isMessagesLoading;
 
   return (
-    <div className="flex flex-col h-screen max-h-screen bg-[#2D2A32] overflow-hidden">
+    <div className="flex flex-col h-full bg-[#2D2A32] overflow-hidden"> {/* Changed h-screen max-h-screen to h-full */}
       <Sidebar 
         isOpen={isSidebarOpen} 
         onClose={handleToggleSidebar} 
