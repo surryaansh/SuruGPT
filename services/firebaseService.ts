@@ -1,3 +1,4 @@
+
 import { initializeApp } from 'firebase/app';
 import {
   getFirestore,
@@ -15,7 +16,7 @@ import {
   Unsubscribe,
   updateDoc
 } from 'firebase/firestore';
-import { firebaseConfig } from './firebaseConfig'; // Your Firebase config
+import { firebaseConfig } from './firebaseConfig'; // Ensure this is a relative path
 import { ChatSession, Message, SenderType } from '../types';
 
 // Initialize Firebase
