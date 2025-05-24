@@ -1,7 +1,7 @@
-// No longer importing OpenAI client-side
-// import OpenAI from 'openai'; 
 
 // Interface for the chunks we'll yield from the stream, consistent with App.tsx needs
+import { Message, SenderType } from '../types'; // Import Message and SenderType
+
 export interface AdaptedStreamingChunk {
   text: string;
 }
@@ -11,22 +11,38 @@ let conversationHistory: { role: 'system' | 'user' | 'assistant'; content: strin
 
 const DEFAULT_SYSTEM_PROMPT = "You are SuruGPT, a helpful and friendly AI assistant. Keep your responses concise and delightful, like a sprinkle of magic! ✨";
 
-// Initializes or resets the local conversation history with a system prompt.
-export const initChatSession = (systemPrompt?: string): boolean => {
+// Initializes or resets the local conversation history with only a system prompt.
+const initializeBaseHistory = (systemPrompt?: string): void => {
   conversationHistory = [{ role: 'system', content: systemPrompt || DEFAULT_SYSTEM_PROMPT }];
   console.log("Local chat session initialized (history cleared with system prompt).");
+};
+
+// Public function to start a new chat session (resets history)
+export const startNewOpenAIChatSession = (systemPrompt?: string): boolean => {
+  initializeBaseHistory(systemPrompt);
   return true;
 };
 
-// Alias for initChatSession, as starting a new chat means resetting local history.
-export const startNewOpenAIChatSession = (systemPrompt?: string): boolean => {
-  return initChatSession(systemPrompt);
+// New function to set the conversation context from an array of app messages
+export const setConversationContextFromAppMessages = (appMessages: Message[], systemPrompt?: string): boolean => {
+  conversationHistory = [{ role: 'system', content: systemPrompt || DEFAULT_SYSTEM_PROMPT }];
+  appMessages.forEach(msg => {
+    conversationHistory.push({
+      role: msg.sender === SenderType.USER ? 'user' : 'assistant',
+      content: msg.text
+    });
+  });
+  console.log("Conversation context set from app messages.");
+  return true;
 };
 
+
 export const sendMessageStream = async (
-  messageText: string
+  messageText: string // This is the new user message text
 ): Promise<AsyncIterable<AdaptedStreamingChunk> | null> => {
-  // Add user's message to local history
+  // Add current user's message to local history right before sending
+  // This assumes the history up to this point (including system prompt and previous messages)
+  // has already been set by startNewOpenAIChatSession or setConversationContextFromAppMessages
   conversationHistory.push({ role: 'user', content: messageText });
 
   try {
@@ -36,11 +52,11 @@ export const sendMessageStream = async (
       headers: {
         'Content-Type': 'application/json',
       },
+      // Send the entire current conversationHistory
       body: JSON.stringify({ messages: conversationHistory }),
     });
 
     if (!response.ok) {
-      // Attempt to read error message from backend if available
       let errorData;
       try {
         errorData = await response.json();
@@ -80,38 +96,52 @@ export const sendMessageStream = async (
             yield { text: chunkText };
           }
         }
+        
         // After the stream is finished, add the AI's full response to the local history
+        // This ensures the history is complete for the next turn.
         if (currentAssistantResponse.trim()) {
-          conversationHistory.push({ role: 'assistant', content: currentAssistantResponse });
+            const lastMessageInHistory = conversationHistory[conversationHistory.length -1];
+            // If the last message was the user's message we just added, append the assistant's response.
+            // Otherwise, if an assistant message was somehow already there (e.g. error in stream handling),
+            // this logic might need adjustment, but usually it's user -> assistant.
+            if (lastMessageInHistory.role === 'user') {
+                 conversationHistory.push({ role: 'assistant', content: currentAssistantResponse });
+            } else if (lastMessageInHistory.role === 'assistant') {
+                // This case might happen if there was partial stream and then completion.
+                // For simplicity, let's assume full replacement or ensure it's a new message.
+                // Given the stream completes fully, we are adding the complete response.
+                // To avoid duplicate assistant messages if stream yields multiple 'done' states (unlikely with fetch),
+                // we'd check if the last message is already this full response.
+                // For now, just push, assuming clean stream completion.
+                if(lastMessageInHistory.content !== currentAssistantResponse) { // Avoid exact duplicates
+                    conversationHistory.push({ role: 'assistant', content: currentAssistantResponse });
+                }
+            }
         } else {
-          // If the stream was empty but successful, we might not add an empty assistant message,
-          // or add a specific placeholder if needed. For now, only add if there's content.
           console.log("Stream ended without new content from AI.");
-          // Optionally yield a message if nothing came
-          // yield { text: "No response from AI."} 
         }
       } finally {
-        // Ensure the final part of a chunk is decoded if the stream ended mid-character
-        const lastChunk = decoder.decode(); // Get any remaining text
+        const lastChunk = decoder.decode(); 
         if (lastChunk) {
             currentAssistantResponse += lastChunk;
             yield { text: lastChunk };
-            // Update history with the very last bit if it completes the message
-            const existingAssistantMsgIndex = conversationHistory.findIndex(msg => msg.role === 'assistant' && msg.content === currentAssistantResponse.slice(0, -lastChunk.length));
-            if (existingAssistantMsgIndex > -1) {
-                conversationHistory[existingAssistantMsgIndex].content = currentAssistantResponse;
-            } else if (!conversationHistory.find(msg => msg.role === 'assistant' && msg.content === currentAssistantResponse) && currentAssistantResponse.trim()) {
-                 // Avoid duplicates if already added
-                 // conversationHistory.push({ role: 'assistant', content: currentAssistantResponse });
-            }
         }
-         if (currentAssistantResponse.trim() && !conversationHistory.find(msg => msg.role === 'assistant' && msg.content === currentAssistantResponse) ) {
-           const lastMessage = conversationHistory[conversationHistory.length -1];
-           if(lastMessage.role === 'assistant') { // if last message is already assistant, update it
-            lastMessage.content = currentAssistantResponse;
-           } else {
-            conversationHistory.push({ role: 'assistant', content: currentAssistantResponse });
-           }
+        // Ensure the complete assistant message is in history if it wasn't empty
+        if (currentAssistantResponse.trim()) {
+            const lastMessage = conversationHistory[conversationHistory.length -1];
+            if(lastMessage && lastMessage.role === 'assistant') { 
+                if (lastMessage.content !== currentAssistantResponse) { // If it's different, update or add
+                    // This logic can get complex if we need to merge. For now, if it exists and is different,
+                    // let's assume it's a new turn or a corrected final version.
+                    // A robust solution might be to find an assistant message with a temporary ID and update it.
+                    // Simpler: if last is assistant, update its content. Otherwise push.
+                    lastMessage.content = currentAssistantResponse; // Update content if already an assistant message
+                }
+            } else if (lastMessage && lastMessage.role === 'user') { // If last was user, this is the AI response
+                conversationHistory.push({ role: 'assistant', content: currentAssistantResponse });
+            } else if (!lastMessage) { // History was empty (only system prompt)
+                 conversationHistory.push({ role: 'assistant', content: currentAssistantResponse });
+            }
         }
       }
     }
@@ -119,8 +149,7 @@ export const sendMessageStream = async (
 
   } catch (error: any) {
     console.error("Error sending message via /api/chat:", error);
-    // Remove the last user message if API call failed
-     if (conversationHistory.length > 0 && conversationHistory[conversationHistory.length -1].role === 'user') {
+    if (conversationHistory.length > 0 && conversationHistory[conversationHistory.length -1].role === 'user') {
         conversationHistory.pop();
     }
     async function* errorStream() {
@@ -130,11 +159,9 @@ export const sendMessageStream = async (
   }
 };
 
-// Chat is "available" if the backend route /api/chat is assumed to be up.
-// The actual check for API key validity is now on the server.
 export const isChatAvailable = (): boolean => {
   return true; 
 };
 
 // Initialize local chat history with default system prompt when service loads
-initChatSession(DEFAULT_SYSTEM_PROMPT);
+initializeBaseHistory(DEFAULT_SYSTEM_PROMPT);
