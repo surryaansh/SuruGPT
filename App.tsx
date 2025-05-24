@@ -131,7 +131,7 @@ const App: React.FC = () => {
     setCurrentMessages(prevMessages => [...prevMessages, userMessageForUI]);
     
     let currentSessionId = activeChatId;
-    let sessionTitleNeedsUpdate = false;
+    // let sessionTitleNeedsUpdate = false; // Not currently used, but keep for potential future logic
 
     try {
         if (!currentSessionId) {
@@ -254,7 +254,7 @@ const App: React.FC = () => {
         ></div>
       )}
       <div className="relative z-10 flex flex-col flex-grow h-full bg-[#393641]">
-        <Header onToggleSidebar={handleToggleSidebar} />
+        <Header onToggleSidebar={handleToggleSidebar} onNewChat={handleNewChat} />
         <main className="flex-grow flex flex-col overflow-hidden">
           {isMessagesLoading && (
             <div className="flex-grow flex items-center justify-center">
