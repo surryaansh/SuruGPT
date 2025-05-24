@@ -10,7 +10,8 @@
   "dependencies": {
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "firebase": "^10.12.4"
+    "firebase": "^10.12.4",
+    "openai": "^4.53.0"
   },
   "devDependencies": {
     "esbuild": "^0.23.0",
