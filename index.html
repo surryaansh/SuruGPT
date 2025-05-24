@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SuruGPT Chat (OpenAI)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Custom scrollbar for webkit browsers */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #393641; /* Softer dark background for track */
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #5A5666; /* Muted purple-gray for thumb */
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #FF8DC7; /* Pink accent on hover */
+    }
+    body {
+      overscroll-behavior-y: contain; /* Prevents pull-to-refresh on mobile */
+      font-family: 'Nunito', sans-serif;
+      background-color: #2D2A32; /* Dark Purple-Gray */
+      color: #EAE6F0; /* Light Lavender White */
+    }
+
+    @keyframes floatHeart {
+      0% {
+        bottom: -30px; /* Start slightly below the container */
+        opacity: 0;
+      }
+      10%, 90% { /* Fade in and stay visible */
+        opacity: 0.7; /* Subtle opacity */
+      }
+      100% {
+        bottom: 100%; /* Float to the top of the parent container */
+        opacity: 0;
+      }
+    }
+
+    .heart-float {
+      position: absolute;
+      opacity: 0; /* Ensure hearts start invisible */
+      animation-name: floatHeart;
+      animation-timing-function: linear;
+      animation-iteration-count: infinite;
+      will-change: bottom, opacity; /* Optimize animation */
+    }
+
+    /* Sidebar Styles */
+    .sidebar {
+      transition: transform 0.3s ease-in-out;
+    }
+    .sidebar-overlay {
+      transition: opacity 0.3s ease-in-out;
+    }
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "react": "https://esm.sh/react@^19.1.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "@vercel/node": "https://esm.sh/@vercel/node@^5.1.16",
+    "openai": "https://esm.sh/openai@^4.103.0"
+  }
+}
+</script>
+</head>
+<body class="antialiased">
+  <div id="root"></div>
+  <script type="module" src="/bundle.js"></script>
+</body>
+</html><link rel="stylesheet" href="index.css">
+<script src="index.tsx" type="module"></script>
