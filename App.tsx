@@ -9,16 +9,16 @@ import Sidebar from './components/Sidebar';
 import { 
   sendMessageStream, 
   isChatAvailable as checkChatAvailability,
-  startNewOpenAIChatSession as resetAiContextWithSystemPrompt, // Renamed for clarity
-  setConversationContextFromAppMessages // Existing function to set AI context
+  startNewOpenAIChatSession as resetAiContextWithSystemPrompt,
+  setConversationContextFromAppMessages
 } from './services/openAIService'; 
 import {
   getChatSessions,
   getMessagesForSession,
   createChatSessionInFirestore,
   addMessageToFirestore,
-  updateChatSessionTitleInFirestore // Optional for later
-} from './services/firebaseService'; // Import Firebase service functions
+  updateChatSessionTitleInFirestore
+} from './services/firebaseService';
 
 const generateChatTitle = (firstMessageText: string): string => {
   if (!firstMessageText) return `Chat @ ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
@@ -40,17 +40,17 @@ const App: React.FC = () => {
   
   const [chatReady, setChatReady] = useState<boolean>(true); 
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+  const [globalContextSummary, setGlobalContextSummary] = useState<string>('');
 
-  // Ref to ensure initial load effects run only once
   const initialLoadComplete = useRef(false);
 
-  // Load chat sessions from Firestore on initial mount
   useEffect(() => {
     if (initialLoadComplete.current) return;
     initialLoadComplete.current = true;
 
     setChatReady(checkChatAvailability()); 
-    resetAiContextWithSystemPrompt(); // Reset AI context on app load before any chat is selected
+    // Initial reset will use default global summary (empty or from its own state if persisted)
+    resetAiContextWithSystemPrompt(undefined, globalContextSummary); 
 
     const loadSessions = async () => {
       setIsSessionsLoading(true);
@@ -59,13 +59,44 @@ const App: React.FC = () => {
         setAllChatSessions(sessions);
       } catch (error) {
         console.error("Failed to load chat sessions:", error);
-        // Optionally set an error state to display to the user
       } finally {
         setIsSessionsLoading(false);
       }
     };
     loadSessions();
-  }, []);
+  }, [globalContextSummary]); // Add globalContextSummary to dependencies if it influences initial reset
+
+  // Effect to generate global context summary from all chat sessions
+  useEffect(() => {
+    if (allChatSessions.length > 0) {
+      const MAX_TITLES_IN_SUMMARY = 3; // Include up to this many distinct recent titles in the summary
+
+      const allSanitizedTitles = allChatSessions
+        .map(s => s.title.replace(/[^\w\s.,!?']/gi, '').trim()) // Basic sanitize and trim
+        .filter(t => t.length > 0); // Filter out empty titles
+      
+      const uniqueRecentTitles: string[] = [];
+      const seenTitles = new Set<string>();
+
+      for (const title of allSanitizedTitles) {
+        if (!seenTitles.has(title)) {
+          seenTitles.add(title);
+          uniqueRecentTitles.push(title);
+          if (uniqueRecentTitles.length >= MAX_TITLES_IN_SUMMARY) {
+            break; 
+          }
+        }
+      }
+      
+      if (uniqueRecentTitles.length > 0) {
+        setGlobalContextSummary(`Key topics from recent chat sessions include: ${uniqueRecentTitles.join('; ')}.`);
+      } else {
+        setGlobalContextSummary(''); // Clear if no suitable titles
+      }
+    } else {
+      setGlobalContextSummary(''); // Clear if no sessions
+    }
+  }, [allChatSessions]);
 
   const handleToggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
@@ -74,25 +105,28 @@ const App: React.FC = () => {
   const handleNewChat = () => { 
     setCurrentMessages([]);
     setActiveChatId(null);
-    resetAiContextWithSystemPrompt(); // Reset AI context for a new chat
+    resetAiContextWithSystemPrompt(undefined, globalContextSummary); 
     setChatReady(checkChatAvailability()); 
     setIsSidebarOpen(false);
   };
 
   const handleSelectChat = useCallback(async (chatId: string) => { 
     if (activeChatId === chatId && currentMessages.length > 0) {
-        setIsSidebarOpen(false); // Just close sidebar if already active and has messages
+        setIsSidebarOpen(false);
         return;
     }
     setActiveChatId(chatId);
-    setCurrentMessages([]); // Clear current messages while new ones load
+    setCurrentMessages([]);
     setIsMessagesLoading(true);
     setIsSidebarOpen(false);
     try {
       const messages = await getMessagesForSession(chatId);
       setCurrentMessages(messages);
-      // Restore conversation history in openAIService for the selected chat.
-      setConversationContextFromAppMessages(messages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)}))); // Ensure JS Date
+      setConversationContextFromAppMessages(
+        messages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})), 
+        undefined, 
+        globalContextSummary
+      );
     } catch (error) {
       console.error(`Failed to load messages for chat ${chatId}:`, error);
       setCurrentMessages([{
@@ -101,11 +135,11 @@ const App: React.FC = () => {
         sender: SenderType.AI,
         timestamp: new Date()
       }]);
-      resetAiContextWithSystemPrompt(); // Reset to default if messages fail to load
+      resetAiContextWithSystemPrompt(undefined, globalContextSummary);
     } finally {
       setIsMessagesLoading(false);
     }
-  }, [activeChatId, currentMessages.length]);
+  }, [activeChatId, currentMessages.length, globalContextSummary]);
 
 
   const handleSendMessage = useCallback(async (text: string) => {
@@ -122,7 +156,7 @@ const App: React.FC = () => {
 
     const tempUserMessageId = crypto.randomUUID();
     const userMessageForUI: Message = {
-      id: tempUserMessageId, // Temporary ID for UI
+      id: tempUserMessageId,
       text,
       sender: SenderType.USER,
       timestamp: new Date(),
@@ -131,28 +165,30 @@ const App: React.FC = () => {
     setCurrentMessages(prevMessages => [...prevMessages, userMessageForUI]);
     
     let currentSessionId = activeChatId;
-    // let sessionTitleNeedsUpdate = false; // Not currently used, but keep for potential future logic
 
     try {
         if (!currentSessionId) {
-          // Create new session in Firestore
           const title = generateChatTitle(text);
           const newSessionFromDb = await createChatSessionInFirestore(title, text);
           currentSessionId = newSessionFromDb.id;
           
-          // Save the first user message to this new session
           const savedUserMessage = await addMessageToFirestore(currentSessionId, { text, sender: SenderType.USER });
           
-          // Update UI with new session and replace temp user message with saved one
           setAllChatSessions(prevSessions => [newSessionFromDb, ...prevSessions]);
           setActiveChatId(currentSessionId);
-          setCurrentMessages([savedUserMessage]); // Start with the saved user message
-          setConversationContextFromAppMessages([savedUserMessage].map(m => ({...m, timestamp: new Date(m.timestamp as Date)}))); // Set context with first message
+          // For a new chat, the context was already set by handleNewChat (or initial load).
+          // Now, we add the first user message to UI. The AI service history will get this message when sendMessageStream is called.
+          setCurrentMessages([savedUserMessage]); 
+          // Explicitly set context with just the first message for the new session to ensure openAIService is aligned
+          // This is crucial for the very first message in a new chat.
+          setConversationContextFromAppMessages(
+            [savedUserMessage].map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
+            undefined,
+            globalContextSummary
+          );
           
         } else {
-          // Add user message to existing session in Firestore
           const savedUserMessage = await addMessageToFirestore(currentSessionId, { text, sender: SenderType.USER });
-          // Update UI: replace temp message with saved one
            setCurrentMessages(prevMessages => 
             prevMessages.map(msg => msg.id === tempUserMessageId ? savedUserMessage : msg)
           );
@@ -165,10 +201,9 @@ const App: React.FC = () => {
             sender: SenderType.AI,
             timestamp: new Date()
         }]);
-        setIsLoadingAiResponse(false); // Stop AI loading if user message failed to save
+        setIsLoadingAiResponse(false);
         return;
     }
-
 
     setIsLoadingAiResponse(true);
     const tempAiMessageId = crypto.randomUUID();
@@ -179,9 +214,6 @@ const App: React.FC = () => {
 
     let accumulatedAiText = '';
     try {
-      // The openAIService's conversationHistory should have been set by handleSelectChat or with the first user message.
-      // Now, we add the current user's message to that history before calling the AI.
-      // This is now handled inside openAIService.sendMessageStream
       const stream = await sendMessageStream(text); 
 
       if (stream) {
@@ -197,9 +229,7 @@ const App: React.FC = () => {
         
         if (currentSessionId && accumulatedAiText.trim()) {
           await addMessageToFirestore(currentSessionId, { text: accumulatedAiText, sender: SenderType.AI });
-          // No need to update currentMessages again here if streaming update was fine
         } else if (currentSessionId && accumulatedAiText.trim() === '') {
-            // AI responded with empty string
             const fallbackMsg = "SuruGPT didn't provide a text response. Perhaps the request was unclear? 🤔";
             accumulatedAiText = fallbackMsg;
             setCurrentMessages(prevMessages =>
@@ -231,12 +261,12 @@ const App: React.FC = () => {
     } finally {
       setIsLoadingAiResponse(false);
     }
-  }, [chatReady, activeChatId]); // Removed currentMessages from dependency to avoid issues with optimistic updates
+  }, [chatReady, activeChatId, globalContextSummary]);
 
   const showWelcome = !activeChatId && currentMessages.length === 0 && chatReady && !isSessionsLoading && !isMessagesLoading;
 
   return (
-    <div className="flex flex-col h-full bg-[#2D2A32] overflow-hidden"> {/* Changed h-screen max-h-screen to h-full */}
+    <div className="flex flex-col h-full bg-[#2D2A32] overflow-hidden">
       <Sidebar 
         isOpen={isSidebarOpen} 
         onClose={handleToggleSidebar} 
@@ -253,7 +283,7 @@ const App: React.FC = () => {
           aria-hidden="true"
         ></div>
       )}
-      <div className="relative z-10 flex flex-col flex-grow h-full w-full bg-[#393641]"> {/* Added w-full */}
+      <div className="relative z-10 flex flex-col flex-grow h-full w-full bg-[#393641]">
         <Header onToggleSidebar={handleToggleSidebar} onNewChat={handleNewChat} />
         <main className="flex-grow flex flex-col overflow-hidden">
           {isMessagesLoading && (
