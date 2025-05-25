@@ -236,7 +236,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <input type="text" placeholder="Search chats" value={searchTerm} onChange={handleSearchChange} className="w-full p-2.5 pl-10 bg-[#4A4754] text-[#EAE6F0] placeholder-[#A09CB0] rounded-md text-sm border border-[#5A5666] focus:outline-none focus:border-[#FF8DC7] focus:ring-1 focus:ring-[#FF8DC7]" aria-label="Search chat history"/>
           </div>
 
-          <div className="flex-grow overflow-y-auto pr-1 mb-4">
+          <div className="flex-grow overflow-y-auto px-1 mb-4">
             {isSearching ? <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">Searching chats...</p>
               : isLoading && !searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">Loading chats...</p>
               : displayedSessions.length > 0 ? (
