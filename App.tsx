@@ -19,6 +19,8 @@ import {
   addMessageToFirestore,
   updateChatSessionTitleInFirestore
 } from './services/firebaseService';
+import { IS_FIREBASE_CONFIG_PLACEHOLDER } from './services/firebaseConfig'; // Import the check
+import { IconSuru } from './constants'; // For the error message
 
 const generateChatTitle = (firstMessageText: string): string => {
   if (!firstMessageText) return `Chat @ ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
@@ -35,21 +37,31 @@ const App: React.FC = () => {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   
   const [isLoadingAiResponse, setIsLoadingAiResponse] = useState<boolean>(false);
-  const [isSessionsLoading, setIsSessionsLoading] = useState<boolean>(true);
+  const [isSessionsLoading, setIsSessionsLoading] = useState<boolean>(true); // Default to true
   const [isMessagesLoading, setIsMessagesLoading] = useState<boolean>(false);
   
   const [chatReady, setChatReady] = useState<boolean>(true); 
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [globalContextSummary, setGlobalContextSummary] = useState<string>('');
 
+  const [firebaseConfigValid] = useState<boolean>(!IS_FIREBASE_CONFIG_PLACEHOLDER); // Check config validity
+
   const initialLoadComplete = useRef(false);
 
   useEffect(() => {
+    if (!firebaseConfigValid) {
+      // If Firebase config is not valid, don't attempt to load sessions or initialize chat further.
+      // The main component will render an error message.
+      setIsSessionsLoading(false); // Ensure loading states are off
+      setChatReady(false); // Indicate chat (especially history) isn't ready
+      console.warn("Firebase configuration is invalid. Please update services/firebaseConfig.ts.");
+      return;
+    }
+
     if (initialLoadComplete.current) return;
     initialLoadComplete.current = true;
 
     setChatReady(checkChatAvailability()); 
-    // Initial reset will use default global summary (empty or from its own state if persisted)
     resetAiContextWithSystemPrompt(undefined, globalContextSummary); 
 
     const loadSessions = async () => {
@@ -58,22 +70,26 @@ const App: React.FC = () => {
         const sessions = await getChatSessions();
         setAllChatSessions(sessions);
       } catch (error) {
-        console.error("Failed to load chat sessions:", error);
+        console.error("Failed to load chat sessions (ensure Firebase config is correct and Firestore is enabled):", error);
+        // Optionally, set an error state to display to the user within the main UI if needed
       } finally {
         setIsSessionsLoading(false);
       }
     };
     loadSessions();
-  }, [globalContextSummary]); // Add globalContextSummary to dependencies if it influences initial reset
+  }, [firebaseConfigValid, globalContextSummary]); // Add firebaseConfigValid to dependencies
 
   // Effect to generate global context summary from all chat sessions
   useEffect(() => {
-    if (allChatSessions.length > 0) {
-      const MAX_TITLES_IN_SUMMARY = 3; // Include up to this many distinct recent titles in the summary
-
+    if (!firebaseConfigValid || allChatSessions.length === 0) {
+      setGlobalContextSummary('');
+      return;
+    }
+    // ... (rest of the globalContextSummary effect remains the same)
+      const MAX_TITLES_IN_SUMMARY = 3; 
       const allSanitizedTitles = allChatSessions
-        .map(s => s.title.replace(/[^\w\s.,!?']/gi, '').trim()) // Basic sanitize and trim
-        .filter(t => t.length > 0); // Filter out empty titles
+        .map(s => s.title.replace(/[^\w\\s.,!?']/gi, '').trim()) 
+        .filter(t => t.length > 0); 
       
       const uniqueRecentTitles: string[] = [];
       const seenTitles = new Set<string>();
@@ -91,18 +107,16 @@ const App: React.FC = () => {
       if (uniqueRecentTitles.length > 0) {
         setGlobalContextSummary(`Key topics from recent chat sessions include: ${uniqueRecentTitles.join('; ')}.`);
       } else {
-        setGlobalContextSummary(''); // Clear if no suitable titles
+        setGlobalContextSummary(''); 
       }
-    } else {
-      setGlobalContextSummary(''); // Clear if no sessions
-    }
-  }, [allChatSessions]);
+  }, [allChatSessions, firebaseConfigValid]);
 
   const handleToggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
   const handleNewChat = () => { 
+    if (!firebaseConfigValid) return; // Prevent new chat if config is bad
     setCurrentMessages([]);
     setActiveChatId(null);
     resetAiContextWithSystemPrompt(undefined, globalContextSummary); 
@@ -111,6 +125,8 @@ const App: React.FC = () => {
   };
 
   const handleSelectChat = useCallback(async (chatId: string) => { 
+    if (!firebaseConfigValid) return; // Prevent selecting chat if config is bad
+
     if (activeChatId === chatId && currentMessages.length > 0) {
         setIsSidebarOpen(false);
         return;
@@ -139,11 +155,25 @@ const App: React.FC = () => {
     } finally {
       setIsMessagesLoading(false);
     }
-  }, [activeChatId, currentMessages.length, globalContextSummary]);
+  }, [activeChatId, currentMessages.length, globalContextSummary, firebaseConfigValid]);
 
 
   const handleSendMessage = useCallback(async (text: string) => {
-    if (!chatReady) {
+    if (!firebaseConfigValid) {
+      console.warn("Firebase is not configured. Message not sent to Firestore.");
+      setCurrentMessages(prev => [...prev, {
+        id: crypto.randomUUID(),
+        text: "Message not saved: Firebase is not configured. Please update services/firebaseConfig.ts.",
+        sender: SenderType.AI,
+        timestamp: new Date()
+      }]);
+      // Allow AI interaction even if not saving? For now, this message informs user.
+      // If we want to completely block, we can return early.
+      // Let's proceed with AI call but acknowledge saving will fail or skip.
+      // The UI error is more prominent.
+    }
+    
+    if (!chatReady && firebaseConfigValid) { // Modified condition: if firebase is valid but chat (OpenAI) isn't ready
       console.warn("Chat is not ready. Cannot send message.");
       setCurrentMessages(prev => [...prev, {
         id: crypto.randomUUID(),
@@ -166,44 +196,43 @@ const App: React.FC = () => {
     
     let currentSessionId = activeChatId;
 
-    try {
-        if (!currentSessionId) {
-          const title = generateChatTitle(text);
-          const newSessionFromDb = await createChatSessionInFirestore(title, text);
-          currentSessionId = newSessionFromDb.id;
-          
-          const savedUserMessage = await addMessageToFirestore(currentSessionId, { text, sender: SenderType.USER });
-          
-          setAllChatSessions(prevSessions => [newSessionFromDb, ...prevSessions]);
-          setActiveChatId(currentSessionId);
-          // For a new chat, the context was already set by handleNewChat (or initial load).
-          // Now, we add the first user message to UI. The AI service history will get this message when sendMessageStream is called.
-          setCurrentMessages([savedUserMessage]); 
-          // Explicitly set context with just the first message for the new session to ensure openAIService is aligned
-          // This is crucial for the very first message in a new chat.
-          setConversationContextFromAppMessages(
-            [savedUserMessage].map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
-            undefined,
-            globalContextSummary
-          );
-          
-        } else {
-          const savedUserMessage = await addMessageToFirestore(currentSessionId, { text, sender: SenderType.USER });
-           setCurrentMessages(prevMessages => 
-            prevMessages.map(msg => msg.id === tempUserMessageId ? savedUserMessage : msg)
-          );
-        }
-    } catch (error) {
-        console.error("Error saving user message to Firestore:", error);
-        setCurrentMessages(prev => [...prev, {
-            id: crypto.randomUUID(),
-            text: "Error saving your message. Please try again.",
-            sender: SenderType.AI,
-            timestamp: new Date()
-        }]);
-        setIsLoadingAiResponse(false);
-        return;
+    if (firebaseConfigValid) { // Only interact with Firestore if config is valid
+      try {
+          if (!currentSessionId) {
+            const title = generateChatTitle(text);
+            const newSessionFromDb = await createChatSessionInFirestore(title, text);
+            currentSessionId = newSessionFromDb.id;
+            
+            const savedUserMessage = await addMessageToFirestore(currentSessionId, { text, sender: SenderType.USER });
+            
+            setAllChatSessions(prevSessions => [newSessionFromDb, ...prevSessions]);
+            setActiveChatId(currentSessionId);
+            setCurrentMessages([savedUserMessage]); 
+            setConversationContextFromAppMessages(
+              [savedUserMessage].map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
+              undefined,
+              globalContextSummary
+            );
+            
+          } else {
+            const savedUserMessage = await addMessageToFirestore(currentSessionId, { text, sender: SenderType.USER });
+             setCurrentMessages(prevMessages => 
+              prevMessages.map(msg => msg.id === tempUserMessageId ? savedUserMessage : msg)
+            );
+          }
+      } catch (error) {
+          console.error("Error saving user message to Firestore:", error);
+          setCurrentMessages(prev => [...prev, {
+              id: crypto.randomUUID(),
+              text: "Error saving your message. Please try again.",
+              sender: SenderType.AI,
+              timestamp: new Date()
+          }]);
+          setIsLoadingAiResponse(false); // Ensure loading stops on Firestore error before AI call
+          return; // Stop if saving user message fails
+      }
     }
+
 
     setIsLoadingAiResponse(true);
     const tempAiMessageId = crypto.randomUUID();
@@ -227,9 +256,9 @@ const App: React.FC = () => {
           }
         }
         
-        if (currentSessionId && accumulatedAiText.trim()) {
+        if (firebaseConfigValid && currentSessionId && accumulatedAiText.trim()) {
           await addMessageToFirestore(currentSessionId, { text: accumulatedAiText, sender: SenderType.AI });
-        } else if (currentSessionId && accumulatedAiText.trim() === '') {
+        } else if (firebaseConfigValid && currentSessionId && accumulatedAiText.trim() === '') {
             const fallbackMsg = "SuruGPT didn't provide a text response. Perhaps the request was unclear? 🤔";
             accumulatedAiText = fallbackMsg;
             setCurrentMessages(prevMessages =>
@@ -244,7 +273,7 @@ const App: React.FC = () => {
         setCurrentMessages(prevMessages =>
             prevMessages.map(msg => (msg.id === tempAiMessageId ? { ...msg, text: errorMsg, timestamp: new Date() } : msg))
         );
-        if (currentSessionId) {
+        if (firebaseConfigValid && currentSessionId) {
             await addMessageToFirestore(currentSessionId, { text: errorMsg, sender: SenderType.AI });
         }
       }
@@ -255,13 +284,44 @@ const App: React.FC = () => {
       setCurrentMessages(prevMessages =>
         prevMessages.map(msg => (msg.id === tempAiMessageId ? { ...msg, text: errorText, timestamp: new Date() } : msg))
       );
-       if (currentSessionId) {
+       if (firebaseConfigValid && currentSessionId) {
             await addMessageToFirestore(currentSessionId, { text: errorText, sender: SenderType.AI });
         }
     } finally {
       setIsLoadingAiResponse(false);
     }
-  }, [chatReady, activeChatId, globalContextSummary]);
+  }, [chatReady, activeChatId, globalContextSummary, firebaseConfigValid]);
+
+  if (!firebaseConfigValid) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center bg-[#2D2A32] text-[#EAE6F0] p-8 text-center overflow-auto">
+        <IconSuru className="w-20 h-20 sm:w-24 sm:h-24 text-[#FF8DC7] mb-6" />
+        <h1 className="text-2xl sm:text-3xl font-bold mb-4">Firebase Configuration Required</h1>
+        <p className="text-lg mb-2">
+          The application cannot connect to Firebase because the configuration is missing or uses placeholder values.
+        </p>
+        <p className="text-md mb-6 max-w-xl">
+          Please update the <code className="bg-[#393641] px-1.5 py-1 rounded text-[#FF8DC7] text-sm">services/firebaseConfig.ts</code> file 
+          with your actual Firebase project credentials.
+        </p>
+        <div className="bg-[#393641] p-4 rounded-lg text-left text-xs sm:text-sm max-w-xl w-full">
+          <p className="font-semibold mb-2">Where to find your Firebase config:</p>
+          <ol className="list-decimal list-inside space-y-1 text-[#C0BCCF]">
+            <li>Go to the <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-[#FF8DC7] underline hover:text-opacity-80">Firebase Console</a>.</li>
+            <li>Select your project.</li>
+            <li>Click the gear icon (Project settings) near "Project Overview".</li>
+            <li>In the "General" tab, scroll to "Your apps".</li>
+            <li>Select your web app (or add one if it doesn't exist).</li>
+            <li>Under "SDK setup and configuration", choose "Config".</li>
+            <li>Copy the configuration object and paste its values into <code className="bg-[#2D2A32] px-1 py-0.5 rounded text-[#FF8DC7]">services/firebaseConfig.ts</code>.</li>
+          </ol>
+        </div>
+         <p className="text-xs text-[#A09CB0] mt-6">
+            After updating the configuration, please refresh this page.
+          </p>
+      </div>
+    );
+  }
 
   const showWelcome = !activeChatId && currentMessages.length === 0 && chatReady && !isSessionsLoading && !isMessagesLoading;
 
@@ -283,7 +343,7 @@ const App: React.FC = () => {
           aria-hidden="true"
         ></div>
       )}
-      <div className="relative z-10 flex flex-col flex-grow h-full w-full bg-[#393641]">
+      <div className="relative z-10 flex flex-col flex-grow h-full w-full bg-[#393641]"> {/* Changed from #2D2A32 to #393641 to match inner components */}
         <Header onToggleSidebar={handleToggleSidebar} onNewChat={handleNewChat} />
         <main className="flex-grow flex flex-col overflow-hidden">
           {isMessagesLoading && (
