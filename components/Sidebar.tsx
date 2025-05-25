@@ -293,9 +293,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                           {editingSessionId !== chat.id && (
                             <button
                               ref={el => { if(el) ellipsisRefs.current[chat.id] = el; }}
+                              // FIX: Changed `group` to `chat` in onClick handler
                               onClick={(e) => handleEllipsisClick(e, chat)}
+                              // FIX: Changed `group.id` to `chat.id` in className condition
                               className={`p-0.5 text-[#A09CB0] hover:text-[#FF8DC7] rounded-md focus:outline-none focus:ring-1 focus:ring-[#FF8DC7] flex-shrink-0 transition-opacity 
                                   ${activeContextMenuSessionId === chat.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`} // p-1 to p-0.5
+                              // FIX: Changed `group.title` to `chat.title` in aria-label
                               aria-label={`More options for chat: ${chat.title}`}
                               aria-haspopup="true"
                               aria-expanded={activeContextMenuSessionId === chat.id}
