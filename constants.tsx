@@ -46,9 +46,15 @@ export const IconSearch: React.FC<{ className?: string }> = ({ className = "w-5 
   </svg>
 );
 
-export const IconEdit: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
+export const IconPencil: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+  </svg>
+);
+
+export const IconNewChat: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
+ <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
   </svg>
 );
 
@@ -59,14 +65,12 @@ export const IconSend: React.FC<{ className?: string }> = ({ className = "w-5 h-
   </svg>
 );
 
-// IconKawaiiSuru definition is kept in case it's needed later.
 export const IconKawaiiSuru: React.FC<{ className?: string }> = ({ className = "w-6 h-6 text-[#FF8DC7]" }) => (
   <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
     <path d="M50 10C27.909 10 10 27.909 10 50C10 72.091 27.909 90 50 90C72.091 90 90 72.091 90 50C90 27.909 72.091 10 50 10Z" fill="currentColor"/>
     <circle cx="35" cy="45" r="8" fill="#EAE6F0"/>
     <circle cx="65" cy="45" r="8" fill="#EAE6F0"/>
     <path d="M30 62C30 62 38 70 50 70C62 70 70 62 70 62" stroke="#EAE6F0" strokeWidth="5" strokeLinecap="round"/>
-    {/* Optional blush marks */}
     <ellipse cx="25" cy="58" rx="7" ry="4" fill="#FFB6C1" opacity="0.6"/>
     <ellipse cx="75" cy="58" rx="7" ry="4" fill="#FFB6C1" opacity="0.6"/>
   </svg>
@@ -81,7 +85,6 @@ export const IconSuru: React.FC<{ className?: string }> = ({ className = "w-6 h-
     </svg>
 );
 
-
 export const IconUser: React.FC<{ className?: string }> = ({ className = "w-6 h-6 text-[#EAE6F0]" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
     <path fillRule="evenodd" d="M18.685 19.097A9.723 9.723 0 0 0 21.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 0 0 3.065 7.097A9.716 9.716 0 0 0 12 21.75a9.716 9.716 0 0 0 6.685-2.653Zm-12.54-1.285A7.486 7.486 0 0 1 12 15a7.486 7.486 0 0 1 5.855 2.812A8.224 8.224 0 0 1 12 20.25a8.224 8.224 0 0 1-5.855-2.438ZM15.75 9a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" clipRule="evenodd" />
@@ -91,13 +94,12 @@ export const IconUser: React.FC<{ className?: string }> = ({ className = "w-6 h-
 export const IconHeart: React.FC<{ className?: string, style?: React.CSSProperties }> = ({ className = "w-6 h-6 text-[#FF8DC7]", style }) => (
   <svg 
     xmlns="http://www.w3.org/2000/svg" 
-    viewBox="0 0 24 24" // Standard 24x24 viewbox
+    viewBox="0 0 24 24"
     fill="currentColor" 
-    className={className} // Default color and size can be overridden by className
+    className={className}
     style={style}
     aria-hidden="true"
   >
-    {/* Simplified heart path for a button, original path was complex for floating animation */}
     <path fillRule="evenodd" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" clipRule="evenodd" />
   </svg>
 );
@@ -108,6 +110,10 @@ export const IconEllipsisVertical: React.FC<{ className?: string }> = ({ classNa
   </svg>
 );
 
+export const IconTrash: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12.56 0c1.153 0 2.242.078 3.324.214m9.236-1.003H4.827a2.25 2.25 0 0 0-2.231 2.079l.162 1.947m5.569 0H9.26" />
+  </svg>
+);
 
-// Alias for the active AI icon
 export const IconAI = IconSuru;
