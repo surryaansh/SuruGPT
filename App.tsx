@@ -17,17 +17,62 @@ import {
   getMessagesForSession,
   createChatSessionInFirestore,
   addMessageToFirestore,
-  updateChatSessionTitleInFirestore
+  // updateChatSessionTitleInFirestore // Not used currently, but available
 } from './services/firebaseService';
 
-const generateChatTitle = (firstMessageText: string): string => {
+const summarizeTextForTitle = async (text: string): Promise<string | null> => {
+  console.log("[summarizeTextForTitle] Attempting to summarize:", text);
+  try {
+    const response = await fetch('/api/summarize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ textToSummarize: text }),
+    });
+    console.log('[summarizeTextForTitle] API Response Status:', response.status, response.statusText);
+    if (!response.ok) {
+      const errorBody = await response.text(); // Use .text() for more versatile error body
+      console.error('[summarizeTextForTitle] Summarization API error. Status:', response.status, 'Body:', errorBody);
+      return null;
+    }
+    const data = await response.json();
+    console.log('[summarizeTextForTitle] API Response Data:', data);
+    if (data && data.summary && typeof data.summary === 'string' && data.summary.trim() !== "") {
+      return data.summary.trim();
+    }
+    console.warn('[summarizeTextForTitle] Summary was null, empty, or not a string. Data received:', data);
+    return null;
+  } catch (error) {
+    console.error('[summarizeTextForTitle] Failed to fetch summary due to network or parsing error:', error);
+    return null;
+  }
+};
+
+const generateFallbackTitle = (firstMessageText: string): string => {
   if (!firstMessageText) return `Chat @ ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   const words = firstMessageText.split(' ');
-  if (words.length > 4) {
-    return words.slice(0, 4).join(' ') + '...';
+  if (words.length > 5) { // Keep fallback slightly longer if needed
+    return words.slice(0, 5).join(' ') + '...';
   }
   return firstMessageText;
 };
+
+const generateChatTitle = async (firstMessageText: string): Promise<string> => {
+  const timestampTitle = `Chat @ ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  if (!firstMessageText || firstMessageText.trim() === "") {
+    console.log("[generateChatTitle] No first message text, using timestamp title.");
+    return timestampTitle;
+  }
+  console.log("[generateChatTitle] Attempting to generate title for:", `"${firstMessageText}"`);
+  const summary = await summarizeTextForTitle(firstMessageText);
+  if (summary) { 
+    console.log("[generateChatTitle] Using summarized title:", `"${summary}"`);
+    return summary;
+  }
+  const fallback = generateFallbackTitle(firstMessageText);
+  console.log("[generateChatTitle] Summarization failed or returned empty, using fallback title:", `"${fallback}"`);
+  return fallback;
+};
+
 
 const App: React.FC = () => {
   const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
@@ -41,13 +86,12 @@ const App: React.FC = () => {
   const [chatReady, setChatReady] = useState<boolean>(true); 
   
   const [isDesktopView, setIsDesktopView] = useState(window.innerWidth >= 768); // md breakpoint (768px)
-  // Default sidebar to open. A useEffect will correct this if it's not a desktop view on initial load.
   const [isSidebarOpen, setIsSidebarOpen] = useState(true); 
 
   const [globalContextSummary, setGlobalContextSummary] = useState<string>('');
 
   const initialLoadComplete = useRef(false);
-  const initialViewSetupDone = useRef(false); // To ensure initial sidebar/view setup runs once
+  const initialViewSetupDone = useRef(false); 
 
   useEffect(() => {
     const handleResizeAndUpdateInitialView = () => {
@@ -55,23 +99,18 @@ const App: React.FC = () => {
       setIsDesktopView(currentIsDesktop);
 
       if (!initialViewSetupDone.current) {
-        // This block runs only once on initial mount
         if (!currentIsDesktop) {
-          // If, after checking window.innerWidth properly in the effect,
-          // we find it's NOT desktop, then close the sidebar.
-          // Otherwise, it remains open (as initialized by useState(true)).
           setIsSidebarOpen(false);
         }
         initialViewSetupDone.current = true;
       }
-      // On subsequent resizes, isSidebarOpen is NOT changed here, preserving user's interactions.
     };
 
-    handleResizeAndUpdateInitialView(); // Call on mount to set initial states correctly
+    handleResizeAndUpdateInitialView(); 
 
     window.addEventListener('resize', handleResizeAndUpdateInitialView);
     return () => window.removeEventListener('resize', handleResizeAndUpdateInitialView);
-  }, []); // Empty dependency array ensures this logic runs once for setup and then for resizes.
+  }, []); 
 
 
   useEffect(() => {
@@ -134,20 +173,20 @@ const App: React.FC = () => {
     setActiveChatId(null);
     resetAiContextWithSystemPrompt(undefined, globalContextSummary); 
     setChatReady(checkChatAvailability()); 
-    if (!isDesktopView) { // Close sidebar on mobile after new chat
+    if (!isDesktopView) {
         setIsSidebarOpen(false);
     }
   };
 
   const handleSelectChat = useCallback(async (chatId: string) => { 
     if (activeChatId === chatId && currentMessages.length > 0) {
-        if (!isDesktopView) setIsSidebarOpen(false); // Close sidebar on mobile if same chat selected
+        if (!isDesktopView) setIsSidebarOpen(false); 
         return;
     }
     setActiveChatId(chatId);
     setCurrentMessages([]);
     setIsMessagesLoading(true);
-    if (!isDesktopView) setIsSidebarOpen(false); // Close sidebar on mobile when a chat is selected
+    if (!isDesktopView) setIsSidebarOpen(false); 
     try {
       const messages = await getMessagesForSession(chatId);
       setCurrentMessages(messages);
@@ -197,7 +236,7 @@ const App: React.FC = () => {
 
     try {
         if (!currentSessionId) {
-          const title = generateChatTitle(text);
+          const title = await generateChatTitle(text); // Now async
           const newSessionFromDb = await createChatSessionInFirestore(title, text);
           currentSessionId = newSessionFromDb.id;
           
@@ -205,6 +244,7 @@ const App: React.FC = () => {
           
           setAllChatSessions(prevSessions => [newSessionFromDb, ...prevSessions]);
           setActiveChatId(currentSessionId);
+          // Replace temp user message with saved one, or set initial messages for new chat
           setCurrentMessages([savedUserMessage]); 
           setConversationContextFromAppMessages(
             [savedUserMessage].map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
@@ -219,10 +259,10 @@ const App: React.FC = () => {
           );
         }
     } catch (error) {
-        console.error("Error saving user message to Firestore:", error);
+        console.error("Error saving user message to Firestore or generating title:", error);
         setCurrentMessages(prev => [...prev, {
             id: crypto.randomUUID(),
-            text: "Error saving your message. Please try again.",
+            text: "Error saving your message or starting chat. Please try again.",
             sender: SenderType.AI,
             timestamp: new Date()
         }]);
@@ -301,7 +341,6 @@ const App: React.FC = () => {
         onSelectChat={handleSelectChat}
         isLoading={isSessionsLoading}
       />
-      {/* Overlay for mobile/tablet when sidebar is open */}
       {isSidebarOpen && !isDesktopView && (
         <div 
           className="fixed inset-0 bg-black/50 z-30 sidebar-overlay" 
@@ -309,10 +348,9 @@ const App: React.FC = () => {
           aria-hidden="true"
         ></div>
       )}
-      {/* Main content area that shifts on desktop */}
       <div 
         className={`relative z-10 flex flex-col flex-grow h-full bg-[#393641] transition-all duration-300 ease-in-out ${
-          (isSidebarOpen && isDesktopView) ? 'md:ml-64' : 'ml-0' // Sidebar width for md+ is w-64 (256px)
+          (isSidebarOpen && isDesktopView) ? 'md:ml-64' : 'ml-0'
         }`}
       >
         <Header onToggleSidebar={handleToggleSidebar} onNewChat={handleNewChat} />
