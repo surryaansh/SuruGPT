@@ -15,7 +15,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isCurrentlyLoading }
         {/* Conditional rendering for AI loading state OR actual message text */}
         {(!isUser && isCurrentlyLoading) ? (
           <div className="py-1 px-0"> {/* Style for loading dots */}
-            <p className="text-sm">
+            <p className="text-sm"> {/* Loading dots kept at text-sm for subtlety */}
               <span className="animate-pulse text-[#FF8DC7]">●</span>
               <span className="animate-pulse delay-150 text-[#FF8DC7] ml-0.5">●</span>
               <span className="animate-pulse delay-300 text-[#FF8DC7] ml-0.5">●</span>
@@ -29,7 +29,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isCurrentlyLoading }
                 : 'py-1 px-0' // AI message style (transparent background)
             }`}
           >
-            <p className="text-sm leading-relaxed whitespace-pre-wrap text-[#EAE6F0]">
+            <p className="text-lg leading-relaxed whitespace-pre-wrap text-[#EAE6F0]">
               {message.text}
             </p>
           </div>
