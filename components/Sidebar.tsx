@@ -82,7 +82,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div
-      className={`sidebar fixed top-0 left-0 h-full w-64 sm:w-72 bg-[#2D2A32] text-[#EAE6F0] p-5 z-40 transform ${
+      className={`sidebar fixed top-0 left-0 h-full w-56 sm:w-64 bg-[#2D2A32] text-[#EAE6F0] p-5 z-40 transform ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
       }`}
       role="dialog"
