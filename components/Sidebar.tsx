@@ -52,7 +52,7 @@ const groupChatSessionsByDate = (sessions: ChatSession[]): GroupedChatSessions[]
   return Object.entries(groups).map(([heading, chats]) => ({ heading, chats })).filter(group => group.chats.length > 0);
 };
 
-const MENU_WIDTH = 150; // px, reduced from 160
+const MENU_WIDTH = 160; // px
 
 const Sidebar: React.FC<SidebarProps> = ({
   isOpen, onClose, onNewChat, chatSessions, activeChatId, onSelectChat,
@@ -131,21 +131,19 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         let top = buttonRect.bottom + verticalOffset;
         let left = buttonRect.right + horizontalOffset;
-        
-        const menuHeight = contextMenuRef.current?.offsetHeight || 100; // Estimate height
 
         // Boundary checks
-        if (left + MENU_WIDTH > window.innerWidth - 10) { // 10px buffer from edge
-            left = buttonRect.left - MENU_WIDTH - horizontalOffset; 
+        if (left + MENU_WIDTH > window.innerWidth) { // If menu goes off-screen to the right
+            left = buttonRect.left - MENU_WIDTH - horizontalOffset; // Position to the left of the button
         }
-        if (left < 10) { 
-            left = 10; 
+        if (left < 0) { // If menu still goes off-screen to the left (e.g. sidebar is very narrow or button is at far left)
+            left = horizontalOffset; // Fallback to a small offset from viewport edge
         }
-        if (top + menuHeight > window.innerHeight -10) { 
-             top = buttonRect.top - menuHeight - verticalOffset; 
+        if (top + (contextMenuRef.current?.offsetHeight || 100) > window.innerHeight) { // If menu goes off-screen to the bottom
+             top = buttonRect.top - (contextMenuRef.current?.offsetHeight || 100) - verticalOffset; // Position above the button
         }
-         if (top < 10) { 
-            top = 10; 
+         if (top < 0) { // If menu still goes off-screen to the top
+            top = verticalOffset; // Fallback to a small offset from viewport edge
         }
 
 
@@ -211,44 +209,42 @@ const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       <div
-        className={`sidebar fixed top-0 left-0 h-full w-56 sm:w-64 bg-[#2D2A32] text-[#EAE6F0] p-4 z-40 transform ${ // p-5 to p-4
+        className={`sidebar fixed top-0 left-0 h-full w-56 sm:w-64 bg-[#2D2A32] text-[#EAE6F0] p-5 z-40 transform ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`} role="dialog" aria-modal="true" aria-hidden={!isOpen}
       >
         <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between mb-3 pt-1"> {/* mb-4 to mb-3 */}
-            <IconHeart className="w-6 h-6 text-[#FF8DC7]" /> {/* w-7 h-7 to w-6 h-6 */}
+          <div className="flex items-center justify-between mb-4 pt-1">
+            <IconHeart className="w-7 h-7 text-[#FF8DC7]" />
             <div className="relative group">
               <button onClick={onClose} className="p-1 text-[#A09CB0] hover:text-[#FF8DC7]" aria-label="Close sidebar">
-                <IconSidebarClose className="w-5 h-5" /> {/* w-6 h-6 to w-5 h-5 */}
+                <IconSidebarClose className="w-6 h-6" />
               </button>
               <span className="absolute right-0 top-full mt-2 w-max px-2 py-1 bg-[#393641] text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">Close sidebar</span>
             </div>
           </div>
 
-          <button onClick={onNewChat} className="w-full flex items-center text-left p-2.5 mb-3 rounded-lg hover:bg-[#4A4754] transition-colors focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-2 focus:ring-offset-[#2D2A32]" aria-label="Start a new chat"> {/* p-3 to p-2.5 */}
-            <IconNewChat className="w-4 h-4 mr-2.5 text-[#EAE6F0]" /> {/* w-5 h-5 to w-4 h-4, mr-3 to mr-2.5 */}
-            <span className="text-sm font-normal text-[#EAE6F0]">New chat</span> {/* text-md to text-sm */}
+          <button onClick={onNewChat} className="w-full flex items-center text-left p-3 mb-3 rounded-lg hover:bg-[#4A4754] transition-colors focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-2 focus:ring-offset-[#2D2A32]" aria-label="Start a new chat">
+            <IconNewChat className="w-5 h-5 mr-3 text-[#EAE6F0]" />
+            <span className="text-md font-normal text-[#EAE6F0]">New chat</span>
           </button>
 
-          <div className="relative mb-3"> {/* mb-4 to mb-3 */}
-            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none"> {/* pl-3 to pl-2.5 */}
+          <div className="relative mb-4">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <IconSearch className="w-4 h-4 text-[#A09CB0]" />
             </div>
-            <input type="text" placeholder="Search chats" value={searchTerm} onChange={handleSearchChange} className="w-full p-2 pl-9 bg-[#4A4754] text-[#EAE6F0] placeholder-[#A09CB0] rounded-md text-sm border border-[#5A5666] focus:outline-none focus:border-[#FF8DC7] focus:ring-1 focus:ring-[#FF8DC7]" aria-label="Search chat history"/> {/* p-2.5 pl-10 to p-2 pl-9 */}
+            <input type="text" placeholder="Search chats" value={searchTerm} onChange={handleSearchChange} className="w-full p-2.5 pl-10 bg-[#4A4754] text-[#EAE6F0] placeholder-[#A09CB0] rounded-md text-sm border border-[#5A5666] focus:outline-none focus:border-[#FF8DC7] focus:ring-1 focus:ring-[#FF8DC7]" aria-label="Search chat history"/>
           </div>
 
-          {/* Added px-1.5 to this div to give space for ring offset */}
-          <div className="flex-grow overflow-y-auto px-1.5 mb-3"> {/* pr-1 to px-1.5, mb-4 to mb-3 */}
-            {isSearching ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Searching chats...</p> {/* py-2 to py-1.5 */}
-              : isLoading && !searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Loading chats...</p> {/* py-2 to py-1.5 */}
+          <div className="flex-grow overflow-y-auto pr-1 mb-4">
+            {isSearching ? <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">Searching chats...</p>
+              : isLoading && !searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">Loading chats...</p>
               : displayedSessions.length > 0 ? (
-                // FIX: Rename 'group' to 'sessionGroup' to avoid potential naming conflicts/linter issues.
-                groupedSessions.map(sessionGroup => (
-                  <div key={sessionGroup.heading} className="mb-2.5"> {/* mb-3 to mb-2.5 */}
-                    <h3 className="text-xs text-[#A09CB0] uppercase font-semibold mb-1 mt-2.5 px-1">{sessionGroup.heading}</h3> {/* mt-3 to mt-2.5 */}
+                groupedSessions.map(group => (
+                  <div key={group.heading} className="mb-3">
+                    <h3 className="text-xs text-[#A09CB0] uppercase font-semibold mb-1 mt-3 px-1">{group.heading}</h3>
                     <ul>
-                      {sessionGroup.chats.map((chat, index) => (
+                      {group.chats.map((chat, index) => (
                         <li 
                           key={chat.id}
                           role="button"
@@ -268,11 +264,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                                   }
                               }
                           }}
-                          className={`group relative flex items-center justify-between p-2 my-0.5 rounded-lg animate-fadeInSlideUp outline-none transition-all duration-150 ease-in-out
+                          className={`group relative flex items-center justify-between p-2.5 my-0.5 rounded-lg animate-fadeInSlideUp outline-none transition-all duration-150 ease-in-out
                             ${activeChatId === chat.id 
                               ? 'bg-[#4A4754] opacity-100 ring-2 ring-[#FF8DC7] ring-offset-2 ring-offset-[#2D2A32]' 
                               : 'opacity-80 hover:opacity-100 hover:bg-[#3c3a43] focus:opacity-100 focus:ring-2 focus:ring-[#FF8DC7] ring-offset-2 ring-offset-[#2D2A32]'
-                            }`} // p-2.5 to p-2
+                            }`}
                           style={{ animationDelay: `${index * 0.03}s` }}
                           aria-current={activeChatId === chat.id ? "page" : undefined}
                         >
@@ -293,22 +289,15 @@ const Sidebar: React.FC<SidebarProps> = ({
                           )}
                           {editingSessionId !== chat.id && (
                             <button
-                              ref={(element: HTMLButtonElement | null) => { // Explicitly typed parameter and block
-                                if (element) {
-                                  ellipsisRefs.current[chat.id] = element;
-                                } else {
-                                  // Optionally handle null element if needed, e.g., delete from record
-                                  // delete ellipsisRefs.current[chat.id];
-                                }
-                              }}
+                              ref={el => { if(el) ellipsisRefs.current[chat.id] = el; }}
                               onClick={(e) => handleEllipsisClick(e, chat)}
-                              className={`p-0.5 text-[#A09CB0] hover:text-[#FF8DC7] rounded-md focus:outline-none focus:ring-1 focus:ring-[#FF8DC7] flex-shrink-0 transition-opacity 
-                                  ${activeContextMenuSessionId === chat.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`} // p-1 to p-0.5
+                              className={`p-1 text-[#A09CB0] hover:text-[#FF8DC7] rounded-md focus:outline-none focus:ring-1 focus:ring-[#FF8DC7] flex-shrink-0 transition-opacity 
+                                  ${activeContextMenuSessionId === chat.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}
                               aria-label={`More options for chat: ${chat.title}`}
                               aria-haspopup="true"
                               aria-expanded={activeContextMenuSessionId === chat.id}
                             >
-                              <IconEllipsisVertical className="w-4 h-4" /> {/* w-5 h-5 to w-4 h-4 */}
+                              <IconEllipsisVertical className="w-5 h-5" />
                             </button>
                           )}
                         </li>
@@ -316,8 +305,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </ul>
                   </div>
                 ))
-              ) : searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">No chats match your search.</p> {/* py-2 to py-1.5 */}
-              : <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">No chat history yet.</p> {/* py-2 to py-1.5 */}
+              ) : searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">No chats match your search.</p>
+              : <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">No chat history yet.</p>
             }
           </div>
         </div>
@@ -327,7 +316,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       {activeContextMenuSessionId && contextMenuPosition && currentSessionForMenu && (
         <div
           ref={contextMenuRef}
-          className="context-menu fixed bg-[#201F23] rounded-lg shadow-xl py-1 z-50"  // py-1.5 to py-1
+          className="context-menu fixed bg-[#201F23] rounded-lg shadow-xl py-1.5 z-50" 
           style={{ 
             top: `${contextMenuPosition.top}px`, 
             left: `${contextMenuPosition.left}px`, 
@@ -337,18 +326,18 @@ const Sidebar: React.FC<SidebarProps> = ({
         >
           <button 
             onClick={() => handleRename(currentSessionForMenu)} 
-            className="context-menu-item w-full text-left px-2.5 py-1.5 text-sm text-[#EAE6F0] hover:bg-[#393641] flex items-center focus:bg-[#393641] focus:outline-none rounded-t-md" // px-3 py-2 to px-2.5 py-1.5
+            className="context-menu-item w-full text-left px-3 py-2 text-sm text-[#EAE6F0] hover:bg-[#393641] flex items-center focus:bg-[#393641] focus:outline-none rounded-t-md"
             role="menuitem"
           >
-            <IconPencil className="w-3.5 h-3.5 mr-2" /> Rename {/* w-4 h-4 to w-3.5 h-3.5, mr-2.5 to mr-2 */}
+            <IconPencil className="w-4 h-4 mr-2.5" /> Rename
           </button>
           <div className="border-t border-[#393641] my-0.5 mx-1.5"></div>
           <button 
             onClick={() => { onRequestDeleteConfirmation(currentSessionForMenu.id, currentSessionForMenu.title); closeContextMenu(); }} 
-            className="context-menu-item w-full text-left px-2.5 py-1.5 text-sm text-[#FF8DC7] hover:bg-[#393641] flex items-center focus:bg-[#393641] focus:outline-none rounded-b-md" // px-3 py-2 to px-2.5 py-1.5
+            className="context-menu-item w-full text-left px-3 py-2 text-sm text-[#FF8DC7] hover:bg-[#393641] flex items-center focus:bg-[#393641] focus:outline-none rounded-b-md"
             role="menuitem"
           >
-            <IconTrash className="w-3.5 h-3.5 mr-2" /> Delete {/* w-4 h-4 to w-3.5 h-3.5, mr-2.5 to mr-2 */}
+            <IconTrash className="w-4 h-4 mr-2.5" /> Delete
           </button>
         </div>
       )}
