@@ -149,12 +149,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </h3>
                 <ul>
                   {group.chats.map((chat) => ( 
-                    <li key={chat.id} className="px-0"> {/* Removed negative margin, rely on button padding and no extra li padding */}
+                    <li key={chat.id} className="px-1"> {/* Changed px-0 to px-1 */}
                       <button 
                         onClick={() => onSelectChat(chat.id)}
                         className={`w-full text-left p-2 my-0.5 rounded-md hover:bg-[#4A4754] truncate transition-colors text-sm focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-1 focus:ring-offset-[#2D2A32] ${
                           activeChatId === chat.id ? 'bg-[#5A5666] font-semibold text-[#FF8DC7]' : 'text-[#EAE6F0]'
-                        }`} // p-2 instead of p-2.5, focus:ring-offset-1
+                        }`}
                       >
                         {chat.title}
                       </button>
