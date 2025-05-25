@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { IconSidebarClose, IconHeart, IconSearch, IconEdit } from '../constants';
 import { ChatSession } from '../types';
 
@@ -10,12 +10,24 @@ interface SidebarProps {
   chatSessions: ChatSession[];
   activeChatId: string | null;
   onSelectChat: (chatId: string) => void;
-  isLoading?: boolean;
+  isLoading?: boolean; // Initial loading of all sessions
 }
 
 interface GroupedChatSessions {
   heading: string;
   chats: ChatSession[];
+}
+
+// Debounce utility function
+function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const debounced = (...args: Parameters<F>) => {
+    if (timeout !== null) {
+      clearTimeout(timeout);
+    }
+    timeout = setTimeout(() => func(...args), waitFor);
+  };
+  return debounced;
 }
 
 const groupChatSessionsByDate = (sessions: ChatSession[]): GroupedChatSessions[] => {
@@ -41,7 +53,6 @@ const groupChatSessionsByDate = (sessions: ChatSession[]): GroupedChatSessions[]
   };
 
   sessions.forEach(session => {
-    // Ensure createdAt is a Date object
     const sessionDate = session.createdAt instanceof Date ? session.createdAt : new Date(session.createdAt);
     const sessionDay = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate());
 
@@ -71,15 +82,58 @@ const Sidebar: React.FC<SidebarProps> = ({
   chatSessions, 
   activeChatId, 
   onSelectChat,
-  isLoading 
+  isLoading // Prop for initial loading of all sessions
 }) => {
-  const [searchTerm, setSearchTerm] = React.useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [displayedSessions, setDisplayedSessions] = useState<ChatSession[]>(chatSessions);
+  const [isSearching, setIsSearching] = useState(false);
 
-  const filteredChatSessions = chatSessions.filter(chat => 
-    chat.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Effect to update displayedSessions when the main chatSessions prop changes,
+  // but only if there's no active search term.
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setDisplayedSessions(chatSessions);
+    }
+  }, [chatSessions, searchTerm]);
 
-  const groupedSessions = groupChatSessionsByDate(filteredChatSessions);
+  const performSearch = useCallback(async (term: string) => {
+    const trimmedTerm = term.trim();
+    if (!trimmedTerm) {
+      setDisplayedSessions(chatSessions); // Show all original sessions if search term is cleared
+      setIsSearching(false);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const response = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ searchTerm: trimmedTerm }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Search API request failed:', response.status, errorData);
+        throw new Error(`Search failed: ${errorData.error || response.statusText}`);
+      }
+      const results: ChatSession[] = await response.json();
+      setDisplayedSessions(results);
+    } catch (error) {
+      console.error("Error fetching search results:", error);
+      setDisplayedSessions([]); // On error, show no results
+    } finally {
+      setIsSearching(false);
+    }
+  }, [chatSessions]); // chatSessions is a dependency to correctly reset to all sessions
+
+  const debouncedSearch = useMemo(() => debounce(performSearch, 300), [performSearch]);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const term = e.target.value;
+    setSearchTerm(term);
+    debouncedSearch(term);
+  };
+
+  const groupedSessions = groupChatSessionsByDate(displayedSessions);
 
   return (
     <div
@@ -92,10 +146,8 @@ const Sidebar: React.FC<SidebarProps> = ({
     >
       <div className="flex flex-col h-full">
         
-        {/* Top Bar: Heart icon (left) and Close button with tooltip (right) */}
         <div className="flex items-center justify-between mb-4 pt-1">
           <IconHeart className="w-7 h-7 text-[#FF8DC7]" />
-          
           <div className="relative group">
             <button
               onClick={onClose}
@@ -112,7 +164,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* New Chat Button */}
         <button
           onClick={onNewChat}
           className="w-full flex items-center text-left p-3 mb-3 rounded-lg hover:bg-[#4A4754] transition-colors focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-2 focus:ring-offset-[#2D2A32]"
@@ -122,7 +173,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           <span className="text-md font-normal text-[#EAE6F0]">New chat</span>
         </button>
 
-        {/* Search Chats Input */}
         <div className="relative mb-4">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <IconSearch className="w-4 h-4 text-[#A09CB0]" />
@@ -131,17 +181,18 @@ const Sidebar: React.FC<SidebarProps> = ({
             type="text"
             placeholder="Search chats"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={handleSearchChange}
             className="w-full p-2.5 pl-10 bg-[#4A4754] text-[#EAE6F0] placeholder-[#A09CB0] rounded-md text-sm border border-[#5A5666] focus:outline-none focus:border-[#FF8DC7] focus:ring-1 focus:ring-[#FF8DC7]"
             aria-label="Search chat history"
           />
         </div>
 
-        {/* Chat History List (Scrollable) */}
-        <div className="flex-grow overflow-y-auto pr-1 mb-4"> {/* pr-1 for scrollbar space */}
-          {isLoading ? (
+        <div className="flex-grow overflow-y-auto pr-1 mb-4">
+          {isSearching ? (
+            <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">Searching chats...</p>
+          ) : isLoading && !searchTerm.trim() ? ( // Initial loading, not actively searching
             <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">Loading chats...</p>
-          ) : groupedSessions.length > 0 ? (
+          ) : displayedSessions.length > 0 ? (
             groupedSessions.map(group => (
               <div key={group.heading} className="mb-3">
                 <h3 className="text-xs text-[#A09CB0] uppercase font-semibold mb-1 mt-3 px-1">
@@ -149,7 +200,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </h3>
                 <ul>
                   {group.chats.map((chat) => ( 
-                    <li key={chat.id} className="px-1"> {/* Changed px-0 to px-1 */}
+                    <li key={chat.id} className="px-1">
                       <button 
                         onClick={() => onSelectChat(chat.id)}
                         className={`w-full text-left p-2 my-0.5 rounded-md hover:bg-[#4A4754] truncate transition-colors text-sm focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-1 focus:ring-offset-[#2D2A32] ${
@@ -163,9 +214,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </ul>
               </div>
             ))
-          ) : searchTerm && chatSessions.length > 0 ? (
+          ) : searchTerm.trim() ? ( // Searched, but no results
              <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">No chats match your search.</p>
-          ) : (
+          ) : ( // No search term, and no initial chats
             <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">No chat history yet.</p>
           )}
         </div>
