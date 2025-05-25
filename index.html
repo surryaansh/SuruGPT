@@ -48,22 +48,30 @@
     }
 
     /* General smoothness for common transitions */
-    /* Corrected: Split transition properties */
-    button, input[type="text"] {
+    button { /* Transitions for buttons */
       transition-property: background-color, border-color, color, opacity, transform, box-shadow;
-      transition-duration: 0.25s; /* Slightly slower for a smoother feel */
+      transition-duration: 0.25s; 
       transition-timing-function: ease-in-out;
     }
-    div, li, a { /* box-shadow removed from transition-property for these elements */
+    input[type="text"] { /* Transitions for text inputs, EXCLUDING box-shadow */
       transition-property: background-color, border-color, color, opacity, transform;
-      transition-duration: 0.25s; /* Slightly slower for a smoother feel */
+      transition-duration: 0.25s; 
+      transition-timing-function: ease-in-out;
+    }
+    div, li, a { /* Transitions for other elements, EXCLUDING box-shadow */
+      transition-property: background-color, border-color, color, opacity, transform;
+      transition-duration: 0.25s;
       transition-timing-function: ease-in-out;
     }
     
-    /* Refined focus styles for sophistication */
-    input[type="text"]:focus, button:focus-visible { /* Using focus-visible for better accessibility */
+    /* Focus styles */
+    input[type="text"]:focus {
+      outline: none; /* Remove default outline */
+      box-shadow: none; /* Remove custom box-shadow */
+    }
+    button:focus-visible { /* Using focus-visible for better accessibility on buttons */
       outline: none;
-      box-shadow: 0 0 0 2px #393641, 0 0 0 4px #FF8DC7; /* Inner dark, outer pink accent ring */
+      box-shadow: 0 0 0 2px #393641, 0 0 0 4px #FF8DC7; /* Inner dark, outer pink accent ring for buttons */
     }
 
     /* Input field placeholder transition for a subtle effect */
