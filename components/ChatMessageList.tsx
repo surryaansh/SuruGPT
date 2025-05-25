@@ -16,7 +16,7 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isLoadingAi
 
   return (
     <div className="flex-grow px-10 py-4 overflow-y-auto"> {/* Outer container: keeps horizontal padding, vertical padding, flex-grow, and overflow */}
-      <div className="max-w-2xl mx-auto space-y-1"> {/* New inner container: centered, max-width, handles message spacing */}
+      <div className="max-w-3xl mx-auto space-y-1"> {/* New inner container: centered, max-width, handles message spacing */}
         {messages.map((msg, index) => {
           // Determine if this specific message should show the loading indicator
           const isLastMessage = index === messages.length - 1;
