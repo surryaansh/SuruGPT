@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { IconSidebarClose, IconHeart, IconSearch, IconPencil, IconEllipsisVertical, IconTrash, IconNewChat } from '../constants';
 import { ChatSession } from '../types';
@@ -237,13 +236,9 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           <div className="flex-grow overflow-y-auto px-1 mb-3"> {/* Changed pr-1 to px-1 for focus ring, reduced mb */}
-            {isSearching ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Searching chats...</p> {/* Reduced py */}
-              : isLoading && !searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Loading chats...</p> {/* Reduced py */}
+            {isSearching ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Searching chats...</p> 
+              : isLoading && !searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Loading chats...</p> 
               : displayedSessions.length > 0 ? (
-                // FIX: Ensure 'sessionGroup' is correctly used as the map parameter and accessed within the map's scope.
-                // The error "Cannot find name 'sessionGroup'" on subsequent lines (243, 244, 246) implies
-                // that in the context where the error occurred, 'sessionGroup' was not defined or misnamed.
-                // The provided code uses 'sessionGroup' as the parameter, so this re-affirms that.
                 groupedSessions.map(sessionGroup => ( 
                   <div key={sessionGroup.heading} className="mb-2"> {/* Reduced mb */}
                     <h3 className="text-xs text-[#A09CB0] uppercase font-semibold mb-0.5 mt-2 px-1">{sessionGroup.heading}</h3> {/* Reduced mb, mt */}
@@ -309,8 +304,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </ul>
                   </div>
                 ))
-              ) : searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">No chats match your search.</p> {/* Reduced py */}
-              : <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">No chat history yet.</p> {/* Reduced py */}
+              ) : searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">No chats match your search.</p>
+              : <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">No chat history yet.</p>
             }
           </div>
         </div>
@@ -350,3 +345,4 @@ const Sidebar: React.FC<SidebarProps> = ({
 };
 
 export default Sidebar;
+    
