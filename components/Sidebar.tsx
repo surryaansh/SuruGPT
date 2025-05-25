@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { IconSidebarClose, IconHeart, IconSearch, IconPencil, IconEllipsisVertical, IconTrash, IconNewChat } from '../constants';
 import { ChatSession } from '../types';
@@ -239,7 +240,11 @@ const Sidebar: React.FC<SidebarProps> = ({
             {isSearching ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Searching chats...</p> {/* Reduced py */}
               : isLoading && !searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Loading chats...</p> {/* Reduced py */}
               : displayedSessions.length > 0 ? (
-                groupedSessions.map(sessionGroup => ( // Renamed group to sessionGroup
+                // FIX: Ensure 'sessionGroup' is correctly used as the map parameter and accessed within the map's scope.
+                // The error "Cannot find name 'sessionGroup'" on subsequent lines (243, 244, 246) implies
+                // that in the context where the error occurred, 'sessionGroup' was not defined or misnamed.
+                // The provided code uses 'sessionGroup' as the parameter, so this re-affirms that.
+                groupedSessions.map(sessionGroup => ( 
                   <div key={sessionGroup.heading} className="mb-2"> {/* Reduced mb */}
                     <h3 className="text-xs text-[#A09CB0] uppercase font-semibold mb-0.5 mt-2 px-1">{sessionGroup.heading}</h3> {/* Reduced mb, mt */}
                     <ul>
