@@ -243,11 +243,12 @@ const Sidebar: React.FC<SidebarProps> = ({
             {isSearching ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Searching chats...</p> {/* py-2 to py-1.5 */}
               : isLoading && !searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Loading chats...</p> {/* py-2 to py-1.5 */}
               : displayedSessions.length > 0 ? (
-                groupedSessions.map(group => (
-                  <div key={group.heading} className="mb-2.5"> {/* mb-3 to mb-2.5 */}
-                    <h3 className="text-xs text-[#A09CB0] uppercase font-semibold mb-1 mt-2.5 px-1">{group.heading}</h3> {/* mt-3 to mt-2.5 */}
+                // FIX: Rename 'group' to 'sessionGroup' to avoid potential naming conflicts/linter issues.
+                groupedSessions.map(sessionGroup => (
+                  <div key={sessionGroup.heading} className="mb-2.5"> {/* mb-3 to mb-2.5 */}
+                    <h3 className="text-xs text-[#A09CB0] uppercase font-semibold mb-1 mt-2.5 px-1">{sessionGroup.heading}</h3> {/* mt-3 to mt-2.5 */}
                     <ul>
-                      {group.chats.map((chat, index) => (
+                      {sessionGroup.chats.map((chat, index) => (
                         <li 
                           key={chat.id}
                           role="button"
