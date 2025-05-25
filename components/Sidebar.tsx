@@ -109,12 +109,13 @@ const Sidebar: React.FC<SidebarProps> = ({
     e.stopPropagation(); 
     const buttonElement = ellipsisRefs.current[sessionId];
     if (buttonElement) {
-        const menuWidth = 160; 
-        const verticalOffset = 4; // Space between button and menu
+        // const menuWidth = 160; // Menu width is set by its content or CSS style
+        const verticalOffset = 4; // Space below the button
+        const horizontalOffset = 2; // Space to the right of the button
         
-        // Position relative to the button within the li (which is position: relative)
         const top = buttonElement.offsetTop + buttonElement.offsetHeight + verticalOffset;
-        const left = buttonElement.offsetLeft + buttonElement.offsetWidth - menuWidth;
+        // Position menu's left edge to the right of the button's right edge
+        const left = buttonElement.offsetLeft + buttonElement.offsetWidth + horizontalOffset;
 
         setContextMenuPosition({ top, left });
     }
@@ -205,7 +206,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           <input type="text" placeholder="Search chats" value={searchTerm} onChange={handleSearchChange} className="w-full p-2.5 pl-10 bg-[#4A4754] text-[#EAE6F0] placeholder-[#A09CB0] rounded-md text-sm border border-[#5A5666] focus:outline-none focus:border-[#FF8DC7] focus:ring-1 focus:ring-[#FF8DC7]" aria-label="Search chat history"/>
         </div>
 
-        <div className="flex-grow overflow-y-auto pr-1 mb-4">
+        <div className="flex-grow overflow-y-auto pr-1 mb-4"> {/* Added pr-1 to avoid scrollbar overlapping content slightly */}
           {isSearching ? <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">Searching chats...</p>
             : isLoading && !searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">Loading chats...</p>
             : displayedSessions.length > 0 ? (
@@ -272,8 +273,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                         {activeContextMenuSessionId === chat.id && contextMenuPosition && (
                           <div
                             ref={contextMenuRef}
-                            className="context-menu absolute bg-[#201F23] rounded-lg shadow-xl py-1.5 z-50" // Darker background
-                            style={{ top: `${contextMenuPosition.top}px`, left: `${contextMenuPosition.left}px`, width: '160px' }} // Width adjusted
+                            className="context-menu absolute bg-[#201F23] rounded-lg shadow-xl py-1.5 z-50" 
+                            style={{ top: `${contextMenuPosition.top}px`, left: `${contextMenuPosition.left}px`, width: '160px' }}
                             role="menu"
                           >
                             <button 
@@ -283,10 +284,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                             >
                               <IconPencil className="w-4 h-4 mr-2.5" /> Rename
                             </button>
-                            <div className="border-t border-[#393641] my-0.5 mx-1.5"></div> {/* Adjusted separator color */}
+                            <div className="border-t border-[#393641] my-0.5 mx-1.5"></div>
                             <button 
                               onClick={() => { onRequestDeleteConfirmation(chat.id, chat.title); closeContextMenu(); }} 
-                              className="context-menu-item w-full text-left px-3 py-2 text-sm text-[#FF8DC7] hover:bg-[#393641] flex items-center focus:bg-[#393641] focus:outline-none rounded-b-md" // Changed text color to pink for delete
+                              className="context-menu-item w-full text-left px-3 py-2 text-sm text-[#FF8DC7] hover:bg-[#393641] flex items-center focus:bg-[#393641] focus:outline-none rounded-b-md"
                               role="menuitem"
                             >
                               <IconTrash className="w-4 h-4 mr-2.5" /> Delete
