@@ -15,22 +15,21 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isLoadingAi
   }, [messages, isLoadingAiResponse]);
 
   return (
-    <div className="flex-grow px-10 py-4 overflow-y-auto"> {/* Outer container: keeps horizontal padding, vertical padding, flex-grow, and overflow */}
-      <div className="max-w-3xl mx-auto space-y-1"> {/* New inner container: centered, max-width, handles message spacing */}
+    <div className="flex-grow px-10 py-4 overflow-y-auto">
+      <div className="max-w-2xl mx-auto space-y-1">
         {messages.map((msg, index) => {
-          // Determine if this specific message should show the loading indicator
           const isLastMessage = index === messages.length - 1;
-          const shouldShowLoadingIndicator =
+          // AI is considered streaming for the last message if it's an AI message and global loading is true
+          const isStreamingAiText =
             isLoadingAiResponse &&
             isLastMessage &&
-            msg.sender === SenderType.AI &&
-            msg.text === ''; // Only show dots if the AI message text is still empty
+            msg.sender === SenderType.AI;
 
           return (
             <ChatMessage
               key={msg.id}
               message={msg}
-              isCurrentlyLoading={shouldShowLoadingIndicator}
+              isStreamingAiText={isStreamingAiText}
             />
           );
         })}
