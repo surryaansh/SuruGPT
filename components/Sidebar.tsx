@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { IconSidebarClose, IconHeart, IconSearch, IconPencil, IconEllipsisVertical, IconTrash, IconNewChat } from '../constants';
 import { ChatSession } from '../types';
@@ -106,11 +107,21 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handleEllipsisClick = (e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation();
+    e.stopPropagation(); // Prevent li click handler
     const buttonElement = ellipsisRefs.current[sessionId];
     if (buttonElement) {
         const rect = buttonElement.getBoundingClientRect();
-        setContextMenuPosition({ top: rect.bottom + window.scrollY + 5, left: rect.left + window.scrollX - 120 }); // Position below and slightly to the left
+        const menuWidth = 150; // Must match the width set in the style
+        const menuHorizontalMargin = 8; // Space between button and menu
+
+        let left = rect.right + window.scrollX + menuHorizontalMargin;
+        // If menu would go off-screen to the right, position it to the left of the button
+        if (left + menuWidth > window.innerWidth) {
+            left = rect.left + window.scrollX - menuWidth - menuHorizontalMargin;
+        }
+        
+        const top = rect.top + window.scrollY;
+        setContextMenuPosition({ top, left });
     }
     setActiveContextMenuSessionId(sessionId === activeContextMenuSessionId ? null : sessionId);
   };
@@ -122,7 +133,13 @@ const Sidebar: React.FC<SidebarProps> = ({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
-        closeContextMenu();
+        // Check if the click was on an ellipsis button to prevent immediate re-open
+        const isClickOnEllipsis = Object.values(ellipsisRefs.current).some(
+            (btn) => btn && btn.contains(event.target as Node)
+        );
+        if (!isClickOnEllipsis) {
+            closeContextMenu();
+        }
       }
     };
     if (activeContextMenuSessionId) {
@@ -143,11 +160,13 @@ const Sidebar: React.FC<SidebarProps> = ({
         await onRenameChatSession(editingSessionId, editingTitle.trim());
       } catch (error) {
         console.error("Failed to rename chat session:", error);
-        // Optionally, revert title or show error to user
+        // Optionally, revert title or show error to user by finding original title
+        const originalSession = chatSessions.find(s => s.id === editingSessionId);
+        if (originalSession) setEditingTitle(originalSession.title);
       }
     }
     setEditingSessionId(null);
-    setEditingTitle('');
+    // setEditingTitle(''); // Cleared after potential revert
   };
 
   const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -157,7 +176,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   const handleEditInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') submitRename();
     if (e.key === 'Escape') {
-      setEditingSessionId(null); setEditingTitle('');
+      const originalSession = chatSessions.find(s => s.id === editingSessionId);
+      if (originalSession) setEditingTitle(originalSession.title);
+      setEditingSessionId(null); 
     }
   };
 
@@ -201,7 +222,33 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <h3 className="text-xs text-[#A09CB0] uppercase font-semibold mb-1 mt-3 px-1">{group.heading}</h3>
                   <ul>
                     {group.chats.map((chat, index) => (
-                      <li key={chat.id} className="relative group flex items-center justify-between px-1 hover:bg-[#3c3a43] rounded-md animate-fadeInSlideUp" style={{ animationDelay: `${index * 0.03}s` }}>
+                      <li 
+                        key={chat.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => {
+                            if (editingSessionId !== chat.id) {
+                                onSelectChat(chat.id);
+                                closeContextMenu(); // Close any open context menu when selecting a different chat
+                            }
+                        }}
+                        onKeyDown={(e) => { 
+                            if (e.key === 'Enter' || e.key === ' ') { 
+                                e.preventDefault(); // Prevent space from scrolling
+                                if (editingSessionId !== chat.id) {
+                                    onSelectChat(chat.id);
+                                    closeContextMenu();
+                                }
+                            }
+                        }}
+                        className={`group flex items-center justify-between p-0.5 my-0.5 rounded-md animate-fadeInSlideUp focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-1 focus:ring-offset-[#2D2A32] transition-all duration-150 ease-in-out
+                          ${activeChatId === chat.id 
+                            ? 'bg-[#5A5666] opacity-100' 
+                            : 'opacity-80 hover:opacity-100 hover:bg-[#3c3a43] focus:opacity-100'
+                          }`}
+                        style={{ animationDelay: `${index * 0.03}s` }}
+                        aria-current={activeChatId === chat.id ? "page" : undefined}
+                      >
                         {editingSessionId === chat.id ? (
                           <input
                             type="text"
@@ -210,19 +257,23 @@ const Sidebar: React.FC<SidebarProps> = ({
                             onKeyDown={handleEditInputKeyDown}
                             onBlur={submitRename}
                             autoFocus
-                            className="flex-grow min-w-0 p-2 my-0.5 bg-[#5A5666] text-[#FF8DC7] rounded-md text-sm border border-[#FF8DC7] focus:outline-none focus:ring-1 focus:ring-[#FF8DC7]"
+                            className="flex-grow min-w-0 p-2 mx-0.5 my-0.5 bg-[#5A5666] text-[#FF8DC7] rounded-md text-sm border border-[#FF8DC7] focus:outline-none focus:ring-1 focus:ring-[#FF8DC7]"
                           />
                         ) : (
-                          <button onClick={() => onSelectChat(chat.id)} className={`flex-grow min-w-0 text-left p-2 my-0.5 rounded-md truncate transition-opacity text-sm focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-1 focus:ring-offset-[#2D2A32] ${activeChatId === chat.id ? 'bg-[#5A5666] font-semibold text-[#FF8DC7] opacity-100' : 'text-[#EAE6F0] opacity-75 group-hover:opacity-100'}`}>
+                          <div className={`flex-grow min-w-0 text-left p-2 truncate text-sm ${activeChatId === chat.id ? 'font-semibold text-[#FF8DC7]' : 'text-[#EAE6F0]'}`}>
                             {chat.title}
-                          </button>
+                          </div>
                         )}
                         {editingSessionId !== chat.id && (
+                          // FIX: Corrected ref callback to ensure void return type.
                           <button
-                            ref={el => ellipsisRefs.current[chat.id] = el}
+                            ref={el => { ellipsisRefs.current[chat.id] = el; }}
                             onClick={(e) => handleEllipsisClick(e, chat.id)}
-                            className="p-1.5 text-[#A09CB0] hover:text-[#FF8DC7] opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 flex-shrink-0"
+                            className={`p-1.5 text-[#A09CB0] hover:text-[#FF8DC7] rounded-md focus:outline-none focus:ring-1 focus:ring-[#FF8DC7] flex-shrink-0 transition-opacity 
+                                ${activeContextMenuSessionId === chat.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}
                             aria-label={`More options for chat: ${chat.title}`}
+                            aria-haspopup="true"
+                            aria-expanded={activeContextMenuSessionId === chat.id}
                           >
                             <IconEllipsisVertical className="w-4 h-4" />
                           </button>
@@ -232,11 +283,20 @@ const Sidebar: React.FC<SidebarProps> = ({
                             ref={contextMenuRef}
                             className="context-menu absolute bg-[#2D2A32] border border-[#5A5666] rounded-md shadow-lg py-1 z-50"
                             style={{ top: `${contextMenuPosition.top}px`, left: `${contextMenuPosition.left}px`, width: '150px' }}
+                            role="menu"
                           >
-                            <button onClick={() => handleRename(chat.id, chat.title)} className="context-menu-item w-full text-left px-3 py-1.5 text-sm text-[#EAE6F0] hover:bg-[#4A4754] flex items-center">
+                            <button 
+                              onClick={() => handleRename(chat.id, chat.title)} 
+                              className="context-menu-item w-full text-left px-3 py-1.5 text-sm text-[#EAE6F0] hover:bg-[#4A4754] flex items-center focus:bg-[#4A4754] focus:outline-none rounded-t-md"
+                              role="menuitem"
+                            >
                               <IconPencil className="w-4 h-4 mr-2.5" /> Rename
                             </button>
-                            <button onClick={() => { onRequestDeleteConfirmation(chat.id, chat.title); closeContextMenu(); }} className="context-menu-item w-full text-left px-3 py-1.5 text-sm text-[#FF6B6B] hover:bg-[#4A4754] flex items-center">
+                            <button 
+                              onClick={() => { onRequestDeleteConfirmation(chat.id, chat.title); closeContextMenu(); }} 
+                              className="context-menu-item w-full text-left px-3 py-1.5 text-sm text-[#FF6B6B] hover:bg-[#4A4754] flex items-center focus:bg-[#4A4754] focus:outline-none rounded-b-md"
+                              role="menuitem"
+                            >
                               <IconTrash className="w-4 h-4 mr-2.5" /> Delete
                             </button>
                           </div>
