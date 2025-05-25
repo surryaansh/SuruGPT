@@ -72,7 +72,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreamingAiText })
   const showInitialLoadingDots = message.sender === SenderType.AI && isStreamingAiText && !message.text && !displayedText;
 
   return (
-    <div className={`flex mb-9 animate-fadeInSlideUp ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex animate-fadeInSlideUp ${isUser ? 'justify-end' : 'justify-start'}`}> {/* Removed mb-9 */}
       <div className={`max-w-[85%] sm:max-w-[75%]`}>
         {showInitialLoadingDots ? (
           <div className="py-1 px-0">
