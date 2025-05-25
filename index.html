@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SuruGPT Chat</title>
+  <title>SuruGPT Chat (OpenAI)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -48,8 +48,14 @@
     }
 
     /* General smoothness for common transitions */
-    button, input[type="text"], div, li, a {
+    /* Corrected: Split transition properties */
+    button, input[type="text"] {
       transition-property: background-color, border-color, color, opacity, transform, box-shadow;
+      transition-duration: 0.25s; /* Slightly slower for a smoother feel */
+      transition-timing-function: ease-in-out;
+    }
+    div, li, a { /* box-shadow removed from transition-property for these elements */
+      transition-property: background-color, border-color, color, opacity, transform;
       transition-duration: 0.25s; /* Slightly slower for a smoother feel */
       transition-timing-function: ease-in-out;
     }
