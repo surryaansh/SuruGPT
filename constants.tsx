@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export const IconMenu: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
@@ -24,15 +25,18 @@ export const IconSidebarClose: React.FC<{ className?: string }> = ({ className =
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    strokeWidth="1.5" // Adjusted strokeWidth to match general theme
+    strokeWidth="1.5"
     strokeLinecap="round"
     strokeLinejoin="round"
     className={className}
     aria-hidden="true"
   >
-    {/* Visually similar to the provided blurry icon: square with a chevron left */}
+    {/* Outer rounded rectangle container */}
     <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-    <polyline points="13.5 16.5 9.5 12 13.5 7.5" />
+    {/* Vertical line divider, slightly offset from the left */}
+    <line x1="8.5" y1="3" x2="8.5" y2="21" />
+    {/* Left-pointing chevron in the right compartment */}
+    <polyline points="15.5 16.5 11.5 12 15.5 7.5" />
   </svg>
 );
 
