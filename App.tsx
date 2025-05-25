@@ -86,7 +86,8 @@ const App: React.FC = () => {
   const [chatReady, setChatReady] = useState<boolean>(true); 
   
   const [isDesktopView, setIsDesktopView] = useState(window.innerWidth >= 768); // md breakpoint (768px)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true); 
+  // Initialize isSidebarOpen based on initial screen width to prevent flash on mobile
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768); 
 
   const [globalContextSummary, setGlobalContextSummary] = useState<string>('');
 
@@ -99,9 +100,10 @@ const App: React.FC = () => {
       setIsDesktopView(currentIsDesktop);
 
       if (!initialViewSetupDone.current) {
-        if (!currentIsDesktop) {
-          setIsSidebarOpen(false);
-        }
+        // This logic used to set isSidebarOpen, but now its initial state is correct.
+        // We still need to ensure this block runs only once for other initial setup needs if any.
+        // If !currentIsDesktop, isSidebarOpen is already false from its useState initialization.
+        // If currentIsDesktop, isSidebarOpen is already true from its useState initialization.
         initialViewSetupDone.current = true;
       }
     };
