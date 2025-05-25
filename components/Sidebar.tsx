@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { IconSidebarClose, IconHeart, IconSearch, IconEdit } from '../constants';
 import { ChatSession } from '../types';
@@ -130,6 +129,13 @@ const Sidebar: React.FC<SidebarProps> = ({
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const term = e.target.value;
     setSearchTerm(term);
+
+    if (!term.trim()) {
+      // Immediately reset UI state when search input is cleared
+      setDisplayedSessions(chatSessions);
+      setIsSearching(false);
+    }
+    // Always call debouncedSearch to handle actual search requests or confirm the reset state
     debouncedSearch(term);
   };
 
@@ -199,12 +205,18 @@ const Sidebar: React.FC<SidebarProps> = ({
                   {group.heading}
                 </h3>
                 <ul>
-                  {group.chats.map((chat) => ( 
-                    <li key={chat.id} className="px-1">
+                  {group.chats.map((chat, index) => ( 
+                    <li 
+                        key={chat.id} 
+                        className="px-1 animate-fadeInSlideUp"
+                        style={{ animationDelay: `${index * 0.03}s` }} // Stagger animation
+                    >
                       <button 
                         onClick={() => onSelectChat(chat.id)}
-                        className={`w-full text-left p-2 my-0.5 rounded-md hover:bg-[#4A4754] truncate transition-colors text-sm focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-1 focus:ring-offset-[#2D2A32] ${
-                          activeChatId === chat.id ? 'bg-[#5A5666] font-semibold text-[#FF8DC7]' : 'text-[#EAE6F0]'
+                        className={`w-full text-left p-2 my-0.5 rounded-md hover:bg-[#4A4754] truncate transition-opacity text-sm focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-1 focus:ring-offset-[#2D2A32] ${
+                          activeChatId === chat.id 
+                            ? 'bg-[#5A5666] font-semibold text-[#FF8DC7] opacity-100' 
+                            : 'text-[#EAE6F0] opacity-75 hover:opacity-100'
                         }`}
                       >
                         {chat.title}
