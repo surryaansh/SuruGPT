@@ -29,7 +29,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isCurrentlyLoading }
                 : 'py-1 px-0' // AI message style (transparent background)
             }`}
           >
-            <p className="text-[10px] leading-relaxed whitespace-pre-wrap text-[#EAE6F0]">
+            <p className="text-[15px] leading-relaxed whitespace-pre-wrap text-[#EAE6F0]">
               {message.text}
             </p>
           </div>
