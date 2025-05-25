@@ -1,6 +1,6 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getChatSessions, getMessagesForSession } from '../services/firebaseService';
+import { getChatSessions, getMessagesForSession } from '../services/firebaseService.js'; // Added .js extension
 import { ChatSession } from '../types';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
