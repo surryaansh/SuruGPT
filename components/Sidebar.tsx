@@ -82,7 +82,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div
-      className={`sidebar fixed top-0 left-0 h-full w-72 sm:w-80 bg-[#393641] text-[#EAE6F0] shadow-2xl p-5 z-40 transform ${
+      className={`sidebar fixed top-0 left-0 h-full w-64 sm:w-72 bg-[#2D2A32] text-[#EAE6F0] p-5 z-40 transform ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
       }`}
       role="dialog"
@@ -104,7 +104,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               <IconSidebarClose className="w-6 h-6" />
             </button>
             <span 
-              className="absolute right-0 top-full mt-2 w-max px-2 py-1 bg-[#2D2A32] text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50"
+              className="absolute right-0 top-full mt-2 w-max px-2 py-1 bg-[#393641] text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50"
             >
               Close sidebar
             </span>
@@ -137,7 +137,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Chat History List (Scrollable) */}
-        <div className="flex-grow overflow-y-auto pr-1 mb-4">
+        <div className="flex-grow overflow-y-auto pr-1 mb-4"> {/* Added pr-1 to give a little space for scrollbar and prevent text touching edge */}
           {isLoading ? (
             <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">Loading chats...</p>
           ) : groupedSessions.length > 0 ? (
