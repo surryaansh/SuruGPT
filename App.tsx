@@ -248,24 +248,34 @@ const App: React.FC = () => {
 
   const handleConfirmDelete = async () => {
     if (!sessionToConfirmDelete) return;
+
+    const sessionToDeleteId = sessionToConfirmDelete.id;
+
+    // Optimistic UI update
+    setAllChatSessions(prevSessions => prevSessions.filter(session => session.id !== sessionToDeleteId));
+    if (activeChatId === sessionToDeleteId) {
+      handleNewChat(); // Reset view if active chat is deleted
+    }
+    
+    // Close dialog immediately
+    setIsDeleteConfirmationOpen(false);
+    setSessionToConfirmDelete(null);
+
     try {
       const response = await fetch('/api/deleteChat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: sessionToConfirmDelete.id }),
+        body: JSON.stringify({ sessionId: sessionToDeleteId }),
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || response.statusText || "Failed to delete chat session");
+        throw new Error(errorData.error || response.statusText || "Failed to delete chat session from server");
       }
-      setAllChatSessions(prevSessions => prevSessions.filter(session => session.id !== sessionToConfirmDelete.id));
-      if (activeChatId === sessionToConfirmDelete.id) handleNewChat();
-      console.log(`Chat session ${sessionToConfirmDelete.id} deleted successfully.`);
+      console.log(`Chat session ${sessionToDeleteId} successfully deleted from server.`);
     } catch (error: any) {
       console.error('Error calling deleteChat API:', error);
-      alert(`Error deleting chat: ${error.message}`);
-    } finally {
-      setIsDeleteConfirmationOpen(false);
-      setSessionToConfirmDelete(null);
+      alert(`Error deleting chat: ${error.message}. The chat was removed from your view, but may still exist on the server. Please refresh or try again later.`);
+      // Note: Re-adding the session to UI on server failure is complex for this flow.
+      // For simplicity, we alert the user. The session might still be fetched on next load if deletion failed.
     }
   };
 
@@ -275,6 +285,16 @@ const App: React.FC = () => {
   };
 
   const handleRenameChatSession = async (sessionId: string, newTitle: string): Promise<void> => {
+    const originalSession = allChatSessions.find(s => s.id === sessionId);
+    const originalTitle = originalSession ? originalSession.title : '';
+
+    // Optimistic UI update
+    setAllChatSessions(prevSessions =>
+      prevSessions.map(session =>
+        session.id === sessionId ? { ...session, title: newTitle } : session
+      )
+    );
+
     try {
       const response = await fetch('/api/renameChat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -284,16 +304,17 @@ const App: React.FC = () => {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || `Failed to rename chat: ${response.statusText}`);
       }
-      setAllChatSessions(prevSessions =>
-        prevSessions.map(session =>
-          session.id === sessionId ? { ...session, title: newTitle } : session
-        )
-      );
-      console.log(`Chat session ${sessionId} renamed to "${newTitle}" successfully.`);
+      console.log(`Chat session ${sessionId} renamed to "${newTitle}" successfully on server.`);
     } catch (error: any) {
       console.error('Error calling renameChat API:', error);
-      alert(`Error renaming chat: ${error.message}`);
-      throw error; // Re-throw to allow Sidebar to handle UI revert if needed
+      // Revert optimistic update if API call fails
+      setAllChatSessions(prevSessions =>
+        prevSessions.map(session =>
+          session.id === sessionId ? { ...session, title: originalTitle } : session
+        )
+      );
+      alert(`Error renaming chat: ${error.message}. Reverted to original title.`);
+      // We don't re-throw here as App.tsx handles the UI revert.
     }
   };
 
