@@ -52,7 +52,7 @@ const groupChatSessionsByDate = (sessions: ChatSession[]): GroupedChatSessions[]
   return Object.entries(groups).map(([heading, chats]) => ({ heading, chats })).filter(group => group.chats.length > 0);
 };
 
-const MENU_WIDTH = 160; // px
+const MENU_WIDTH = 148; // px, reduced from 160
 
 const Sidebar: React.FC<SidebarProps> = ({
   isOpen, onClose, onNewChat, chatSessions, activeChatId, onSelectChat,
@@ -126,26 +126,25 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     if (buttonElement) {
         const buttonRect = buttonElement.getBoundingClientRect();
-        const verticalOffset = 4; 
-        const horizontalOffset = 8; 
+        const verticalOffset = 2; // Reduced offset
+        const horizontalOffset = 6; // Reduced offset
 
         let top = buttonRect.bottom + verticalOffset;
         let left = buttonRect.right + horizontalOffset;
 
         // Boundary checks
-        if (left + MENU_WIDTH > window.innerWidth) { // If menu goes off-screen to the right
-            left = buttonRect.left - MENU_WIDTH - horizontalOffset; // Position to the left of the button
+        if (left + MENU_WIDTH > window.innerWidth) { 
+            left = buttonRect.left - MENU_WIDTH - horizontalOffset; 
         }
-        if (left < 0) { // If menu still goes off-screen to the left (e.g. sidebar is very narrow or button is at far left)
-            left = horizontalOffset; // Fallback to a small offset from viewport edge
+        if (left < 0) { 
+            left = horizontalOffset; 
         }
-        if (top + (contextMenuRef.current?.offsetHeight || 100) > window.innerHeight) { // If menu goes off-screen to the bottom
-             top = buttonRect.top - (contextMenuRef.current?.offsetHeight || 100) - verticalOffset; // Position above the button
+        if (top + (contextMenuRef.current?.offsetHeight || 80) > window.innerHeight) { // Approx height of menu
+             top = buttonRect.top - (contextMenuRef.current?.offsetHeight || 80) - verticalOffset; 
         }
-         if (top < 0) { // If menu still goes off-screen to the top
-            top = verticalOffset; // Fallback to a small offset from viewport edge
+         if (top < 0) { 
+            top = verticalOffset; 
         }
-
 
         setContextMenuPosition({ top, left });
         setActiveContextMenuSessionId(session.id);
@@ -209,42 +208,42 @@ const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       <div
-        className={`sidebar fixed top-0 left-0 h-full w-56 sm:w-64 bg-[#2D2A32] text-[#EAE6F0] p-5 z-40 transform ${
+        className={`sidebar fixed top-0 left-0 h-full w-52 sm:w-60 bg-[#2D2A32] text-[#EAE6F0] p-4 z-40 transform ${ // Reduced width and padding
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`} role="dialog" aria-modal="true" aria-hidden={!isOpen}
       >
         <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between mb-4 pt-1">
-            <IconHeart className="w-7 h-7 text-[#FF8DC7]" />
+          <div className="flex items-center justify-between mb-3 pt-0.5"> {/* Reduced mb and pt */}
+            <IconHeart className="w-6 h-6 text-[#FF8DC7]" /> {/* Reduced size */}
             <div className="relative group">
-              <button onClick={onClose} className="p-1 text-[#A09CB0] hover:text-[#FF8DC7]" aria-label="Close sidebar">
-                <IconSidebarClose className="w-6 h-6" />
+              <button onClick={onClose} className="p-0.5 text-[#A09CB0] hover:text-[#FF8DC7]" aria-label="Close sidebar"> {/* Reduced padding */}
+                <IconSidebarClose className="w-5 h-5" /> {/* Reduced size */}
               </button>
               <span className="absolute right-0 top-full mt-2 w-max px-2 py-1 bg-[#393641] text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">Close sidebar</span>
             </div>
           </div>
 
-          <button onClick={onNewChat} className="w-full flex items-center text-left p-3 mb-3 rounded-lg hover:bg-[#4A4754] transition-colors focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-2 focus:ring-offset-[#2D2A32]" aria-label="Start a new chat">
-            <IconNewChat className="w-5 h-5 mr-3 text-[#EAE6F0]" />
-            <span className="text-md font-normal text-[#EAE6F0]">New chat</span>
+          <button onClick={onNewChat} className="w-full flex items-center text-left p-2.5 mb-2.5 rounded-lg hover:bg-[#4A4754] transition-colors focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-2 focus:ring-offset-[#2D2A32]" aria-label="Start a new chat"> {/* Reduced padding and mb */}
+            <IconNewChat className="w-4 h-4 mr-2.5 text-[#EAE6F0]" /> {/* Reduced size and mr */}
+            <span className="text-sm font-normal text-[#EAE6F0]">New chat</span> {/* Changed to text-sm */}
           </button>
 
-          <div className="relative mb-4">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <IconSearch className="w-4 h-4 text-[#A09CB0]" />
+          <div className="relative mb-3"> {/* Reduced mb */}
+            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none"> {/* Reduced pl */}
+              <IconSearch className="w-3.5 h-3.5 text-[#A09CB0]" /> {/* Reduced size */}
             </div>
-            <input type="text" placeholder="Search chats" value={searchTerm} onChange={handleSearchChange} className="w-full p-2.5 pl-10 bg-[#4A4754] text-[#EAE6F0] placeholder-[#A09CB0] rounded-md text-sm border border-[#5A5666] focus:outline-none focus:border-[#FF8DC7] focus:ring-1 focus:ring-[#FF8DC7]" aria-label="Search chat history"/>
+            <input type="text" placeholder="Search chats" value={searchTerm} onChange={handleSearchChange} className="w-full p-2 pl-8 bg-[#4A4754] text-[#EAE6F0] placeholder-[#A09CB0] rounded-md text-xs border border-[#5A5666] focus:outline-none focus:border-[#FF8DC7] focus:ring-1 focus:ring-[#FF8DC7]" aria-label="Search chat history"/> {/* Reduced p, pl, text-xs */}
           </div>
 
-          <div className="flex-grow overflow-y-auto px-1 mb-4">
-            {isSearching ? <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">Searching chats...</p>
-              : isLoading && !searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">Loading chats...</p>
+          <div className="flex-grow overflow-y-auto px-1 mb-3"> {/* Changed pr-1 to px-1 for focus ring, reduced mb */}
+            {isSearching ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Searching chats...</p> {/* Reduced py */}
+              : isLoading && !searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Loading chats...</p> {/* Reduced py */}
               : displayedSessions.length > 0 ? (
-                groupedSessions.map(group => (
-                  <div key={group.heading} className="mb-3">
-                    <h3 className="text-xs text-[#A09CB0] uppercase font-semibold mb-1 mt-3 px-1">{group.heading}</h3>
+                groupedSessions.map(sessionGroup => ( // Renamed group to sessionGroup
+                  <div key={sessionGroup.heading} className="mb-2"> {/* Reduced mb */}
+                    <h3 className="text-xs text-[#A09CB0] uppercase font-semibold mb-0.5 mt-2 px-1">{sessionGroup.heading}</h3> {/* Reduced mb, mt */}
                     <ul>
-                      {group.chats.map((chat, index) => (
+                      {sessionGroup.chats.map((chat, index) => (
                         <li 
                           key={chat.id}
                           role="button"
@@ -264,11 +263,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                                   }
                               }
                           }}
-                          className={`group relative flex items-center justify-between p-2.5 my-0.5 rounded-lg animate-fadeInSlideUp outline-none transition-all duration-150 ease-in-out
+                          className={`group relative flex items-center justify-between p-2 my-0.5 rounded-lg animate-fadeInSlideUp outline-none transition-all duration-150 ease-in-out
                             ${activeChatId === chat.id 
                               ? 'bg-[#4A4754] opacity-100 ring-2 ring-[#FF8DC7] ring-offset-2 ring-offset-[#2D2A32]' 
                               : 'opacity-80 hover:opacity-100 hover:bg-[#3c3a43] focus:opacity-100 focus:ring-2 focus:ring-[#FF8DC7] ring-offset-2 ring-offset-[#2D2A32]'
-                            }`}
+                            }`} // Reduced p
                           style={{ animationDelay: `${index * 0.03}s` }}
                           aria-current={activeChatId === chat.id ? "page" : undefined}
                         >
@@ -280,10 +279,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                               onKeyDown={handleEditInputKeyDown}
                               onBlur={submitRename}
                               autoFocus
-                              className="flex-grow min-w-0 p-0 bg-transparent text-[#FF8DC7] rounded-md text-sm border-none focus:outline-none focus:ring-0"
+                              className="flex-grow min-w-0 p-0 bg-transparent text-[#FF8DC7] rounded-md text-xs border-none focus:outline-none focus:ring-0" // text-xs
                             />
                           ) : (
-                            <div className={`flex-grow min-w-0 text-left truncate text-sm ${activeChatId === chat.id ? 'font-semibold text-[#FF8DC7]' : 'text-[#EAE6F0]'}`}>
+                            <div className={`flex-grow min-w-0 text-left truncate text-xs ${activeChatId === chat.id ? 'font-semibold text-[#FF8DC7]' : 'text-[#EAE6F0]'}`}> {/* text-xs */}
                               {chat.title}
                             </div>
                           )}
@@ -291,13 +290,13 @@ const Sidebar: React.FC<SidebarProps> = ({
                             <button
                               ref={el => { if(el) ellipsisRefs.current[chat.id] = el; }}
                               onClick={(e) => handleEllipsisClick(e, chat)}
-                              className={`p-1 text-[#A09CB0] hover:text-[#FF8DC7] rounded-md focus:outline-none focus:ring-1 focus:ring-[#FF8DC7] flex-shrink-0 transition-opacity 
-                                  ${activeContextMenuSessionId === chat.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}
+                              className={`p-0.5 text-[#A09CB0] hover:text-[#FF8DC7] rounded-md focus:outline-none focus:ring-1 focus:ring-[#FF8DC7] flex-shrink-0 transition-opacity 
+                                  ${activeContextMenuSessionId === chat.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`} // Reduced p
                               aria-label={`More options for chat: ${chat.title}`}
                               aria-haspopup="true"
                               aria-expanded={activeContextMenuSessionId === chat.id}
                             >
-                              <IconEllipsisVertical className="w-5 h-5" />
+                              <IconEllipsisVertical className="w-4 h-4" /> {/* Reduced size */}
                             </button>
                           )}
                         </li>
@@ -305,8 +304,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </ul>
                   </div>
                 ))
-              ) : searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">No chats match your search.</p>
-              : <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">No chat history yet.</p>
+              ) : searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">No chats match your search.</p> {/* Reduced py */}
+              : <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">No chat history yet.</p> {/* Reduced py */}
             }
           </div>
         </div>
@@ -316,7 +315,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       {activeContextMenuSessionId && contextMenuPosition && currentSessionForMenu && (
         <div
           ref={contextMenuRef}
-          className="context-menu fixed bg-[#201F23] rounded-lg shadow-xl py-1.5 z-50" 
+          className="context-menu fixed bg-[#201F23] rounded-lg shadow-xl py-1 z-50" // Reduced py
           style={{ 
             top: `${contextMenuPosition.top}px`, 
             left: `${contextMenuPosition.left}px`, 
@@ -326,18 +325,18 @@ const Sidebar: React.FC<SidebarProps> = ({
         >
           <button 
             onClick={() => handleRename(currentSessionForMenu)} 
-            className="context-menu-item w-full text-left px-3 py-2 text-sm text-[#EAE6F0] hover:bg-[#393641] flex items-center focus:bg-[#393641] focus:outline-none rounded-t-md"
+            className="context-menu-item w-full text-left px-2.5 py-1.5 text-xs text-[#EAE6F0] hover:bg-[#393641] flex items-center focus:bg-[#393641] focus:outline-none rounded-t-md" // Reduced px, py, text-xs
             role="menuitem"
           >
-            <IconPencil className="w-4 h-4 mr-2.5" /> Rename
+            <IconPencil className="w-3.5 h-3.5 mr-2" /> Rename {/* Reduced size and mr */}
           </button>
-          <div className="border-t border-[#393641] my-0.5 mx-1.5"></div>
+          <div className="border-t border-[#393641] my-0.5 mx-1"></div> {/* Reduced mx */}
           <button 
             onClick={() => { onRequestDeleteConfirmation(currentSessionForMenu.id, currentSessionForMenu.title); closeContextMenu(); }} 
-            className="context-menu-item w-full text-left px-3 py-2 text-sm text-[#FF8DC7] hover:bg-[#393641] flex items-center focus:bg-[#393641] focus:outline-none rounded-b-md"
+            className="context-menu-item w-full text-left px-2.5 py-1.5 text-xs text-[#FF8DC7] hover:bg-[#393641] flex items-center focus:bg-[#393641] focus:outline-none rounded-b-md" // Reduced px, py, text-xs
             role="menuitem"
           >
-            <IconTrash className="w-4 h-4 mr-2.5" /> Delete
+            <IconTrash className="w-3.5 h-3.5 mr-2" /> Delete {/* Reduced size and mr */}
           </button>
         </div>
       )}
