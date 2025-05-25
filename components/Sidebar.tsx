@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { IconSidebarClose, IconHeart, IconSearch, IconPencil, IconEllipsisVertical, IconTrash, IconNewChat } from '../constants';
 import { ChatSession } from '../types';
@@ -107,20 +106,30 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handleEllipsisClick = (e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation(); // Prevent li click handler
+    e.stopPropagation(); 
     const buttonElement = ellipsisRefs.current[sessionId];
     if (buttonElement) {
         const rect = buttonElement.getBoundingClientRect();
-        const menuWidth = 150; // Must match the width set in the style
-        const menuHorizontalMargin = 8; // Space between button and menu
+        const menuWidth = 150; 
+        const verticalOffset = 4; // Space between button and menu
+        const screenPadding = 8; // Min padding from screen edges
 
-        let left = rect.right + window.scrollX + menuHorizontalMargin;
-        // If menu would go off-screen to the right, position it to the left of the button
-        if (left + menuWidth > window.innerWidth) {
-            left = rect.left + window.scrollX - menuWidth - menuHorizontalMargin;
+        let top = rect.bottom + window.scrollY + verticalOffset;
+        let left = rect.left + window.scrollX + (rect.width / 2) - (menuWidth / 2); // Center menu under button
+
+        // Boundary checks
+        if (left < screenPadding) {
+            left = screenPadding;
         }
-        
-        const top = rect.top + window.scrollY;
+        if (left + menuWidth > window.innerWidth - screenPadding) {
+            left = window.innerWidth - menuWidth - screenPadding;
+        }
+        // Ensure menu is not positioned above the button (e.g. if button is at bottom of scrollable area)
+        if (top + 100 > window.innerHeight + window.scrollY - screenPadding) { // Assuming menu height ~100px
+            top = rect.top + window.scrollY - 100 - verticalOffset; // Position above
+        }
+
+
         setContextMenuPosition({ top, left });
     }
     setActiveContextMenuSessionId(sessionId === activeContextMenuSessionId ? null : sessionId);
@@ -133,7 +142,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
-        // Check if the click was on an ellipsis button to prevent immediate re-open
         const isClickOnEllipsis = Object.values(ellipsisRefs.current).some(
             (btn) => btn && btn.contains(event.target as Node)
         );
@@ -160,13 +168,11 @@ const Sidebar: React.FC<SidebarProps> = ({
         await onRenameChatSession(editingSessionId, editingTitle.trim());
       } catch (error) {
         console.error("Failed to rename chat session:", error);
-        // Optionally, revert title or show error to user by finding original title
         const originalSession = chatSessions.find(s => s.id === editingSessionId);
         if (originalSession) setEditingTitle(originalSession.title);
       }
     }
     setEditingSessionId(null);
-    // setEditingTitle(''); // Cleared after potential revert
   };
 
   const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -229,22 +235,22 @@ const Sidebar: React.FC<SidebarProps> = ({
                         onClick={() => {
                             if (editingSessionId !== chat.id) {
                                 onSelectChat(chat.id);
-                                closeContextMenu(); // Close any open context menu when selecting a different chat
+                                closeContextMenu(); 
                             }
                         }}
                         onKeyDown={(e) => { 
                             if (e.key === 'Enter' || e.key === ' ') { 
-                                e.preventDefault(); // Prevent space from scrolling
+                                e.preventDefault(); 
                                 if (editingSessionId !== chat.id) {
                                     onSelectChat(chat.id);
                                     closeContextMenu();
                                 }
                             }
                         }}
-                        className={`group flex items-center justify-between p-0.5 my-0.5 rounded-md animate-fadeInSlideUp focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-1 focus:ring-offset-[#2D2A32] transition-all duration-150 ease-in-out
+                        className={`group flex items-center justify-between p-0.5 my-0.5 rounded-md animate-fadeInSlideUp outline-none transition-all duration-150 ease-in-out
                           ${activeChatId === chat.id 
-                            ? 'bg-[#5A5666] opacity-100' 
-                            : 'opacity-80 hover:opacity-100 hover:bg-[#3c3a43] focus:opacity-100'
+                            ? 'bg-[#5A5666] opacity-100 ring-2 ring-[#FF8DC7] ring-offset-1 ring-offset-[#2D2A32]' 
+                            : 'opacity-80 hover:opacity-100 hover:bg-[#3c3a43] focus:opacity-100 focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-1 focus:ring-offset-[#2D2A32]'
                           }`}
                         style={{ animationDelay: `${index * 0.03}s` }}
                         aria-current={activeChatId === chat.id ? "page" : undefined}
@@ -265,9 +271,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                           </div>
                         )}
                         {editingSessionId !== chat.id && (
-                          // FIX: Corrected ref callback to ensure void return type.
                           <button
-                            ref={el => { ellipsisRefs.current[chat.id] = el; }}
+                            ref={el => { if(el) ellipsisRefs.current[chat.id] = el; }}
                             onClick={(e) => handleEllipsisClick(e, chat.id)}
                             className={`p-1.5 text-[#A09CB0] hover:text-[#FF8DC7] rounded-md focus:outline-none focus:ring-1 focus:ring-[#FF8DC7] flex-shrink-0 transition-opacity 
                                 ${activeContextMenuSessionId === chat.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}
@@ -281,20 +286,21 @@ const Sidebar: React.FC<SidebarProps> = ({
                         {activeContextMenuSessionId === chat.id && contextMenuPosition && (
                           <div
                             ref={contextMenuRef}
-                            className="context-menu absolute bg-[#2D2A32] border border-[#5A5666] rounded-md shadow-lg py-1 z-50"
+                            className="context-menu absolute bg-[#2D2A32] rounded-lg shadow-xl py-1 z-50"
                             style={{ top: `${contextMenuPosition.top}px`, left: `${contextMenuPosition.left}px`, width: '150px' }}
                             role="menu"
                           >
                             <button 
                               onClick={() => handleRename(chat.id, chat.title)} 
-                              className="context-menu-item w-full text-left px-3 py-1.5 text-sm text-[#EAE6F0] hover:bg-[#4A4754] flex items-center focus:bg-[#4A4754] focus:outline-none rounded-t-md"
+                              className="context-menu-item w-full text-left px-3 py-1.5 text-sm text-[#EAE6F0] hover:bg-[#4A4754] flex items-center focus:bg-[#4A4754] focus:outline-none"
                               role="menuitem"
                             >
                               <IconPencil className="w-4 h-4 mr-2.5" /> Rename
                             </button>
+                            <div className="border-t border-[#4A4754] my-1 mx-1"></div> {/* Separator */}
                             <button 
                               onClick={() => { onRequestDeleteConfirmation(chat.id, chat.title); closeContextMenu(); }} 
-                              className="context-menu-item w-full text-left px-3 py-1.5 text-sm text-[#FF6B6B] hover:bg-[#4A4754] flex items-center focus:bg-[#4A4754] focus:outline-none rounded-b-md"
+                              className="context-menu-item w-full text-left px-3 py-1.5 text-sm text-[#FF6B6B] hover:bg-[#4A4754] flex items-center focus:bg-[#4A4754] focus:outline-none"
                               role="menuitem"
                             >
                               <IconTrash className="w-4 h-4 mr-2.5" /> Delete
