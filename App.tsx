@@ -312,7 +312,7 @@ const App: React.FC = () => {
       {/* Main content area that shifts on desktop */}
       <div 
         className={`relative z-10 flex flex-col flex-grow h-full bg-[#393641] transition-all duration-300 ease-in-out ${
-          (isSidebarOpen && isDesktopView) ? 'md:ml-80' : 'ml-0' // Sidebar width for md+ is w-80 (320px)
+          (isSidebarOpen && isDesktopView) ? 'md:ml-72' : 'ml-0' // Sidebar width for md+ is w-72 (288px)
         }`}
       >
         <Header onToggleSidebar={handleToggleSidebar} onNewChat={handleNewChat} />
