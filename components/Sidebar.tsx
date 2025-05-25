@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { IconSidebarClose, IconHeart, IconSearch, IconEdit } from '../constants';
 import { ChatSession } from '../types';
@@ -137,7 +138,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Chat History List (Scrollable) */}
-        <div className="flex-grow overflow-y-auto pr-1 mb-4"> {/* Added pr-1 to give a little space for scrollbar and prevent text touching edge */}
+        <div className="flex-grow overflow-y-auto pr-1 mb-4"> {/* pr-1 for scrollbar space */}
           {isLoading ? (
             <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">Loading chats...</p>
           ) : groupedSessions.length > 0 ? (
@@ -148,12 +149,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </h3>
                 <ul>
                   {group.chats.map((chat) => ( 
-                    <li key={chat.id}>
+                    <li key={chat.id} className="px-0"> {/* Removed negative margin, rely on button padding and no extra li padding */}
                       <button 
                         onClick={() => onSelectChat(chat.id)}
-                        className={`w-full text-left p-2.5 my-0.5 rounded-md hover:bg-[#4A4754] truncate transition-colors text-sm focus:outline-none focus:ring-1 focus:ring-[#FF8DC7] focus:ring-offset-2 focus:ring-offset-[#2D2A32] ${
+                        className={`w-full text-left p-2 my-0.5 rounded-md hover:bg-[#4A4754] truncate transition-colors text-sm focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-1 focus:ring-offset-[#2D2A32] ${
                           activeChatId === chat.id ? 'bg-[#5A5666] font-semibold text-[#FF8DC7]' : 'text-[#EAE6F0]'
-                        }`}
+                        }`} // p-2 instead of p-2.5, focus:ring-offset-1
                       >
                         {chat.title}
                       </button>
