@@ -15,7 +15,10 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isLoadingAi
   }, [messages, isLoadingAiResponse]);
 
   return (
-    <div className="flex-grow px-10 py-4 overflow-y-auto">
+    <div 
+      className="flex-grow px-10 py-4 overflow-y-auto chat-message-list-scroll-container"
+      tabIndex={-1} // Prevent keyboard focus unless specifically desired
+    >
       <div className="max-w-2xl mx-auto space-y-1">
         {messages.map((msg, index) => {
           const isLastMessage = index === messages.length - 1;
