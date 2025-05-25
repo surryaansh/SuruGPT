@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { IconSidebarClose, IconHeart, IconSearch, IconEdit } from '../constants';
+import { IconSidebarClose, IconHeart, IconSearch, IconEdit, IconEllipsisVertical } from '../constants';
 import { ChatSession } from '../types';
 
 interface SidebarProps {
@@ -9,6 +10,7 @@ interface SidebarProps {
   chatSessions: ChatSession[];
   activeChatId: string | null;
   onSelectChat: (chatId: string) => void;
+  onDeleteChatSession: (sessionId: string) => void; // New prop for deleting
   isLoading?: boolean; // Initial loading of all sessions
 }
 
@@ -81,14 +83,13 @@ const Sidebar: React.FC<SidebarProps> = ({
   chatSessions, 
   activeChatId, 
   onSelectChat,
-  isLoading // Prop for initial loading of all sessions
+  onDeleteChatSession,
+  isLoading 
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [displayedSessions, setDisplayedSessions] = useState<ChatSession[]>(chatSessions);
   const [isSearching, setIsSearching] = useState(false);
 
-  // Effect to update displayedSessions when the main chatSessions prop changes,
-  // but only if there's no active search term.
   useEffect(() => {
     if (!searchTerm.trim()) {
       setDisplayedSessions(chatSessions);
@@ -98,7 +99,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const performSearch = useCallback(async (term: string) => {
     const trimmedTerm = term.trim();
     if (!trimmedTerm) {
-      setDisplayedSessions(chatSessions); // Show all original sessions if search term is cleared
+      setDisplayedSessions(chatSessions); 
       setIsSearching(false);
       return;
     }
@@ -118,11 +119,11 @@ const Sidebar: React.FC<SidebarProps> = ({
       setDisplayedSessions(results);
     } catch (error) {
       console.error("Error fetching search results:", error);
-      setDisplayedSessions([]); // On error, show no results
+      setDisplayedSessions([]); 
     } finally {
       setIsSearching(false);
     }
-  }, [chatSessions]); // chatSessions is a dependency to correctly reset to all sessions
+  }, [chatSessions]);
 
   const debouncedSearch = useMemo(() => debounce(performSearch, 300), [performSearch]);
 
@@ -131,12 +132,16 @@ const Sidebar: React.FC<SidebarProps> = ({
     setSearchTerm(term);
 
     if (!term.trim()) {
-      // Immediately reset UI state when search input is cleared
       setDisplayedSessions(chatSessions);
       setIsSearching(false);
     }
-    // Always call debouncedSearch to handle actual search requests or confirm the reset state
     debouncedSearch(term);
+  };
+
+  const handleDeleteClick = (sessionId: string, sessionTitle: string) => {
+    if (window.confirm(`Are you sure you want to delete the chat "${sessionTitle}"? This action cannot be undone.`)) {
+      onDeleteChatSession(sessionId);
+    }
   };
 
   const groupedSessions = groupChatSessionsByDate(displayedSessions);
@@ -196,7 +201,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex-grow overflow-y-auto pr-1 mb-4">
           {isSearching ? (
             <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">Searching chats...</p>
-          ) : isLoading && !searchTerm.trim() ? ( // Initial loading, not actively searching
+          ) : isLoading && !searchTerm.trim() ? ( 
             <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">Loading chats...</p>
           ) : displayedSessions.length > 0 ? (
             groupedSessions.map(group => (
@@ -208,27 +213,37 @@ const Sidebar: React.FC<SidebarProps> = ({
                   {group.chats.map((chat, index) => ( 
                     <li 
                         key={chat.id} 
-                        className="px-1 animate-fadeInSlideUp"
-                        style={{ animationDelay: `${index * 0.03}s` }} // Stagger animation
+                        className="relative group flex items-center justify-between px-1 animate-fadeInSlideUp hover:bg-[#4A4754] rounded-md" // Added group for hover on li
+                        style={{ animationDelay: `${index * 0.03}s` }} 
                     >
                       <button 
                         onClick={() => onSelectChat(chat.id)}
-                        className={`w-full text-left p-2 my-0.5 rounded-md hover:bg-[#4A4754] truncate transition-opacity text-sm focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-1 focus:ring-offset-[#2D2A32] ${
+                        className={`flex-grow min-w-0 text-left p-2 my-0.5 rounded-md truncate transition-opacity text-sm focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-1 focus:ring-offset-[#2D2A32] ${
                           activeChatId === chat.id 
                             ? 'bg-[#5A5666] font-semibold text-[#FF8DC7] opacity-100' 
-                            : 'text-[#EAE6F0] opacity-75 hover:opacity-100'
+                            : 'text-[#EAE6F0] opacity-75 group-hover:opacity-100' // Ensure text is visible on hover
                         }`}
                       >
                         {chat.title}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                           e.stopPropagation(); // Prevent onSelectChat from firing
+                           handleDeleteClick(chat.id, chat.title);
+                        }}
+                        className="p-1.5 text-[#A09CB0] hover:text-[#FF8DC7] opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 flex-shrink-0"
+                        aria-label={`More options for chat: ${chat.title}`}
+                      >
+                        <IconEllipsisVertical className="w-4 h-4" />
                       </button>
                     </li>
                   ))}
                 </ul>
               </div>
             ))
-          ) : searchTerm.trim() ? ( // Searched, but no results
+          ) : searchTerm.trim() ? ( 
              <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">No chats match your search.</p>
-          ) : ( // No search term, and no initial chats
+          ) : ( 
             <p className="text-xs text-[#A09CB0] px-1 py-2 text-center">No chat history yet.</p>
           )}
         </div>
