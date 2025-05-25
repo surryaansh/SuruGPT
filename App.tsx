@@ -86,7 +86,6 @@ const App: React.FC = () => {
   const [chatReady, setChatReady] = useState<boolean>(true); 
   
   const [isDesktopView, setIsDesktopView] = useState(window.innerWidth >= 768); // md breakpoint (768px)
-  // Initialize isSidebarOpen based on initial screen width to prevent flash on mobile
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768); 
 
   const [globalContextSummary, setGlobalContextSummary] = useState<string>('');
@@ -100,10 +99,6 @@ const App: React.FC = () => {
       setIsDesktopView(currentIsDesktop);
 
       if (!initialViewSetupDone.current) {
-        // This logic used to set isSidebarOpen, but now its initial state is correct.
-        // We still need to ensure this block runs only once for other initial setup needs if any.
-        // If !currentIsDesktop, isSidebarOpen is already false from its useState initialization.
-        // If currentIsDesktop, isSidebarOpen is already true from its useState initialization.
         initialViewSetupDone.current = true;
       }
     };
@@ -238,7 +233,7 @@ const App: React.FC = () => {
 
     try {
         if (!currentSessionId) {
-          const title = await generateChatTitle(text); // Now async
+          const title = await generateChatTitle(text); 
           const newSessionFromDb = await createChatSessionInFirestore(title, text);
           currentSessionId = newSessionFromDb.id;
           
@@ -246,7 +241,6 @@ const App: React.FC = () => {
           
           setAllChatSessions(prevSessions => [newSessionFromDb, ...prevSessions]);
           setActiveChatId(currentSessionId);
-          // Replace temp user message with saved one, or set initial messages for new chat
           setCurrentMessages([savedUserMessage]); 
           setConversationContextFromAppMessages(
             [savedUserMessage].map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
@@ -330,6 +324,34 @@ const App: React.FC = () => {
     }
   }, [chatReady, activeChatId, globalContextSummary]);
 
+  const handleDeleteChatSession = async (sessionId: string) => {
+    try {
+      const response = await fetch('/api/deleteChat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to delete chat session:', response.status, errorData);
+        alert(`Error deleting chat: ${errorData.error || response.statusText}`);
+        return;
+      }
+
+      setAllChatSessions(prevSessions => prevSessions.filter(session => session.id !== sessionId));
+      if (activeChatId === sessionId) {
+        handleNewChat(); // Reset to a new chat state
+      }
+       // Optionally, display a success message or toast
+       console.log(`Chat session ${sessionId} deleted successfully.`);
+
+    } catch (error) {
+      console.error('Error calling deleteChat API:', error);
+      alert('An unexpected error occurred while trying to delete the chat session.');
+    }
+  };
+
   const showWelcome = !activeChatId && currentMessages.length === 0 && chatReady && !isSessionsLoading && !isMessagesLoading;
 
   return (
@@ -341,6 +363,7 @@ const App: React.FC = () => {
         chatSessions={allChatSessions}
         activeChatId={activeChatId}
         onSelectChat={handleSelectChat}
+        onDeleteChatSession={handleDeleteChatSession} // Pass the new handler
         isLoading={isSessionsLoading}
       />
       {isSidebarOpen && !isDesktopView && (
