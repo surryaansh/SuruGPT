@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -49,31 +48,23 @@
     }
 
     /* General smoothness for common transitions */
-    button { /* Transitions for buttons */
+    button, input[type="text"], div, li, a, svg { /* Added svg for icon transitions */
       transition-property: background-color, border-color, color, opacity, transform, box-shadow;
       transition-duration: 0.25s; 
-      transition-timing-function: ease-in-out;
-    }
-    input[type="text"] { /* Transitions for text inputs, EXCLUDING box-shadow */
-      transition-property: background-color, border-color, color, opacity, transform;
-      transition-duration: 0.25s; 
-      transition-timing-function: ease-in-out;
-    }
-    div, li, a { /* Transitions for other elements, EXCLUDING box-shadow */
-      transition-property: background-color, border-color, color, opacity, transform;
-      transition-duration: 0.25s;
       transition-timing-function: ease-in-out;
     }
     
     /* Focus styles */
     input[type="text"]:focus {
-      outline: none; /* Remove default outline */
-      box-shadow: none; /* Remove custom box-shadow */
+      outline: none; 
+      box-shadow: none; 
     }
-    button:focus-visible { /* Using focus-visible for better accessibility on buttons */
+    /* More consistent focus ring for buttons and interactive elements */
+    button:focus-visible, [role="button"]:focus-visible, [tabindex="0"]:focus-visible:not(input):not(.chat-message-list-scroll-container) {
       outline: none;
-      box-shadow: 0 0 0 2px #393641, 0 0 0 4px #FF8DC7; /* Inner dark, outer pink accent ring for buttons */
+      box-shadow: 0 0 0 2px #393641, 0 0 0 4px #FF8DC7;
     }
+
 
     /* Input field placeholder transition for a subtle effect */
     input::placeholder {
@@ -85,40 +76,40 @@
 
     @keyframes floatHeart {
       0% {
-        bottom: -30px; /* Start slightly below the container */
+        bottom: -30px; 
         opacity: 0;
       }
-      10%, 90% { /* Fade in and stay visible */
-        opacity: 0.7; /* Subtle opacity */
+      10%, 90% { 
+        opacity: 0.7; 
       }
       100% {
-        bottom: 100%; /* Float to the top of the parent container */
+        bottom: 100%; 
         opacity: 0;
       }
     }
 
     .heart-float {
       position: absolute;
-      opacity: 0; /* Ensure hearts start invisible */
+      opacity: 0; 
       animation-name: floatHeart;
       animation-timing-function: linear;
       animation-iteration-count: infinite;
-      will-change: bottom, opacity; /* Optimize animation */
+      will-change: bottom, opacity; 
     }
 
     /* Sidebar Styles */
     .sidebar {
-      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); /* Smoother easing */
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); 
     }
     .sidebar-overlay {
-      transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1); /* Smoother easing */
+      transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1); 
     }
 
     /* Message & List Item appearance animation */
     @keyframes fadeInSlideUp {
       from {
         opacity: 0;
-        transform: translateY(8px); /* Slightly less travel */
+        transform: translateY(8px); 
       }
       to {
         opacity: 1;
@@ -136,42 +127,24 @@
       50% { opacity: 0; }
     }
     .blinking-cursor {
-      display: inline-block; /* Ensures it flows with text */
-      width: 7px; /* Adjust width as needed */
-      height: 1.1em; /* Match text line height */
-      background-color: #FF8DC7; /* Accent color */
+      display: inline-block; 
+      width: 7px; 
+      height: 1.1em; 
+      background-color: #FF8DC7; 
       margin-left: 2px;
       animation: blinkCursor 1s step-end infinite;
       position: relative;
-      bottom: -0.15em; /* Fine-tune vertical alignment */
+      bottom: -0.15em; 
     }
 
     /* Remove focus rectangle from main chat message list */
     .chat-message-list-scroll-container:focus {
       box-shadow: none !important;
       outline: none !important;
-      border-color: transparent !important; /* Added for good measure */
+      border-color: transparent !important; 
     }
 
-    /* Context Menu Styles */
-    .context-menu {
-      /* Tailwind classes used in component, specific overrides here if needed */
-      /* e.g. min-width if not set by component style prop */
-    }
-    .context-menu-item:hover {
-      /* Tailwind hover:bg-gray-700 is used, this is for additional specific overrides */
-    }
-
-    /* Confirmation Dialog Styles */
-    .dialog-overlay {
-      /* Tailwind classes used in component */
-      animation: fadeIn 0.2s ease-out forwards;
-    }
-    .dialog-content {
-      /* Tailwind classes used in component */
-       animation: scaleIn 0.2s ease-out forwards;
-    }
-
+    /* Keyframes for dialogs and context menus */
     @keyframes fadeIn {
       from { opacity: 0; }
       to { opacity: 1; }
@@ -179,6 +152,28 @@
     @keyframes scaleIn {
       from { opacity: 0; transform: scale(0.95); }
       to { opacity: 1; transform: scale(1); }
+    }
+    
+    /* Utility classes for animations */
+    .animate-fadeIn {
+      animation: fadeIn 0.2s ease-out forwards;
+    }
+    .animate-scaleIn {
+      animation: scaleIn 0.2s ease-out forwards;
+    }
+    .dialog-overlay {
+      /* Uses animate-fadeIn directly */
+    }
+    .dialog-content {
+      /* Uses animate-scaleIn directly */
+    }
+
+    @keyframes subtleBounce {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-2px) scale(1.05); }
+    }
+    .animate-subtleBounceOnHover:hover {
+        animation: subtleBounce 0.4s ease-in-out;
     }
 
   </style>
