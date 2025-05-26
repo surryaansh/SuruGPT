@@ -28,7 +28,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onNewChat }) => {
       {/* Right Button: New Chat */}
       <button
         onClick={onNewChat}
-        className="p-1.5 sm:p-2 text-[#EAE6F0] hover:text-[#FF8DC7] flex-shrink-0" 
+        className="p-1.5 sm:p-2 text-[#EAE6F0] hover:text-[#FF8DC7] flex-shrink-0 animate-subtleBounceOnHover" 
         aria-label="Start new chat"
       >
         <IconHeart className="w-5 h-5 sm:w-6 sm:h-6" />
