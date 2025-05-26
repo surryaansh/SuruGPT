@@ -29,7 +29,8 @@ const convertMessageTimestamp = (messageData: any): Message => {
   const timestampField = messageData.timestamp;
   return {
     ...messageData,
-    timestamp: timestampField instanceof Timestamp ? timestampField.toDate() : new Date(timestampField), 
+    timestamp: timestampField instanceof Timestamp ? timestampField.toDate() : new Date(timestampField),
+    feedback: messageData.feedback === undefined ? null : messageData.feedback, // Ensure feedback defaults to null
   } as Message;
 };
 
@@ -108,6 +109,7 @@ export const addMessageToFirestore = async (
       {
         ...messageData,
         timestamp: serverTimestamp(), 
+        feedback: null, // Initialize feedback as null
       }
     );
     const docSnap = await getDoc(messageRef);
@@ -131,11 +133,26 @@ export const updateMessageInFirestore = async (
     const messageRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION, messageId);
     await updateDoc(messageRef, { 
       text: newText,
-      timestamp: serverTimestamp() // Also update timestamp on edit
+      timestamp: serverTimestamp() 
     });
     console.log(`Message ${messageId} in session ${sessionId} updated successfully.`);
   } catch (error) {
     console.error(`Error updating message ${messageId} in session ${sessionId}:`, error);
+    throw error;
+  }
+};
+
+export const updateMessageFeedbackInFirestore = async (
+  sessionId: string,
+  messageId: string,
+  feedback: 'good' | 'bad' | null
+): Promise<void> => {
+  try {
+    const messageRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION, messageId);
+    await updateDoc(messageRef, { feedback });
+    console.log(`Feedback for message ${messageId} in session ${sessionId} updated to ${feedback}.`);
+  } catch (error) {
+    console.error(`Error updating feedback for message ${messageId} in session ${sessionId}:`, error);
     throw error;
   }
 };
