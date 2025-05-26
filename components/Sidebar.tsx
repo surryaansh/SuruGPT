@@ -86,7 +86,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
     setIsSearching(true);
     try {
-      const response = await fetch('/api/search', {
+      const response = await fetch(`${window.location.origin}/api/search`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ searchTerm: trimmedTerm }),
       });
