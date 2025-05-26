@@ -266,7 +266,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                           className={`group relative flex items-center justify-between p-2 my-0.5 rounded-lg animate-fadeInSlideUp outline-none transition-all duration-150 ease-in-out
                             ${activeChatId === chat.id 
                               ? 'bg-[#4A4754] opacity-100 ring-2 ring-[#FF8DC7] ring-offset-2 ring-offset-[#2D2A32]' 
-                              : 'opacity-80 hover:opacity-100 hover:bg-[#3c3a43] hover:ring-2 hover:ring-[#FF8DC7] hover:ring-offset-2 hover:ring-offset-[#2D2A32] focus:opacity-100 focus:bg-[#3c3a43] focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-2 focus:ring-offset-[#2D2A32]'
+                              : 'opacity-80 hover:opacity-100 hover:bg-[#3c3a43] hover:ring-2 hover:ring-[#FF8DC7] focus:opacity-100 focus:bg-[#3c3a43] focus:ring-2 focus:ring-[#FF8DC7]'
                             }`} // Reduced p
                           style={{ animationDelay: `${index * 0.03}s` }}
                           aria-current={activeChatId === chat.id ? "page" : undefined}
