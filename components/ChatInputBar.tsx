@@ -32,7 +32,7 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({ onSendMessage, isLoading, i
       <div className="max-w-2xl mx-auto"> {/* New wrapper for max-width and centering */}
         <div className="flex items-center bg-[#4A4754] rounded-xl p-1.5 shadow-sm">
           <button 
-            className="p-2 text-[#A09CB0] hover:text-[#FF8DC7] disabled:opacity-50" 
+            className="p-2 text-[#A09CB0] hover:text-[#FF8DC7] disabled:opacity-50 animate-subtleBounceOnHover" 
             disabled={isLoading || !isChatAvailable}
             aria-label="More options" // Changed aria-label
           >
