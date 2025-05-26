@@ -126,20 +126,19 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     if (buttonElement) {
         const buttonRect = buttonElement.getBoundingClientRect();
-        const verticalOffset = 2; // Reduced offset
-        const horizontalOffset = 6; // Reduced offset
+        const verticalOffset = 2; 
+        const horizontalOffset = 6; 
 
         let top = buttonRect.bottom + verticalOffset;
         let left = buttonRect.right + horizontalOffset;
 
-        // Boundary checks
         if (left + MENU_WIDTH > window.innerWidth) { 
             left = buttonRect.left - MENU_WIDTH - horizontalOffset; 
         }
         if (left < 0) { 
             left = horizontalOffset; 
         }
-        if (top + (contextMenuRef.current?.offsetHeight || 80) > window.innerHeight) { // Approx height of menu
+        if (top + (contextMenuRef.current?.offsetHeight || 80) > window.innerHeight) {
              top = buttonRect.top - (contextMenuRef.current?.offsetHeight || 80) - verticalOffset; 
         }
          if (top < 0) { 
@@ -208,40 +207,51 @@ const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       <div
-        className={`sidebar fixed top-0 left-0 h-full w-52 sm:w-60 bg-[#2D2A32] text-[#EAE6F0] p-4 z-40 transform ${ // Reduced width and padding
+        className={`sidebar fixed top-0 left-0 h-full w-52 sm:w-60 bg-[#2D2A32] text-[#EAE6F0] p-4 z-40 transform ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`} role="dialog" aria-modal="true" aria-hidden={!isOpen}
       >
         <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between mb-3 pt-0.5"> {/* Reduced mb and pt */}
-            <IconHeart className="w-6 h-6 text-[#FF8DC7]" /> {/* Reduced size */}
+          <div className="flex items-center justify-between mb-3 pt-0.5">
+            <IconHeart className="w-6 h-6 text-[#FF8DC7]" />
             <div className="relative group">
-              <button onClick={onClose} className="p-0.5 text-[#A09CB0] hover:text-[#FF8DC7]" aria-label="Close sidebar"> {/* Reduced padding */}
-                <IconSidebarClose className="w-5 h-5" /> {/* Reduced size */}
+              <button onClick={onClose} className="p-0.5 text-[#A09CB0] hover:text-[#FF8DC7]" aria-label="Close sidebar">
+                <IconSidebarClose className="w-5 h-5" />
               </button>
               <span className="absolute right-0 top-full mt-2 w-max px-2 py-1 bg-[#393641] text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">Close sidebar</span>
             </div>
           </div>
 
-          <button onClick={onNewChat} className="w-full flex items-center text-left p-2.5 mb-2.5 rounded-lg hover:bg-[#4A4754] transition-colors focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-2 focus:ring-offset-[#2D2A32]" aria-label="Start a new chat"> {/* Reduced padding and mb */}
-            <IconNewChat className="w-4 h-4 mr-2.5 text-[#EAE6F0]" /> {/* Reduced size and mr */}
-            <span className="text-sm font-normal text-[#EAE6F0]">New chat</span> {/* Changed to text-sm */}
+          <button 
+            onClick={onNewChat} 
+            className="w-full flex items-center text-left p-2.5 mb-2.5 rounded-lg hover:bg-[#4A4754] transition-colors focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-2 focus:ring-offset-[#2D2A32]" 
+            aria-label="Start a new chat"
+          >
+            <IconNewChat className="w-4 h-4 mr-2.5 text-[#EAE6F0]" />
+            <span className="text-sm font-normal text-[#EAE6F0]">New chat</span>
           </button>
 
-          <div className="relative mb-3"> {/* Reduced mb */}
-            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none"> {/* Reduced pl */}
-              <IconSearch className="w-3.5 h-3.5 text-[#A09CB0]" /> {/* Reduced size */}
+          <div className="relative mb-3">
+            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+              <IconSearch className="w-3.5 h-3.5 text-[#A09CB0]" />
             </div>
-            <input type="text" placeholder="Search chats" value={searchTerm} onChange={handleSearchChange} className="w-full p-2 pl-8 bg-[#4A4754] text-[#EAE6F0] placeholder-[#A09CB0] rounded-md text-xs border border-[#5A5666] focus:outline-none focus:border-[#FF8DC7] focus:ring-1 focus:ring-[#FF8DC7]" aria-label="Search chat history"/> {/* Reduced p, pl, text-xs */}
+            <input 
+              type="text" 
+              placeholder="Search chats" 
+              value={searchTerm} 
+              onChange={handleSearchChange} 
+              className="w-full p-2 pl-8 bg-[#4A4754] text-[#EAE6F0] placeholder-[#A09CB0] rounded-md text-xs border border-[#5A5666] focus:outline-none focus:border-[#FF8DC7] focus:ring-1 focus:ring-[#FF8DC7]" 
+              aria-label="Search chat history"
+            />
           </div>
 
-          <div className="flex-grow overflow-y-auto px-1 mb-3"> {/* Changed pr-1 to px-1 for focus ring, reduced mb */}
+          <div className="flex-grow overflow-y-auto px-1 mb-3">
             {isSearching ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Searching chats...</p> 
               : isLoading && !searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Loading chats...</p> 
               : displayedSessions.length > 0 ? (
                 groupedSessions.map(sessionGroup => ( 
-                  <div key={sessionGroup.heading} className="mb-2"> {/* Reduced mb */}
-                    <h3 className="text-xs text-[#A09CB0] uppercase font-semibold mb-0.5 mt-2 px-1">{sessionGroup.heading}</h3> {/* Reduced mb, mt */}
+                  <div key={sessionGroup.heading} className="mb-2">
+                    <h3 className="text-xs text-[#A09CB0] uppercase font-semibold mb-0.5 mt-2 px-1">{sessionGroup.heading}</h3>
                     <ul>
                       {sessionGroup.chats.map((chat, index) => (
                         <li 
@@ -265,9 +275,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                           }}
                           className={`group relative flex items-center justify-between p-2 my-0.5 rounded-lg animate-fadeInSlideUp outline-none transition-all duration-150 ease-in-out
                             ${activeChatId === chat.id 
-                              ? 'bg-[#4A4754] opacity-100 ring-2 ring-[#FF8DC7] ring-offset-2 ring-offset-[#2D2A32]' 
-                              : 'opacity-80 hover:opacity-100 hover:bg-[#3c3a43] hover:ring-2 hover:ring-[#FF8DC7] focus:opacity-100 focus:bg-[#3c3a43] focus:ring-2 focus:ring-[#FF8DC7]'
-                            }`} // Reduced p
+                              ? 'bg-[#4A4754] opacity-100' // Active: darker fade, full opacity
+                              : 'bg-[#312e38] opacity-80 hover:opacity-100 hover:bg-[#3c3a43] focus:opacity-100 focus:bg-[#3c3a43]' // Inactive: base subtle bg, less opacity; hover/focus: lighter fade, full opacity
+                            }`}
                           style={{ animationDelay: `${index * 0.03}s` }}
                           aria-current={activeChatId === chat.id ? "page" : undefined}
                         >
@@ -279,10 +289,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                               onKeyDown={handleEditInputKeyDown}
                               onBlur={submitRename}
                               autoFocus
-                              className="flex-grow min-w-0 p-0 bg-transparent text-[#FF8DC7] rounded-md text-xs border-none focus:outline-none focus:ring-0" // text-xs
+                              className="flex-grow min-w-0 p-0 bg-transparent text-[#FF8DC7] rounded-md text-xs border-none focus:outline-none focus:ring-0"
                             />
                           ) : (
-                            <div className={`flex-grow min-w-0 text-left truncate text-xs ${activeChatId === chat.id ? 'font-semibold text-[#FF8DC7]' : 'text-[#EAE6F0]'}`}> {/* text-xs */}
+                            <div className={`flex-grow min-w-0 text-left truncate text-xs ${activeChatId === chat.id ? 'font-semibold text-[#FF8DC7]' : 'text-[#EAE6F0]'}`}>
                               {chat.title}
                             </div>
                           )}
@@ -291,12 +301,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                               ref={el => { if(el) ellipsisRefs.current[chat.id] = el; }}
                               onClick={(e) => handleEllipsisClick(e, chat)}
                               className={`p-0.5 text-[#A09CB0] hover:text-[#FF8DC7] rounded-md focus:outline-none focus:ring-1 focus:ring-[#FF8DC7] flex-shrink-0 transition-opacity 
-                                  ${activeContextMenuSessionId === chat.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`} // Reduced p
+                                  ${activeContextMenuSessionId === chat.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}
                               aria-label={`More options for chat: ${chat.title}`}
                               aria-haspopup="true"
                               aria-expanded={activeContextMenuSessionId === chat.id}
                             >
-                              <IconEllipsisVertical className="w-4 h-4" /> {/* Reduced size */}
+                              <IconEllipsisVertical className="w-4 h-4" />
                             </button>
                           )}
                         </li>
@@ -315,7 +325,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       {activeContextMenuSessionId && contextMenuPosition && currentSessionForMenu && (
         <div
           ref={contextMenuRef}
-          className="context-menu fixed bg-[#201F23] rounded-lg shadow-xl py-1 z-50" // Reduced py
+          className="context-menu fixed bg-[#201F23] rounded-lg shadow-xl py-1 z-50"
           style={{ 
             top: `${contextMenuPosition.top}px`, 
             left: `${contextMenuPosition.left}px`, 
@@ -325,18 +335,18 @@ const Sidebar: React.FC<SidebarProps> = ({
         >
           <button 
             onClick={() => handleRename(currentSessionForMenu)} 
-            className="context-menu-item w-full text-left px-2.5 py-1.5 text-xs text-[#EAE6F0] hover:bg-[#393641] flex items-center focus:bg-[#393641] focus:outline-none rounded-t-md" // Reduced px, py, text-xs
+            className="context-menu-item w-full text-left px-2.5 py-1.5 text-xs text-[#EAE6F0] hover:bg-[#393641] flex items-center focus:bg-[#393641] focus:outline-none rounded-t-md"
             role="menuitem"
           >
-            <IconPencil className="w-3.5 h-3.5 mr-2" /> Rename {/* Reduced size and mr */}
+            <IconPencil className="w-3.5 h-3.5 mr-2" /> Rename
           </button>
-          <div className="border-t border-[#393641] my-0.5 mx-1"></div> {/* Reduced mx */}
+          <div className="border-t border-[#393641] my-0.5 mx-1"></div>
           <button 
             onClick={() => { onRequestDeleteConfirmation(currentSessionForMenu.id, currentSessionForMenu.title); closeContextMenu(); }} 
-            className="context-menu-item w-full text-left px-2.5 py-1.5 text-xs text-[#FF8DC7] hover:bg-[#393641] flex items-center focus:bg-[#393641] focus:outline-none rounded-b-md" // Reduced px, py, text-xs
+            className="context-menu-item w-full text-left px-2.5 py-1.5 text-xs text-[#FF8DC7] hover:bg-[#393641] flex items-center focus:bg-[#393641] focus:outline-none rounded-b-md"
             role="menuitem"
           >
-            <IconTrash className="w-3.5 h-3.5 mr-2" /> Delete {/* Reduced size and mr */}
+            <IconTrash className="w-3.5 h-3.5 mr-2" /> Delete
           </button>
         </div>
       )}
