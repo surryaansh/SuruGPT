@@ -26,11 +26,20 @@ const WelcomeMessage: React.FC = () => {
 
       {/* Original Content - ensure it's above the hearts with relative positioning and z-index. Added flex for centering. */}
       <div className="relative z-10 flex flex-col items-center"> {/* Centering icon and text */}
-        <IconSuru className="w-20 h-20 text-[#FF8DC7] mb-6" /> {/* Using IconSuru, sized w-20 h-20 */}
-        <h1 className="text-2xl sm:text-3xl font-semibold text-[#EAE6F0] mb-2">
+        <IconSuru 
+            className="w-20 h-20 text-[#FF8DC7] mb-6 animate-fadeInSlideUp" 
+            style={{ animationDelay: '0.1s' }} 
+        />
+        <h1 
+            className="text-2xl sm:text-3xl font-semibold text-[#EAE6F0] mb-2 animate-fadeInSlideUp" 
+            style={{ animationDelay: '0.2s' }}
+        >
           Hey Manvi! SuruGPT at your service!
         </h1>
-        <p className="text-lg text-[#A09CB0]">
+        <p 
+            className="text-lg text-[#A09CB0] animate-fadeInSlideUp" 
+            style={{ animationDelay: '0.3s' }}
+        >
           What lovely things are we chatting about today?
         </p>
       </div>
