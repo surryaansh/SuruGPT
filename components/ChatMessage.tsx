@@ -90,7 +90,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreamingAiText })
                 : 'py-1 px-0' 
             }`}
           >
-            <p className="text-lg leading-relaxed whitespace-pre-wrap text-[#EAE6F0]">
+            <p className="text-base leading-relaxed whitespace-pre-wrap text-[#EAE6F0]">
               {displayedText}
               {showTypingCursor && <span className="blinking-cursor" aria-hidden="true"></span>}
             </p>
