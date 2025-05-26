@@ -1,5 +1,4 @@
 
-
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, 
@@ -13,9 +12,9 @@ import {
   getDoc,
   doc,
   updateDoc,
-  writeBatch, // Import writeBatch
-  deleteDoc // Import deleteDoc
-} from '@firebase/firestore';
+  writeBatch, 
+  deleteDoc 
+} from 'firebase/firestore'; 
 
 import { firebaseConfig } from './firebaseConfig.js'; 
 import { ChatSession, Message, SenderType } from '../types';
@@ -72,8 +71,8 @@ export const getMessagesForSession = async (sessionId: string): Promise<Message[
 
 export const createChatSessionInFirestore = async (
   title: string, 
-  firstMessageText: string, 
-  ): Promise<ChatSession> => {
+  firstMessageText: string 
+  ): Promise<ChatSession> => { 
   try {
     const newSessionRef = await addDoc(collection(db, CHAT_SESSIONS_COLLECTION), {
       title,
@@ -123,6 +122,24 @@ export const addMessageToFirestore = async (
   }
 };
 
+export const updateMessageInFirestore = async (
+  sessionId: string,
+  messageId: string,
+  newText: string
+): Promise<void> => {
+  try {
+    const messageRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION, messageId);
+    await updateDoc(messageRef, { 
+      text: newText,
+      timestamp: serverTimestamp() // Also update timestamp on edit
+    });
+    console.log(`Message ${messageId} in session ${sessionId} updated successfully.`);
+  } catch (error) {
+    console.error(`Error updating message ${messageId} in session ${sessionId}:`, error);
+    throw error;
+  }
+};
+
 export const updateChatSessionTitleInFirestore = async (sessionId: string, newTitle: string): Promise<void> => {
   try {
     const sessionRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId);
@@ -147,7 +164,6 @@ export const deleteChatSessionFromFirestore = async (sessionId: string): Promise
       });
     }
     
-    // After setting up deletions for messages, delete the session document itself.
     const sessionRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId);
     batch.delete(sessionRef);
 
