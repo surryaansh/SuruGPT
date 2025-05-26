@@ -339,7 +339,7 @@ const App: React.FC = () => {
       <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#393641] transition-all duration-300 ease-in-out ${(isSidebarOpen && isDesktopView) ? 'md:ml-64' : 'ml-0'}`}>
         <Header onToggleSidebar={handleToggleSidebar} onNewChat={handleNewChat} />
         <main className="flex-grow flex flex-col overflow-hidden">
-          {isMessagesLoading && <div className="flex-grow flex items-center justify-center"><p className="text-[#A09CB0] text-lg">Loading chat...</p></div>}
+          {isMessagesLoading && <div className="flex-grow flex items-center justify-center"><p className="text-[#A09CB0] text-lg animate-pulse">Loading chat...</p></div>}
           {!isMessagesLoading && showWelcome && <WelcomeMessage />}
           {!isMessagesLoading && !showWelcome && <ChatMessageList messages={currentMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)}))} isLoadingAiResponse={isLoadingAiResponse} />}
         </main>
