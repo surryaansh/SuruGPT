@@ -119,40 +119,48 @@ export const IconTrash: React.FC<{ className?: string }> = ({ className = "w-5 h
 
 export const IconAI = IconSuru;
 
-// Copy Icon - Replaced with PNG
-export const IconClipboardDocumentList: React.FC<{ className?: string; alt?: string }> = ({ className = "w-4 h-4", alt = "Copy" }) => (
-  <img src="/assets/custom-copy-icon.png" alt={alt} className={className} />
+// Replaced image with SVG for Copy Icon
+export const IconClipboardDocumentList: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    viewBox="0 0 24 24" 
+    fill="currentColor" 
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+  </svg>
 );
 
-// Thumbs Up Icon (Outline) - Awaiting specific new SVG if different.
+// Thumbs Up Icon (Outline) 
 export const IconThumbUp: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.5c.806 0 1.533-.426 2.002-1.125H18.75a2.25 2.25 0 012.25 2.25v.167c0 .904-.426 1.708-1.125 2.252H15.188c-.862 1.69-2.607 2.875-4.688 2.875C7.138 17.125 4.5 14.526 4.5 11.137V9.375c0-1.125.9-2.025 2.025-2.025H6.633z" />
   </svg>
 );
 
-// Thumbs Up Icon (Solid) - Awaiting specific new SVG if different.
+// Thumbs Up Icon (Solid) 
 export const IconThumbUpSolid: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
     <path d="M7.493 18.75c-.425 0-.82-.236-.975-.632A7.48 7.48 0 016 15.375c0-1.75.5-3.375 1.375-4.75A7.48 7.48 0 015.25 6H6.75a2.25 2.25 0 012.25-2.25H13.5a2.25 2.25 0 012.25 2.25V15h1.5a2.25 2.25 0 012.25 2.25v1.5a2.25 2.25 0 01-2.25-2.25H16.5a2.25 2.25 0 01-2.25-2.25V15H7.493v3.75z" />
   </svg>
 );
 
-// Thumbs Down Icon (Outline) - Awaiting specific new SVG if different.
+// Thumbs Down Icon (Outline) 
 export const IconThumbDown: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M17.367 13.5c-.806 0-1.533.426-2.002 1.125H5.25a2.25 2.25 0 01-2.25-2.25v-.167c0-.904.426-1.708 1.125-2.252h2.812c.862-1.69 2.607-2.875 4.688-2.875C15.862 6.875 18.5 9.474 18.5 12.863v1.762c0 1.125-.9 2.025-2.025 2.025h-.108z" />
   </svg>
 );
 
-// Thumbs Down Icon (Solid) - Awaiting specific new SVG if different.
+// Thumbs Down Icon (Solid) 
 export const IconThumbDownSolid: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
      <path d="M16.507 5.25c.425 0 .82.236.975.632A7.48 7.48 0 0118 8.625c0 1.75-.5 3.375-1.375 4.75a7.48 7.48 0 012.125 4.75H17.25a2.25 2.25 0 01-2.25 2.25H9a2.25 2.25 0 01-2.25-2.25V9H5.25a2.25 2.25 0 01-2.25-2.25V5.25A2.25 2.25 0 015.25 3H7.5a2.25 2.25 0 012.25 2.25V9h6.757V5.25z" />
   </svg>
 );
 
-// Retry Icon - Awaiting specific new SVG if different.
+// Retry Icon 
 export const IconArrowPath: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
