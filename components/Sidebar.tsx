@@ -224,10 +224,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           <button 
             onClick={onNewChat} 
-            className="w-full flex items-center text-left p-2.5 mb-2.5 rounded-lg hover:bg-[#4A4754] transition-colors focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] focus:ring-offset-2 focus:ring-offset-[#2D2A32]" 
+            className="group w-full flex items-center text-left p-2.5 mb-2.5 rounded-lg hover:bg-[#4A4754] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-2 focus-visible:ring-offset-[#2D2A32]" 
             aria-label="Start a new chat"
           >
-            <IconNewChat className="w-4 h-4 mr-2.5 text-[#EAE6F0]" />
+            <IconNewChat className="w-4 h-4 mr-2.5 text-[#EAE6F0] group-hover:scale-110 group-hover:rotate-[-12deg] transition-transform duration-200" />
             <span className="text-sm font-normal text-[#EAE6F0]">New chat</span>
           </button>
 
@@ -249,9 +249,14 @@ const Sidebar: React.FC<SidebarProps> = ({
             {isSearching ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Searching chats...</p> 
               : isLoading && !searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Loading chats...</p> 
               : displayedSessions.length > 0 ? (
-                groupedSessions.map(sessionGroup => ( 
+                groupedSessions.map((sessionGroup, groupIndex) => ( 
                   <div key={sessionGroup.heading} className="mb-2">
-                    <h3 className="text-xs text-[#A09CB0] uppercase font-semibold mb-0.5 mt-2 px-1">{sessionGroup.heading}</h3>
+                    <h3 
+                        className="text-xs text-[#A09CB0] uppercase font-semibold mb-0.5 mt-2 px-1 animate-fadeInSlideUp"
+                        style={{ animationDelay: `${groupIndex * 0.05}s` }}
+                    >
+                        {sessionGroup.heading}
+                    </h3>
                     <ul>
                       {sessionGroup.chats.map((chat, index) => (
                         <li 
@@ -273,12 +278,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                                   }
                               }
                           }}
-                          className={`group relative flex items-center justify-between p-2 my-0.5 rounded-lg animate-fadeInSlideUp outline-none transition-all duration-150 ease-in-out
+                          className={`group relative flex items-center justify-between p-2 my-0.5 rounded-lg animate-fadeInSlideUp outline-none transition-all duration-150 ease-in-out focus-visible:ring-2 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#2D2A32]
                             ${activeChatId === chat.id 
-                              ? 'bg-[#4A4754]' // Active: darker background
-                              : 'hover:bg-[#3c3a43] focus:bg-[#3c3a43]' // Inactive: transparent by default, lighter background on hover/focus
+                              ? 'bg-[#4A4754]' 
+                              : 'hover:bg-[#3c3a43] focus:bg-[#3c3a43]' 
                             }`}
-                          style={{ animationDelay: `${index * 0.03}s` }}
+                          style={{ animationDelay: `${(groupIndex * 0.1) + (index * 0.03)}s` }}
                           aria-current={activeChatId === chat.id ? "page" : undefined}
                         >
                           {editingSessionId === chat.id ? (
@@ -300,7 +305,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             <button
                               ref={el => { if(el) ellipsisRefs.current[chat.id] = el; }}
                               onClick={(e) => handleEllipsisClick(e, chat)}
-                              className={`p-0.5 text-[#A09CB0] hover:text-[#FF8DC7] rounded-md focus:outline-none focus:ring-1 focus:ring-[#FF8DC7] flex-shrink-0 transition-opacity 
+                              className={`p-0.5 text-[#A09CB0] hover:text-[#FF8DC7] rounded-md focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] flex-shrink-0 transition-opacity group-hover:scale-110
                                   ${activeContextMenuSessionId === chat.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}
                               aria-label={`More options for chat: ${chat.title}`}
                               aria-haspopup="true"
@@ -325,7 +330,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       {activeContextMenuSessionId && contextMenuPosition && currentSessionForMenu && (
         <div
           ref={contextMenuRef}
-          className="context-menu fixed bg-[#201F23] rounded-lg shadow-xl py-1 z-50"
+          className="context-menu fixed bg-[#201F23] rounded-lg shadow-xl py-1 z-50 animate-fadeIn animate-scaleIn"
           style={{ 
             top: `${contextMenuPosition.top}px`, 
             left: `${contextMenuPosition.left}px`, 
