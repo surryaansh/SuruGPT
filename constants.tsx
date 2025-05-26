@@ -119,39 +119,44 @@ export const IconTrash: React.FC<{ className?: string }> = ({ className = "w-5 h
 
 export const IconAI = IconSuru;
 
+// Updated Copy Icon
 export const IconClipboardDocumentList: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
   </svg>
 );
 
+// Updated Thumbs Up Icon (Outline)
 export const IconThumbUp: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.5c.806 0 1.533-.426 2.002-1.125H18.75a2.25 2.25 0 012.25 2.25v.167c0 .904-.426 1.708-1.125 2.252H15.188c-.862 1.69-2.607 2.875-4.688 2.875C7.138 17.125 4.5 14.526 4.5 11.137V9.375c0-1.125.9-2.025 2.025-2.025H6.633z" />
   </svg>
 );
 
+// Updated Thumbs Up Icon (Solid)
 export const IconThumbUpSolid: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3v11z"></path>
+    <path d="M7.493 18.75c-.425 0-.82-.236-.975-.632A7.48 7.48 0 016 15.375c0-1.75.5-3.375 1.375-4.75A7.48 7.48 0 015.25 6H6.75a2.25 2.25 0 012.25-2.25H13.5a2.25 2.25 0 012.25 2.25V15h1.5a2.25 2.25 0 012.25 2.25v1.5a2.25 2.25 0 01-2.25 2.25H16.5a2.25 2.25 0 01-2.25-2.25V15H7.493v3.75z" />
   </svg>
 );
 
-
+// Updated Thumbs Down Icon (Outline)
 export const IconThumbDown: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-     <path strokeLinecap="round" strokeLinejoin="round" d="M10 15V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H10zM17 2H20a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"></path>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M17.367 13.5c-.806 0-1.533.426-2.002 1.125H5.25a2.25 2.25 0 01-2.25-2.25v-.167c0-.904.426-1.708 1.125-2.252h2.812c.862-1.69 2.607-2.875 4.688-2.875C15.862 6.875 18.5 9.474 18.5 12.863v1.762c0 1.125-.9 2.025-2.025 2.025h-.108z" />
   </svg>
 );
 
+// Updated Thumbs Down Icon (Solid)
 export const IconThumbDownSolid: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-    <path d="M10 15V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H10zM17 2H20a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3V2z"></path>
+     <path d="M16.507 5.25c.425 0 .82.236.975.632A7.48 7.48 0 0118 8.625c0 1.75-.5 3.375-1.375 4.75a7.48 7.48 0 012.125 4.75H17.25a2.25 2.25 0 01-2.25 2.25H9a2.25 2.25 0 01-2.25-2.25V9H5.25a2.25 2.25 0 01-2.25-2.25V5.25A2.25 2.25 0 015.25 3H7.5a2.25 2.25 0 012.25 2.25V9h6.757V5.25z" />
   </svg>
 );
 
+// Updated Retry Icon
 export const IconArrowPath: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M19.939 10.061a8.001 8.001 0 10-3.878 10.81M20 4v6h-6" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
   </svg>
 );
