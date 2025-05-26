@@ -36,10 +36,10 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
     >
       <div className="max-w-2xl mx-auto space-y-9">
         {messages.map((msg, index) => {
-          const isLastMessage = index === messages.length - 1;
+          const isOverallLatestMessage = index === messages.length - 1;
           const isStreamingAiText =
             isLoadingAiResponse &&
-            isLastMessage &&
+            isOverallLatestMessage &&
             msg.sender === SenderType.AI;
 
           let previousUserMessageText: string | undefined = undefined;
@@ -52,6 +52,7 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
               key={msg.id}
               message={msg}
               isStreamingAiText={isStreamingAiText}
+              isOverallLatestMessage={isOverallLatestMessage} // Pass the new prop
               onCopyText={onCopyText}
               onRateResponse={onRateResponse}
               onRetryResponse={onRetryResponse}
