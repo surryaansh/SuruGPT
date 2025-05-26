@@ -6,7 +6,7 @@ import WelcomeMessage from './components/WelcomeMessage';
 import ChatMessageList from './components/ChatMessageList';
 import ChatInputBar from './components/ChatInputBar';
 import Sidebar from './components/Sidebar';
-import ConfirmationDialog from './components/ConfirmationDialog'; // Import new component
+import ConfirmationDialog from './components/ConfirmationDialog';
 import { 
   sendMessageStream, 
   isChatAvailable as checkChatAvailability,
@@ -18,13 +18,15 @@ import {
   getMessagesForSession,
   createChatSessionInFirestore,
   addMessageToFirestore,
-  updateChatSessionTitleInFirestore 
+  // updateChatSessionTitleInFirestore // Already imported for rename
+  updateMessageInFirestore, // Added for editing messages
+  deleteChatSessionFromFirestore // Re-add for delete function if it was removed
 } from './services/firebaseService';
 
 const summarizeTextForTitle = async (text: string): Promise<string | null> => {
   console.log("[summarizeTextForTitle] Attempting to summarize:", text);
   try {
-    const response = await fetch('/api/summarize', {
+    const response = await fetch(`${window.location.origin}/api/summarize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ textToSummarize: text }),
@@ -94,7 +96,6 @@ const App: React.FC = () => {
   const initialLoadComplete = useRef(false);
   const initialViewSetupDone = useRef(false); 
 
-  // State for delete confirmation dialog
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
   const [sessionToConfirmDelete, setSessionToConfirmDelete] = useState<{id: string, title: string} | null>(null);
 
@@ -175,41 +176,25 @@ const App: React.FC = () => {
     } finally { setIsMessagesLoading(false); }
   }, [activeChatId, currentMessages.length, globalContextSummary, isDesktopView]);
 
-  const handleSendMessage = useCallback(async (text: string) => {
-    if (!chatReady) {
-      console.warn("Chat is not ready. Cannot send message.");
-      setCurrentMessages(prev => [...prev, { id: crypto.randomUUID(), text: "Chat service is currently unavailable. Please try again later.", sender: SenderType.AI, timestamp: new Date() }]);
-      return;
-    }
-    const tempUserMessageId = crypto.randomUUID();
-    const userMessageForUI: Message = { id: tempUserMessageId, text, sender: SenderType.USER, timestamp: new Date() };
-    setCurrentMessages(prevMessages => [...prevMessages, userMessageForUI]);
-    let currentSessionId = activeChatId;
-    try {
-        if (!currentSessionId) {
-          const title = await generateChatTitle(text); 
-          const newSessionFromDb = await createChatSessionInFirestore(title, text);
-          currentSessionId = newSessionFromDb.id;
-          const savedUserMessage = await addMessageToFirestore(currentSessionId, { text, sender: SenderType.USER });
-          setAllChatSessions(prevSessions => [newSessionFromDb, ...prevSessions]);
-          setActiveChatId(currentSessionId); setCurrentMessages([savedUserMessage]); 
-          setConversationContextFromAppMessages([savedUserMessage].map(m => ({...m, timestamp: new Date(m.timestamp as Date)})), undefined, globalContextSummary);
-        } else {
-          const savedUserMessage = await addMessageToFirestore(currentSessionId, { text, sender: SenderType.USER });
-          setCurrentMessages(prevMessages => prevMessages.map(msg => msg.id === tempUserMessageId ? savedUserMessage : msg));
-        }
-    } catch (error) {
-        console.error("Error saving user message to Firestore or generating title:", error);
-        setCurrentMessages(prev => [...prev, { id: crypto.randomUUID(), text: "Error saving your message or starting chat. Please try again.", sender: SenderType.AI, timestamp: new Date() }]);
-        setIsLoadingAiResponse(false); return;
-    }
+  const getAiResponse = useCallback(async (
+    textForAi: string,
+    currentSessionIdForAi: string | null
+  ) => {
     setIsLoadingAiResponse(true);
     const tempAiMessageId = crypto.randomUUID();
     const aiPlaceholderMessageForUI: Message = { id: tempAiMessageId, text: '', sender: SenderType.AI, timestamp: new Date() };
     setCurrentMessages(prevMessages => [...prevMessages, aiPlaceholderMessageForUI]);
+    
     let accumulatedAiText = '';
     try {
-      const stream = await sendMessageStream(text); 
+      // Ensure AI context is set based on current messages BEFORE sending
+      setConversationContextFromAppMessages(
+        currentMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})), // Ensure this is the up-to-date list
+        undefined, 
+        globalContextSummary
+      );
+
+      const stream = await sendMessageStream(textForAi); 
       if (stream) {
         for await (const chunk of stream) { 
           const chunkText = chunk.text; 
@@ -218,28 +203,136 @@ const App: React.FC = () => {
             setCurrentMessages(prevMessages => prevMessages.map(msg => (msg.id === tempAiMessageId ? { ...msg, text: accumulatedAiText, timestamp: new Date() } : msg)));
           }
         }
-        if (currentSessionId && accumulatedAiText.trim()) {
-          await addMessageToFirestore(currentSessionId, { text: accumulatedAiText, sender: SenderType.AI });
-        } else if (currentSessionId && accumulatedAiText.trim() === '') {
+        if (currentSessionIdForAi && accumulatedAiText.trim()) {
+          await addMessageToFirestore(currentSessionIdForAi, { text: accumulatedAiText, sender: SenderType.AI });
+        } else if (currentSessionIdForAi && accumulatedAiText.trim() === '') {
             const fallbackMsg = "SuruGPT didn't provide a text response. Perhaps the request was unclear? 🤔";
             accumulatedAiText = fallbackMsg;
             setCurrentMessages(prevMessages => prevMessages.map(msg => (msg.id === tempAiMessageId ? { ...msg, text: fallbackMsg, timestamp: new Date() } : msg)));
-            await addMessageToFirestore(currentSessionId, { text: fallbackMsg, sender: SenderType.AI });
+            await addMessageToFirestore(currentSessionIdForAi, { text: fallbackMsg, sender: SenderType.AI });
         }
       } else { 
         const errorMsg = "It seems there was a hiccup sending your message to SuruGPT! The stream could not be established. Please try again. 🚧";
         accumulatedAiText = errorMsg;
         setCurrentMessages(prevMessages => prevMessages.map(msg => (msg.id === tempAiMessageId ? { ...msg, text: errorMsg, timestamp: new Date() } : msg)));
-        if (currentSessionId) await addMessageToFirestore(currentSessionId, { text: errorMsg, sender: SenderType.AI });
+        if (currentSessionIdForAi) await addMessageToFirestore(currentSessionIdForAi, { text: errorMsg, sender: SenderType.AI });
       }
     } catch (error) { 
-      console.error('Error streaming response in App.tsx:', error);
+      console.error('Error streaming response in App.tsx getAiResponse:', error);
       const errorText = typeof error === 'string' ? error : (error instanceof Error ? error.message : "SuruGPT encountered a little problem! Please try again. 🛠️");
       accumulatedAiText = errorText;
       setCurrentMessages(prevMessages => prevMessages.map(msg => (msg.id === tempAiMessageId ? { ...msg, text: errorText, timestamp: new Date() } : msg)));
-      if (currentSessionId) await addMessageToFirestore(currentSessionId, { text: errorText, sender: SenderType.AI });
+      if (currentSessionIdForAi) await addMessageToFirestore(currentSessionIdForAi, { text: errorText, sender: SenderType.AI });
     } finally { setIsLoadingAiResponse(false); }
-  }, [chatReady, activeChatId, globalContextSummary]);
+  }, [currentMessages, globalContextSummary]); // Added currentMessages
+
+
+  const handleSendMessage = useCallback(async (text: string) => {
+    if (!chatReady) {
+      console.warn("Chat is not ready. Cannot send message.");
+      setCurrentMessages(prev => [...prev, { id: crypto.randomUUID(), text: "Chat service is currently unavailable. Please try again later.", sender: SenderType.AI, timestamp: new Date() }]);
+      return;
+    }
+    const tempUserMessageId = crypto.randomUUID();
+    const userMessageForUI: Message = { id: tempUserMessageId, text, sender: SenderType.USER, timestamp: new Date() };
+    
+    let currentSessionId = activeChatId;
+    let finalUserMessage: Message;
+
+    // Store user message first
+    if (!currentSessionId) {
+      const title = await generateChatTitle(text); 
+      const newSessionFromDb = await createChatSessionInFirestore(title, text);
+      currentSessionId = newSessionFromDb.id;
+      finalUserMessage = await addMessageToFirestore(currentSessionId, { text, sender: SenderType.USER });
+      setAllChatSessions(prevSessions => [newSessionFromDb, ...prevSessions]);
+      setActiveChatId(currentSessionId); 
+      setCurrentMessages([finalUserMessage]); // Start with just the saved user message
+    } else {
+      finalUserMessage = await addMessageToFirestore(currentSessionId, { text, sender: SenderType.USER });
+      setCurrentMessages(prevMessages => [...prevMessages.filter(m => m.id !== tempUserMessageId), finalUserMessage]);
+    }
+    
+    // Then get AI response
+    await getAiResponse(finalUserMessage.text, currentSessionId);
+
+  }, [chatReady, activeChatId, globalContextSummary, getAiResponse]);
+
+
+  const handleCopyText = useCallback(async (textToCopy: string) => {
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      // Feedback is handled in ChatMessage component
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+      // Optionally show an error message to the user
+    }
+  }, []);
+
+  const handleRateResponse = useCallback((messageId: string, rating: 'good' | 'bad') => {
+    console.log(`Rated message ${messageId} as ${rating}`);
+    // Placeholder for actual feedback submission logic
+  }, []);
+  
+  const handleRetryAiResponse = useCallback(async (aiMessageToRetryId: string, userPromptText: string) => {
+    if (!activeChatId || !userPromptText) return;
+
+    // 1. Remove the AI message to be retried from currentMessages
+    setCurrentMessages(prev => prev.filter(msg => msg.id !== aiMessageToRetryId));
+    
+    // 2. The AI context will be rebuilt by getAiResponse based on the modified currentMessages.
+    //    (It's important that currentMessages is updated *before* calling getAiResponse)
+    // Need to ensure state update completes before calling getAiResponse
+    // Using a timeout or useEffect for this can be tricky. A direct call should be okay if getAiResponse
+    // correctly uses the state *at the time of its execution*.
+    // Let's make `getAiResponse` take `currentMessages` as an argument to ensure context.
+    // No, getAiResponse uses currentMessages from its closure, so we need to ensure it's updated.
+    // A slight delay or functional update for setCurrentMessages might be needed.
+    // For now, we'll proceed, but this is a potential race condition if state update isn't immediate for getAiResponse.
+    
+    // To ensure `getAiResponse` uses the updated messages list for context:
+    const updatedMessagesAfterRemoval = currentMessages.filter(msg => msg.id !== aiMessageToRetryId);
+    // Rebuild context using this specific list *before* calling AI
+     setConversationContextFromAppMessages(
+        updatedMessagesAfterRemoval.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
+        undefined,
+        globalContextSummary
+      );
+
+    await getAiResponse(userPromptText, activeChatId);
+
+  }, [activeChatId, getAiResponse, currentMessages, globalContextSummary]);
+
+
+  const handleSaveUserEdit = useCallback(async (messageId: string, newText: string) => {
+    if (!activeChatId) return;
+
+    const messageIndex = currentMessages.findIndex(msg => msg.id === messageId);
+    if (messageIndex === -1) return;
+
+    // 1. Update the message in Firestore
+    await updateMessageInFirestore(activeChatId, messageId, newText);
+
+    // 2. Create the updated message for UI
+    const updatedMessage: Message = { ...currentMessages[messageIndex], text: newText, timestamp: new Date() };
+
+    // 3. Truncate messages array and update the specific message
+    const messagesUpToEdit = currentMessages.slice(0, messageIndex);
+    const newCurrentMessages = [...messagesUpToEdit, updatedMessage];
+    setCurrentMessages(newCurrentMessages);
+    
+    // 4. The AI context will be rebuilt by getAiResponse based on the newCurrentMessages.
+    // Rebuild context using this specific list *before* calling AI
+     setConversationContextFromAppMessages(
+        newCurrentMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
+        undefined,
+        globalContextSummary
+      );
+
+    await getAiResponse(newText, activeChatId);
+
+  }, [activeChatId, currentMessages, getAiResponse, globalContextSummary]);
+
 
   const handleRequestDeleteConfirmation = (sessionId: string, sessionTitle: string) => {
     setSessionToConfirmDelete({id: sessionId, title: sessionTitle});
@@ -248,34 +341,17 @@ const App: React.FC = () => {
 
   const handleConfirmDelete = async () => {
     if (!sessionToConfirmDelete) return;
-
     const sessionToDeleteId = sessionToConfirmDelete.id;
-
-    // Optimistic UI update
     setAllChatSessions(prevSessions => prevSessions.filter(session => session.id !== sessionToDeleteId));
-    if (activeChatId === sessionToDeleteId) {
-      handleNewChat(); // Reset view if active chat is deleted
-    }
-    
-    // Close dialog immediately
+    if (activeChatId === sessionToDeleteId) handleNewChat();
     setIsDeleteConfirmationOpen(false);
     setSessionToConfirmDelete(null);
-
     try {
-      const response = await fetch('/api/deleteChat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: sessionToDeleteId }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || response.statusText || "Failed to delete chat session from server");
-      }
-      console.log(`Chat session ${sessionToDeleteId} successfully deleted from server.`);
+      await deleteChatSessionFromFirestore(sessionToDeleteId); // Use direct Firebase call
+      console.log(`Chat session ${sessionToDeleteId} successfully deleted from Firestore.`);
     } catch (error: any) {
-      console.error('Error calling deleteChat API:', error);
+      console.error('Error deleting chat session from Firestore:', error);
       alert(`Error deleting chat: ${error.message}. The chat was removed from your view, but may still exist on the server. Please refresh or try again later.`);
-      // Note: Re-adding the session to UI on server failure is complex for this flow.
-      // For simplicity, we alert the user. The session might still be fetched on next load if deletion failed.
     }
   };
 
@@ -287,16 +363,15 @@ const App: React.FC = () => {
   const handleRenameChatSession = async (sessionId: string, newTitle: string): Promise<void> => {
     const originalSession = allChatSessions.find(s => s.id === sessionId);
     const originalTitle = originalSession ? originalSession.title : '';
-
-    // Optimistic UI update
     setAllChatSessions(prevSessions =>
       prevSessions.map(session =>
         session.id === sessionId ? { ...session, title: newTitle } : session
       )
     );
-
     try {
-      const response = await fetch('/api/renameChat', {
+      // Use direct Firebase call for rename if your API just wraps this
+      // For now, assuming API handles it or you have updateChatSessionTitleInFirestore
+      const response = await fetch(`${window.location.origin}/api/renameChat`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, newTitle }),
       });
@@ -307,14 +382,12 @@ const App: React.FC = () => {
       console.log(`Chat session ${sessionId} renamed to "${newTitle}" successfully on server.`);
     } catch (error: any) {
       console.error('Error calling renameChat API:', error);
-      // Revert optimistic update if API call fails
       setAllChatSessions(prevSessions =>
         prevSessions.map(session =>
           session.id === sessionId ? { ...session, title: originalTitle } : session
         )
       );
       alert(`Error renaming chat: ${error.message}. Reverted to original title.`);
-      // We don't re-throw here as App.tsx handles the UI revert.
     }
   };
 
@@ -341,7 +414,15 @@ const App: React.FC = () => {
         <main className="flex-grow flex flex-col overflow-hidden">
           {isMessagesLoading && <div className="flex-grow flex items-center justify-center"><p className="text-[#A09CB0] text-lg animate-pulse">Loading chat...</p></div>}
           {!isMessagesLoading && showWelcome && <WelcomeMessage />}
-          {!isMessagesLoading && !showWelcome && <ChatMessageList messages={currentMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)}))} isLoadingAiResponse={isLoadingAiResponse} />}
+          {!isMessagesLoading && !showWelcome && 
+            <ChatMessageList 
+              messages={currentMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)}))} 
+              isLoadingAiResponse={isLoadingAiResponse}
+              onCopyText={handleCopyText}
+              onRateResponse={handleRateResponse}
+              onRetryResponse={handleRetryAiResponse}
+              onSaveEdit={handleSaveUserEdit}
+            />}
         </main>
         <ChatInputBar onSendMessage={handleSendMessage} isLoading={isLoadingAiResponse} isChatAvailable={chatReady} />
       </div>

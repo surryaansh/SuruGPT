@@ -76,8 +76,9 @@ export const IconKawaiiSuru: React.FC<{ className?: string }> = ({ className = "
   </svg>
 );
 
-export const IconSuru: React.FC<{ className?: string }> = ({ className = "w-6 h-6 text-[#FF8DC7]" }) => (
-    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+// FIX: Added style prop to IconSuru to allow inline styles.
+export const IconSuru: React.FC<{ className?: string, style?: React.CSSProperties }> = ({ className = "w-6 h-6 text-[#FF8DC7]", style }) => (
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} style={style}>
         <path d="M7 13C7 14.1046 7.89543 15 9 15C10.1046 15 11 14.1046 11 13C11 11.8954 10.1046 11 9 11C7.89543 11 7 11.8954 7 13Z" fill="#EAE6F0"/>
         <path d="M13 13C13 14.1046 13.8954 15 15 15C16.1046 15 17 14.1046 17 13C17 11.8954 16.1046 11 15 11C13.8954 11 13 11.8954 13 13Z" fill="#EAE6F0"/>
         <path fillRule="evenodd" clipRule="evenodd" d="M5 7C5 5.34315 6.34315 4 8 4H16C17.6569 4 19 5.34315 19 7V17C19 18.6569 17.6569 20 16 20H8C6.34315 20 5 18.6569 5 17V7ZM8 6C7.44772 6 7 6.44772 7 7V17C7 17.5523 7.44772 18 8 18H16C17.5523 18 18 17.5523 18 17V7C18 6.44772 17.5523 6 16 6H8Z" fill="currentColor"/>
@@ -117,3 +118,27 @@ export const IconTrash: React.FC<{ className?: string }> = ({ className = "w-5 h
 );
 
 export const IconAI = IconSuru;
+
+export const IconClipboardDocumentList: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m9.75 0H9.375c-.621 0-1.125.504-1.125 1.125v8.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V11.25a1.125 1.125 0 0 0-1.125-1.125Z" />
+  </svg>
+);
+
+export const IconThumbUp: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 0 1 2.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 0 0 .322-1.672V3a.75.75 0 0 1 .75-.75A2.25 2.25 0 0 1 16.5 4.5c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 0 1-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 0 0-1.423-.23H5.904M6.633 10.5l-1.07-1.071a.75.75 0 0 0-1.06 1.061l1.07 1.071M6.633 10.5V14.25m0-3.75a.75.75 0 0 0-1.5 0v3.75a.75.75 0 0 0 1.5 0V10.5Z" />
+  </svg>
+);
+
+export const IconThumbDown: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.5c-.806 0-1.533.446-2.031 1.08a9.041 9.041 0 0 0-2.861 2.4c-.723.384-1.35.956-1.653 1.715a4.498 4.498 0 0 1-.322 1.672V21a.75.75 0 0 0 .75.75A2.25 2.25 0 0 0 16.5 19.5c0-1.152.26-2.243.723-3.218.266-.558-.107-1.282-.725-1.282H3.374c-1.026 0-1.945-.694-2.054-1.715-.045-.422-.068-.85-.068-1.285a11.95 11.95 0 0 1 2.649-7.521c.388-.482.987-.729 1.605-.729H9.02c.483 0 .964.078 1.423.23l3.114 1.04a4.501 4.501 0 0 1 1.423.23h1.777M6.633 10.5l1.07 1.071a.75.75 0 0 1 1.06-1.061l-1.07-1.071M6.633 10.5V5.25m0 5.25a.75.75 0 0 1 1.5 0V5.25a.75.75 0 0 1-1.5 0v5.25Z" />
+  </svg>
+);
+
+export const IconArrowPath: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 11.667 0l3.181-3.183m-4.994 0-3.182-3.182a8.25 8.25 0 0 0-11.667 0l3.182 3.182H2.985z" />
+  </svg>
+);

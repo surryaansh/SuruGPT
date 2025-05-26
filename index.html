@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -121,20 +122,31 @@
       animation: fadeInSlideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
     
-    /* Blinking cursor animation */
-    @keyframes blinkCursor {
+    /* General blinking animation */
+    @keyframes blink {
       0%, 100% { opacity: 1; }
       50% { opacity: 0; }
     }
+
     .blinking-cursor {
       display: inline-block; 
       width: 7px; 
       height: 1.1em; 
       background-color: #FF8DC7; 
       margin-left: 2px;
-      animation: blinkCursor 1s step-end infinite;
+      animation: blink 1s step-end infinite; /* Use generalized blink animation */
       position: relative;
       bottom: -0.15em; 
+    }
+
+    .blinking-white-dot {
+      display: inline-block;
+      width: 8px; 
+      height: 8px; 
+      background-color: #EAE6F0; /* Light Lavender White */
+      border-radius: 50%; /* Makes it a circle */
+      animation: blink 1s step-end infinite; /* Use generalized blink animation */
+      vertical-align: middle;
     }
 
     /* Remove focus rectangle from main chat message list */
@@ -176,6 +188,12 @@
         animation: subtleBounce 0.4s ease-in-out;
     }
 
+    .copied-feedback {
+      display: inline-block;
+      padding: 0 2px; /* Minimal padding */
+      font-style: italic;
+    }
+
   </style>
 <script type="importmap">
 {
@@ -197,3 +215,5 @@
   <script type="module" src="/bundle.js"></script>
 </body>
 </html>
+<link rel="stylesheet" href="index.css">
+<script src="index.tsx" type="module"></script>
