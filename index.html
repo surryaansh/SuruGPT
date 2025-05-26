@@ -122,7 +122,7 @@
       animation: fadeInSlideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
     
-    /* General blinking animation */
+    /* Blinking animation for text cursor */
     @keyframes blink {
       0%, 100% { opacity: 1; }
       50% { opacity: 0; }
@@ -134,18 +134,24 @@
       height: 1.1em; 
       background-color: #FF8DC7; 
       margin-left: 2px;
-      animation: blink 1s step-end infinite; /* Use generalized blink animation */
+      animation: blink 1s step-end infinite;
       position: relative;
       bottom: -0.15em; 
     }
+    
+    /* Pulsating animation for AI thinking dot */
+    @keyframes pulseDot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
 
-    .blinking-white-dot {
+    .pulsating-white-dot { /* Renamed from blinking-white-dot */
       display: inline-block;
       width: 8px; 
       height: 8px; 
       background-color: #EAE6F0; /* Light Lavender White */
       border-radius: 50%; /* Makes it a circle */
-      animation: blink 1s step-end infinite; /* Use generalized blink animation */
+      animation: pulseDot 1.2s ease-in-out infinite; /* Use pulseDot animation */
       vertical-align: middle;
     }
 
@@ -214,6 +220,5 @@
   <div id="root"></div>
   <script type="module" src="/bundle.js"></script>
 </body>
-</html>
-<link rel="stylesheet" href="index.css">
+</html><link rel="stylesheet" href="index.css">
 <script src="index.tsx" type="module"></script>
