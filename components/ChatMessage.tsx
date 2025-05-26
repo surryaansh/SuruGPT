@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, SenderType } from '../types';
-import { IconClipboardDocumentList, IconPencil, IconThumbUp, IconThumbDown, IconArrowPath } from '../constants';
+import { IconClipboardDocumentList, IconPencil, IconThumbUp, IconThumbDown, IconArrowPath, IconThumbUpSolid, IconThumbDownSolid } from '../constants';
 
 interface ChatMessageProps {
   message: Message;
   isStreamingAiText?: boolean;
-  isOverallLatestMessage: boolean; // New prop
+  isOverallLatestMessage: boolean; 
   onCopyText: (text: string, buttonId: string) => void;
   onRateResponse: (messageId: string, rating: 'good' | 'bad')
     => void;
@@ -15,10 +15,37 @@ interface ChatMessageProps {
   previousUserMessageText?: string; // For AI retry
 }
 
+const ActionButtonWithTooltip: React.FC<{
+  onClick?: () => void;
+  label: string;
+  tooltipText: string;
+  children: React.ReactNode;
+  className?: string;
+  disabled?: boolean;
+}> = ({ onClick, label, tooltipText, children, className, disabled }) => (
+  <div className="relative group">
+    <button
+      onClick={onClick}
+      className={`${className} focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#35323C]`}
+      aria-label={label}
+      disabled={disabled}
+    >
+      {children}
+    </button>
+    <span
+      className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 w-max max-w-xs px-2 py-1 bg-[#201F23] text-white text-[10px] rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-20"
+      role="tooltip"
+    >
+      {tooltipText}
+    </span>
+  </div>
+);
+
+
 const ChatMessage: React.FC<ChatMessageProps> = ({ 
   message, 
   isStreamingAiText,
-  isOverallLatestMessage, // New prop
+  isOverallLatestMessage, 
   onCopyText,
   onRateResponse,
   onRetryResponse,
@@ -38,22 +65,20 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   const [showCopiedFeedbackFor, setShowCopiedFeedbackFor] = useState<string | null>(null);
   const copyFeedbackTimeoutRef = useRef<number | null>(null);
 
-  const [actionButtonsReady, setActionButtonsReady] = useState(isUser); // User buttons ready immediately
+  const [actionButtonsReady, setActionButtonsReady] = useState(isUser); 
   const actionButtonReadyTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (isUser) {
-      setActionButtonsReady(true); // User buttons are always ready
+      setActionButtonsReady(true); 
       return;
     }
-    // For AI messages, set ready after a delay once streaming is done and text is present
     if (!isUser && !isStreamingAiText && message.text && message.text.trim() !== '') {
       if (actionButtonReadyTimeoutRef.current) clearTimeout(actionButtonReadyTimeoutRef.current);
       actionButtonReadyTimeoutRef.current = window.setTimeout(() => {
         setActionButtonsReady(true);
-      }, 150); // Short delay for smoother appearance
+      }, 150); 
     } else if (isStreamingAiText || !message.text || message.text.trim() === '') {
-      // If AI starts streaming or message is empty, reset readiness
       setActionButtonsReady(false); 
     }
     return () => {
@@ -72,7 +97,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     if (isStreamingAiText && message.text) {
       if (displayedText !== message.text) {
-        // const startTypingFromIndex = displayedText.length; // Not directly used
         let currentTypedLength = displayedText.length;
         if (message.text.length < displayedText.length || !message.text.startsWith(displayedText)) {
              setDisplayedText('');
@@ -87,7 +111,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
           } else {
             setShowTypingCursor(false);
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-            // Action buttons readiness is handled by the other useEffect
           }
         };
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -105,7 +128,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     return () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
-  }, [message.text, message.sender, isStreamingAiText, isUser, displayedText]);
+  }, [message.text, message.sender, isStreamingAiText, isUser, displayedText]); 
 
   const showInitialLoadingDots = message.sender === SenderType.AI && isStreamingAiText && !message.text && !displayedText;
 
@@ -159,11 +182,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       e.preventDefault();
       handleSave();
     } else if (e.key === 'Escape') {
+      e.preventDefault(); 
       handleCancelEdit();
     }
   };
 
-  const actionButtonClass = "p-1.5 text-[#A09CB0] hover:text-[#FF8DC7] disabled:opacity-50 disabled:hover:text-[#A09CB0] transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#35323C]";
+  const actionButtonClass = "p-1.5 text-[#A09CB0] hover:text-[#FF8DC7] disabled:opacity-50 disabled:hover:text-[#A09CB0] transition-colors";
   
   const shouldShowActionButtons = actionButtonsReady && !showInitialLoadingDots && (isUser || (!isUser && message.text && message.text.trim() !== ''));
   const isLatestAiMessageVisible = message.sender === SenderType.AI && isOverallLatestMessage && !isStreamingAiText && actionButtonsReady;
@@ -179,7 +203,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
           <div
             className={`${
               isUser
-                ? 'bg-[#35323C] rounded-2xl py-2 px-3'
+                ? 'bg-[#35323C] rounded-2xl py-2 px-3' 
                 : 'py-1 px-0' 
             }`}
           >
@@ -189,8 +213,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 value={editText}
                 onChange={handleTextareaChange}
                 onKeyDown={handleTextareaKeyDown}
-                onBlur={handleSave} 
-                className="w-full bg-transparent text-[#EAE6F0] text-base leading-relaxed focus:outline-none resize-none border-none p-0"
+                className="w-full bg-transparent text-[#EAE6F0] text-base leading-relaxed focus:outline-none resize-none border-none p-0 overflow-y-auto max-h-40" 
                 rows={1}
               />
             ) : (
@@ -203,40 +226,91 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         )}
       </div>
       {shouldShowActionButtons && (
-        <div className={`mt-1.5 flex items-center space-x-2 transition-opacity duration-300 ease-in-out 
+        <div className={`mt-1.5 flex items-center space-x-1.5 transition-opacity duration-300 ease-in-out 
           ${isLatestAiMessageVisible ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}
         `}>
           {isUser ? (
             <>
-              <button onClick={() => handleCopy('user-copy')} className={actionButtonClass} aria-label="Copy my message">
+              <ActionButtonWithTooltip
+                onClick={() => handleCopy('user-copy')}
+                label="Copy my message"
+                tooltipText="Copy my message"
+                className={actionButtonClass}
+              >
                 {showCopiedFeedbackFor === `${message.id}-user-copy` ? <span className="text-xs text-[#FF8DC7] copied-feedback" aria-live="polite">Copied!</span> : <IconClipboardDocumentList />}
-              </button>
+              </ActionButtonWithTooltip>
               {isEditing ? (
                 <>
-                  <button onClick={handleSave} className={`${actionButtonClass} text-[#86E8B3] hover:text-[#A0F0C8]`} aria-label="Save changes">Save</button>
-                  <button onClick={handleCancelEdit} className={`${actionButtonClass} text-[#FF8585] hover:text-[#FFAAAA]`} aria-label="Cancel edit">Cancel</button>
+                  <ActionButtonWithTooltip
+                    onClick={handleSave}
+                    label="Save changes"
+                    tooltipText="Save changes"
+                    className={`${actionButtonClass} text-[#86E8B3] hover:text-[#A0F0C8]`}
+                  >
+                    Save
+                  </ActionButtonWithTooltip>
+                  <ActionButtonWithTooltip
+                    onClick={handleCancelEdit}
+                    label="Cancel edit"
+                    tooltipText="Cancel edit"
+                    className={`${actionButtonClass} text-[#FF8585] hover:text-[#FFAAAA]`}
+                  >
+                    Cancel
+                  </ActionButtonWithTooltip>
                 </>
               ) : (
-                <button onClick={handleEdit} className={actionButtonClass} aria-label="Edit my message">
+                <ActionButtonWithTooltip
+                  onClick={handleEdit}
+                  label="Edit my message"
+                  tooltipText="Edit my message"
+                  className={actionButtonClass}
+                >
                   <IconPencil className="w-4 h-4" />
-                </button>
+                </ActionButtonWithTooltip>
               )}
             </>
-          ) : ( // AI message actions
+          ) : ( 
             <>
-              <button onClick={() => handleCopy('ai-copy')} className={actionButtonClass} aria-label="Copy AI's response">
+              <ActionButtonWithTooltip
+                onClick={() => handleCopy('ai-copy')}
+                label="Copy AI's response"
+                tooltipText="Copy AI's response"
+                className={actionButtonClass}
+              >
                  {showCopiedFeedbackFor === `${message.id}-ai-copy` ? <span className="text-xs text-[#FF8DC7] copied-feedback" aria-live="polite">Copied!</span> : <IconClipboardDocumentList />}
-              </button>
-              <button onClick={() => onRateResponse(message.id, 'good')} className={actionButtonClass} aria-label="Good response">
-                <IconThumbUp />
-              </button>
-              <button onClick={() => onRateResponse(message.id, 'bad')} className={actionButtonClass} aria-label="Bad response">
-                <IconThumbDown />
-              </button>
+              </ActionButtonWithTooltip>
+
+              {message.feedback !== 'bad' && (
+                <ActionButtonWithTooltip
+                  onClick={() => onRateResponse(message.id, 'good')}
+                  label="Good response"
+                  tooltipText="Good response"
+                  className={`${actionButtonClass} ${message.feedback === 'good' ? 'text-[#FF8DC7]' : ''}`}
+                >
+                  {message.feedback === 'good' ? <IconThumbUpSolid /> : <IconThumbUp />}
+                </ActionButtonWithTooltip>
+              )}
+
+              {message.feedback !== 'good' && (
+                <ActionButtonWithTooltip
+                  onClick={() => onRateResponse(message.id, 'bad')}
+                  label="Bad response"
+                  tooltipText="Bad response"
+                  className={`${actionButtonClass} ${message.feedback === 'bad' ? 'text-[#FF8DC7]' : ''}`}
+                >
+                  {message.feedback === 'bad' ? <IconThumbDownSolid /> : <IconThumbDown />}
+                </ActionButtonWithTooltip>
+              )}
+
               {previousUserMessageText && (
-                <button onClick={() => onRetryResponse(message.id, previousUserMessageText)} className={actionButtonClass} aria-label="Retry response">
+                <ActionButtonWithTooltip
+                  onClick={() => onRetryResponse(message.id, previousUserMessageText)}
+                  label="Retry response"
+                  tooltipText="Retry response"
+                  className={actionButtonClass}
+                >
                   <IconArrowPath />
-                </button>
+                </ActionButtonWithTooltip>
               )}
             </>
           )}
