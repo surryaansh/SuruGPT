@@ -20,7 +20,7 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isLoadingAi
 
   return (
     <div 
-      className="flex-grow px-10 py-4 overflow-y-auto chat-message-list-scroll-container"
+      className="flex-grow px-6 py-11 overflow-y-auto chat-message-list-scroll-container"
       tabIndex={-1} // Prevent keyboard focus unless specifically desired
     >
       <div className="max-w-2xl mx-auto space-y-9"> {/* Changed from space-y-1 to space-y-9 */}
