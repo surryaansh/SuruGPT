@@ -18,9 +18,9 @@ import {
   getMessagesForSession,
   createChatSessionInFirestore,
   addMessageToFirestore,
-  // updateChatSessionTitleInFirestore // Already imported for rename
-  updateMessageInFirestore, // Added for editing messages
-  deleteChatSessionFromFirestore // Re-add for delete function if it was removed
+  updateMessageInFirestore, 
+  deleteChatSessionFromFirestore,
+  updateMessageFeedbackInFirestore // Added for feedback
 } from './services/firebaseService';
 
 const summarizeTextForTitle = async (text: string): Promise<string | null> => {
@@ -171,7 +171,7 @@ const App: React.FC = () => {
       setConversationContextFromAppMessages(messages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})), undefined, globalContextSummary);
     } catch (error) {
       console.error(`Failed to load messages for chat ${chatId}:`, error);
-      setCurrentMessages([{ id: crypto.randomUUID(), text: "Error loading messages for this chat. Please try again.", sender: SenderType.AI, timestamp: new Date() }]);
+      setCurrentMessages([{ id: crypto.randomUUID(), text: "Error loading messages for this chat. Please try again.", sender: SenderType.AI, timestamp: new Date(), feedback: null }]);
       resetAiContextWithSystemPrompt(undefined, globalContextSummary);
     } finally { setIsMessagesLoading(false); }
   }, [activeChatId, currentMessages.length, globalContextSummary, isDesktopView]);
@@ -182,14 +182,13 @@ const App: React.FC = () => {
   ) => {
     setIsLoadingAiResponse(true);
     const tempAiMessageId = crypto.randomUUID();
-    const aiPlaceholderMessageForUI: Message = { id: tempAiMessageId, text: '', sender: SenderType.AI, timestamp: new Date() };
+    const aiPlaceholderMessageForUI: Message = { id: tempAiMessageId, text: '', sender: SenderType.AI, timestamp: new Date(), feedback: null };
     setCurrentMessages(prevMessages => [...prevMessages, aiPlaceholderMessageForUI]);
     
     let accumulatedAiText = '';
     try {
-      // Ensure AI context is set based on current messages BEFORE sending
       setConversationContextFromAppMessages(
-        currentMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})), // Ensure this is the up-to-date list
+        currentMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})), 
         undefined, 
         globalContextSummary
       );
@@ -224,22 +223,21 @@ const App: React.FC = () => {
       setCurrentMessages(prevMessages => prevMessages.map(msg => (msg.id === tempAiMessageId ? { ...msg, text: errorText, timestamp: new Date() } : msg)));
       if (currentSessionIdForAi) await addMessageToFirestore(currentSessionIdForAi, { text: errorText, sender: SenderType.AI });
     } finally { setIsLoadingAiResponse(false); }
-  }, [currentMessages, globalContextSummary]); // Added currentMessages
+  }, [currentMessages, globalContextSummary]); 
 
 
   const handleSendMessage = useCallback(async (text: string) => {
     if (!chatReady) {
       console.warn("Chat is not ready. Cannot send message.");
-      setCurrentMessages(prev => [...prev, { id: crypto.randomUUID(), text: "Chat service is currently unavailable. Please try again later.", sender: SenderType.AI, timestamp: new Date() }]);
+      setCurrentMessages(prev => [...prev, { id: crypto.randomUUID(), text: "Chat service is currently unavailable. Please try again later.", sender: SenderType.AI, timestamp: new Date(), feedback: null }]);
       return;
     }
     const tempUserMessageId = crypto.randomUUID();
-    const userMessageForUI: Message = { id: tempUserMessageId, text, sender: SenderType.USER, timestamp: new Date() };
+    // User message for UI will be replaced by the one from Firestore
     
     let currentSessionId = activeChatId;
     let finalUserMessage: Message;
 
-    // Store user message first
     if (!currentSessionId) {
       const title = await generateChatTitle(text); 
       const newSessionFromDb = await createChatSessionInFirestore(title, text);
@@ -247,13 +245,12 @@ const App: React.FC = () => {
       finalUserMessage = await addMessageToFirestore(currentSessionId, { text, sender: SenderType.USER });
       setAllChatSessions(prevSessions => [newSessionFromDb, ...prevSessions]);
       setActiveChatId(currentSessionId); 
-      setCurrentMessages([finalUserMessage]); // Start with just the saved user message
+      setCurrentMessages([finalUserMessage]); 
     } else {
       finalUserMessage = await addMessageToFirestore(currentSessionId, { text, sender: SenderType.USER });
       setCurrentMessages(prevMessages => [...prevMessages.filter(m => m.id !== tempUserMessageId), finalUserMessage]);
     }
     
-    // Then get AI response
     await getAiResponse(finalUserMessage.text, currentSessionId);
 
   }, [chatReady, activeChatId, globalContextSummary, getAiResponse]);
@@ -262,37 +259,36 @@ const App: React.FC = () => {
   const handleCopyText = useCallback(async (textToCopy: string) => {
     try {
       await navigator.clipboard.writeText(textToCopy);
-      // Feedback is handled in ChatMessage component
     } catch (err) {
       console.error('Failed to copy text: ', err);
-      // Optionally show an error message to the user
     }
   }, []);
 
-  const handleRateResponse = useCallback((messageId: string, rating: 'good' | 'bad') => {
-    console.log(`Rated message ${messageId} as ${rating}`);
-    // Placeholder for actual feedback submission logic
-  }, []);
+  const handleRateResponse = useCallback(async (messageId: string, rating: 'good' | 'bad') => {
+    if (!activeChatId) return;
+
+    setCurrentMessages(prevMessages =>
+      prevMessages.map(msg => {
+        if (msg.id === messageId) {
+          const newFeedback = msg.feedback === rating ? null : rating;
+          // Optimistically update UI
+          updateMessageFeedbackInFirestore(activeChatId, messageId, newFeedback).catch(error => {
+            console.error("Failed to update feedback in Firestore:", error);
+            // Potentially revert UI change here or show error
+          });
+          return { ...msg, feedback: newFeedback };
+        }
+        return msg;
+      })
+    );
+  }, [activeChatId]);
   
   const handleRetryAiResponse = useCallback(async (aiMessageToRetryId: string, userPromptText: string) => {
     if (!activeChatId || !userPromptText) return;
 
-    // 1. Remove the AI message to be retried from currentMessages
     setCurrentMessages(prev => prev.filter(msg => msg.id !== aiMessageToRetryId));
     
-    // 2. The AI context will be rebuilt by getAiResponse based on the modified currentMessages.
-    //    (It's important that currentMessages is updated *before* calling getAiResponse)
-    // Need to ensure state update completes before calling getAiResponse
-    // Using a timeout or useEffect for this can be tricky. A direct call should be okay if getAiResponse
-    // correctly uses the state *at the time of its execution*.
-    // Let's make `getAiResponse` take `currentMessages` as an argument to ensure context.
-    // No, getAiResponse uses currentMessages from its closure, so we need to ensure it's updated.
-    // A slight delay or functional update for setCurrentMessages might be needed.
-    // For now, we'll proceed, but this is a potential race condition if state update isn't immediate for getAiResponse.
-    
-    // To ensure `getAiResponse` uses the updated messages list for context:
     const updatedMessagesAfterRemoval = currentMessages.filter(msg => msg.id !== aiMessageToRetryId);
-    // Rebuild context using this specific list *before* calling AI
      setConversationContextFromAppMessages(
         updatedMessagesAfterRemoval.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
         undefined,
@@ -310,19 +306,14 @@ const App: React.FC = () => {
     const messageIndex = currentMessages.findIndex(msg => msg.id === messageId);
     if (messageIndex === -1) return;
 
-    // 1. Update the message in Firestore
     await updateMessageInFirestore(activeChatId, messageId, newText);
 
-    // 2. Create the updated message for UI
     const updatedMessage: Message = { ...currentMessages[messageIndex], text: newText, timestamp: new Date() };
 
-    // 3. Truncate messages array and update the specific message
     const messagesUpToEdit = currentMessages.slice(0, messageIndex);
     const newCurrentMessages = [...messagesUpToEdit, updatedMessage];
     setCurrentMessages(newCurrentMessages);
     
-    // 4. The AI context will be rebuilt by getAiResponse based on the newCurrentMessages.
-    // Rebuild context using this specific list *before* calling AI
      setConversationContextFromAppMessages(
         newCurrentMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
         undefined,
@@ -347,7 +338,7 @@ const App: React.FC = () => {
     setIsDeleteConfirmationOpen(false);
     setSessionToConfirmDelete(null);
     try {
-      await deleteChatSessionFromFirestore(sessionToDeleteId); // Use direct Firebase call
+      await deleteChatSessionFromFirestore(sessionToDeleteId); 
       console.log(`Chat session ${sessionToDeleteId} successfully deleted from Firestore.`);
     } catch (error: any) {
       console.error('Error deleting chat session from Firestore:', error);
@@ -369,8 +360,6 @@ const App: React.FC = () => {
       )
     );
     try {
-      // Use direct Firebase call for rename if your API just wraps this
-      // For now, assuming API handles it or you have updateChatSessionTitleInFirestore
       const response = await fetch(`${window.location.origin}/api/renameChat`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, newTitle }),
