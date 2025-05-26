@@ -275,8 +275,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                           }}
                           className={`group relative flex items-center justify-between p-2 my-0.5 rounded-lg animate-fadeInSlideUp outline-none transition-all duration-150 ease-in-out
                             ${activeChatId === chat.id 
-                              ? 'bg-[#4A4754] opacity-100' // Active: darker fade, full opacity
-                              : 'bg-[#312e38] opacity-80 hover:opacity-100 hover:bg-[#3c3a43] focus:opacity-100 focus:bg-[#3c3a43]' // Inactive: base subtle bg, less opacity; hover/focus: lighter fade, full opacity
+                              ? 'bg-[#4A4754]' // Active: darker background
+                              : 'hover:bg-[#3c3a43] focus:bg-[#3c3a43]' // Inactive: transparent by default, lighter background on hover/focus
                             }`}
                           style={{ animationDelay: `${index * 0.03}s` }}
                           aria-current={activeChatId === chat.id ? "page" : undefined}
