@@ -206,7 +206,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     <div className={`message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}> {/* Changed from group/message-item */}
       <div className={`max-w-[85%] sm:max-w-[75%]`}>
         {showInitialLoadingDots ? (
-          <div className="py-1 px-0 text-base leading-relaxed">
+          <div className="py-1 px-0 text-sm leading-relaxed"> {/* Changed text-base to text-sm */}
             <span className="pulsating-white-dot" aria-hidden="true"></span>
           </div>
         ) : (
@@ -223,11 +223,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 value={editText}
                 onChange={handleTextareaChange}
                 onKeyDown={handleTextareaKeyDown}
-                className="w-full bg-transparent text-[#EAE6F0] text-base leading-relaxed focus:outline-none resize-none border-none p-0 overflow-y-auto max-h-40"
+                className="w-full bg-transparent text-[#EAE6F0] text-sm leading-relaxed focus:outline-none resize-none border-none p-0 overflow-y-auto max-h-40" // Changed text-base to text-sm
                 rows={1}
               />
             ) : (
-              <p className="text-base leading-relaxed whitespace-pre-wrap text-[#EAE6F0]">
+              <p className="text-sm leading-relaxed whitespace-pre-wrap text-[#EAE6F0]"> {/* Changed text-base to text-sm */}
                 {displayedText}
                 {showTypingCursor && <span className="blinking-cursor" aria-hidden="true"></span>}
               </p>
