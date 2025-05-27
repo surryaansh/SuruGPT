@@ -134,7 +134,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const handleCopy = (buttonIdSuffix: string) => {
     const textToCopy = isEditing ? editText : message.text;
-    onCopyText(textToCopy);
+    onCopyText(textToCopy.trim()); // Also trim here for consistency if needed
 
     const copyButtonId = `${message.id}-${buttonIdSuffix}`;
     setShowCopiedFeedbackFor(copyButtonId);
@@ -228,7 +228,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
               />
             ) : (
               <p className="text-sm leading-relaxed whitespace-pre-wrap text-[#EAE6F0]"> {/* Changed text-base to text-sm */}
-                {displayedText}
+                {displayedText.trim()}
                 {showTypingCursor && <span className="blinking-cursor" aria-hidden="true"></span>}
               </p>
             )}
