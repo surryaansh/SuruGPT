@@ -23,10 +23,10 @@ const ActionButtonWithTooltip: React.FC<{
   className?: string;
   disabled?: boolean;
 }> = ({ onClick, label, tooltipText, children, className, disabled }) => (
-  <div className="relative group">
+  <div className="relative"> {/* Removed 'group' from here */}
     <button
       onClick={onClick}
-      className={`${className} focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#35323C]`}
+      className={`${className} group focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#35323C]`} // Added 'group' here
       aria-label={label}
       disabled={disabled}
     >
@@ -196,7 +196,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   const isLatestAiMessageVisible = message.sender === SenderType.AI && isOverallLatestMessage && !isStreamingAiText && actionButtonsReady;
 
   return (
-    <div className={`group flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}>
+    <div className={`group/message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}> {/* Changed 'group' to 'group/message-item' to avoid conflict if nested */}
       <div className={`max-w-[85%] sm:max-w-[75%]`}>
         {showInitialLoadingDots ? (
           <div className="py-1 px-0 text-base leading-relaxed">
@@ -230,14 +230,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       </div>
       {shouldShowActionButtons && (
         <div className={`mt-1.5 flex items-center space-x-1.5 transition-opacity duration-300 ease-in-out 
-          ${isLatestAiMessageVisible ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}
+          ${isLatestAiMessageVisible ? 'opacity-100' : 'opacity-0 group-hover/message-item:opacity-100 focus-within:opacity-100'}
         `}>
           {isUser ? (
             <>
               <ActionButtonWithTooltip
                 onClick={() => handleCopy('user-copy')}
                 label="Copy my message"
-                tooltipText="Copy my message"
+                tooltipText="Copy"
                 className={actionButtonClass}
               >
                 {showCopiedFeedbackFor === `${message.id}-user-copy` ? <IconCheck className="w-4 h-4 text-[#FF8DC7]" /> : <IconClipboardDocumentList className="w-4 h-4" />}
@@ -247,7 +247,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                   <ActionButtonWithTooltip
                     onClick={handleSave}
                     label="Save changes"
-                    tooltipText="Save changes"
+                    tooltipText="Save"
                     className={`${actionButtonClass} text-[#86E8B3] hover:text-[#A0F0C8]`}
                   >
                     Save
@@ -255,7 +255,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                   <ActionButtonWithTooltip
                     onClick={handleCancelEdit}
                     label="Cancel edit"
-                    tooltipText="Cancel edit"
+                    tooltipText="Cancel"
                     className={`${actionButtonClass} text-[#FF8585] hover:text-[#FFAAAA]`}
                   >
                     Cancel
@@ -265,7 +265,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 <ActionButtonWithTooltip
                   onClick={handleEdit}
                   label="Edit my message"
-                  tooltipText="Edit my message"
+                  tooltipText="Edit"
                   className={actionButtonClass}
                 >
                   <IconPencil className="w-4 h-4" />
@@ -277,7 +277,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
               <ActionButtonWithTooltip
                 onClick={() => handleCopy('ai-copy')}
                 label="Copy AI's response"
-                tooltipText="Copy AI's response"
+                tooltipText="Copy AI"
                 className={actionButtonClass}
               >
                  {showCopiedFeedbackFor === `${message.id}-ai-copy` ? <IconCheck className="w-4 h-4 text-[#FF8DC7]" /> : <IconClipboardDocumentList className="w-4 h-4" />}
