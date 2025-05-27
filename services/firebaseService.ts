@@ -13,11 +13,12 @@ import {
   doc,
   updateDoc,
   writeBatch, 
-  deleteDoc 
+  deleteDoc,
+  arrayUnion
 } from 'firebase/firestore'; 
 
 import { firebaseConfig } from './firebaseConfig.js'; 
-import { ChatSession, Message, SenderType } from '../types';
+import { ChatSession, Message, SenderType, AIResponse } from '../types';
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -25,14 +26,56 @@ const db = getFirestore(app);
 const CHAT_SESSIONS_COLLECTION = 'chat_sessions';
 const MESSAGES_SUBCOLLECTION = 'messages';
 
-const convertMessageTimestamp = (messageData: any): Message => {
-  const timestampField = messageData.timestamp;
-  return {
-    ...messageData,
-    timestamp: timestampField instanceof Timestamp ? timestampField.toDate() : new Date(timestampField),
-    feedback: messageData.feedback === undefined ? null : messageData.feedback, // Ensure feedback defaults to null
-  } as Message;
+const convertAIResponseTimestamp = (response: any): AIResponse => ({
+  ...response,
+  timestamp: response.timestamp instanceof Timestamp ? response.timestamp.toDate() : new Date(response.timestamp || Date.now()), // Fallback for potential undefined timestamp during conversion
+  feedback: response.feedback === undefined ? null : response.feedback,
+});
+
+const convertMessageDocumentToMessage = (docSnapshot: any): Message => {
+  const data = docSnapshot.data();
+  let message: Message = {
+    id: docSnapshot.id,
+    sender: data.sender,
+    text: data.text, 
+    timestamp: data.timestamp instanceof Timestamp ? data.timestamp.toDate() : new Date(data.timestamp || Date.now()), 
+    feedback: data.feedback === undefined ? null : data.feedback, 
+    isStreamingThisResponse: data.isStreamingThisResponse || false,
+  };
+
+  if (data.sender === SenderType.AI) {
+    message.responses = (data.responses || []).map(convertAIResponseTimestamp);
+    message.currentResponseIndex = typeof data.currentResponseIndex === 'number' ? data.currentResponseIndex : 0;
+    message.promptText = data.promptText;
+    
+    if (message.responses && message.responses.length > 0 && 
+        typeof message.currentResponseIndex === 'number' && 
+        message.currentResponseIndex >= 0 && // Ensure index is not negative
+        message.currentResponseIndex < message.responses.length) {
+      const currentResp = message.responses[message.currentResponseIndex];
+      message.text = currentResp.text;
+      message.feedback = currentResp.feedback;
+      message.timestamp = currentResp.timestamp;
+    } else if (message.responses && message.responses.length > 0 && message.currentResponseIndex === undefined) {
+      // Default to first response if index is undefined but responses exist
+      const firstResp = message.responses[0];
+      message.text = firstResp.text;
+      message.feedback = firstResp.feedback;
+      message.timestamp = firstResp.timestamp;
+      message.currentResponseIndex = 0;
+    } else if (!message.responses || message.responses.length === 0) {
+      // If no responses array, ensure top-level fields are at least initialized from data if they exist
+      // or default them if not. This handles cases where data might be partially formed.
+      message.text = data.text || '';
+      message.feedback = data.feedback === undefined ? null : data.feedback;
+      message.timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : new Date(data.timestamp || Date.now());
+      message.responses = [];
+      message.currentResponseIndex = 0;
+    }
+  }
+  return message;
 };
+
 
 export const getChatSessions = async (): Promise<ChatSession[]> => {
   try {
@@ -58,12 +101,10 @@ export const getMessagesForSession = async (sessionId: string): Promise<Message[
   try {
     const messagesQuery = query(
       collection(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION),
-      orderBy('timestamp', 'asc')
+      orderBy('timestamp', 'asc') 
     );
     const querySnapshot = await getDocs(messagesQuery);
-    return querySnapshot.docs.map(docSnapshot => 
-      convertMessageTimestamp({ id: docSnapshot.id, ...docSnapshot.data() })
-    );
+    return querySnapshot.docs.map(convertMessageDocumentToMessage);
   } catch (error) {
     console.error(`Error fetching messages for session ${sessionId}:`, error);
     throw error;
@@ -101,20 +142,45 @@ export const createChatSessionInFirestore = async (
 
 export const addMessageToFirestore = async (
   sessionId: string,
-  messageData: { text: string; sender: SenderType }
+  messageData: Partial<Message> 
 ): Promise<Message> => {
   try {
+    let dataToSave: any;
+    const currentServerTimestamp = serverTimestamp(); // Use a single serverTimestamp for consistency
+
+    if (messageData.sender === SenderType.USER) {
+      dataToSave = {
+        sender: SenderType.USER,
+        text: messageData.text,
+        timestamp: currentServerTimestamp,
+      };
+    } else { 
+      const firstResponse: AIResponse = {
+        text: messageData.text!,
+        feedback: null,
+        timestamp: currentServerTimestamp as unknown as Timestamp, // Will be resolved by server
+      };
+      dataToSave = {
+        sender: SenderType.AI,
+        promptText: messageData.promptText,
+        responses: [firstResponse], // Store the object that will be resolved
+        currentResponseIndex: 0,
+        text: firstResponse.text,
+        feedback: firstResponse.feedback,
+        timestamp: currentServerTimestamp, // Top-level timestamp also reflects the first response
+        isStreamingThisResponse: messageData.isStreamingThisResponse || false,
+      };
+    }
+
     const messageRef = await addDoc(
       collection(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION),
-      {
-        ...messageData,
-        timestamp: serverTimestamp(), 
-        feedback: null, // Initialize feedback as null
-      }
+      dataToSave
     );
+    
+    // Fetch the document to get server-resolved timestamps
     const docSnap = await getDoc(messageRef);
     if (docSnap.exists()) {
-        return convertMessageTimestamp({ id: messageRef.id, ...docSnap.data() });
+        return convertMessageDocumentToMessage(docSnap);
     } else {
          throw new Error("Failed to add and retrieve message from Firestore");
     }
@@ -124,7 +190,7 @@ export const addMessageToFirestore = async (
   }
 };
 
-export const updateMessageInFirestore = async (
+export const updateUserMessageTextInFirestore = async (
   sessionId: string,
   messageId: string,
   newText: string
@@ -135,27 +201,152 @@ export const updateMessageInFirestore = async (
       text: newText,
       timestamp: serverTimestamp() 
     });
-    console.log(`Message ${messageId} in session ${sessionId} updated successfully.`);
   } catch (error) {
-    console.error(`Error updating message ${messageId} in session ${sessionId}:`, error);
+    console.error(`Error updating user message ${messageId} in session ${sessionId}:`, error);
     throw error;
   }
 };
 
+export const addResponseToAIMessageInFirestore = async (
+  sessionId: string,
+  messageId: string,
+  newResponseText: string
+): Promise<Message> => {
+  const messageRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION, messageId);
+  try {
+    const newResponseItemForDb = { // Structure for arrayUnion
+      text: newResponseText,
+      feedback: null,
+      timestamp: serverTimestamp(),
+    };
+
+    // Fetch current message to know the new index
+    const docSnap = await getDoc(messageRef);
+    if (!docSnap.exists() || docSnap.data().sender !== SenderType.AI) {
+      throw new Error("AI message not found or invalid type for adding response.");
+    }
+    const existingResponsesCount = (docSnap.data().responses || []).length;
+    const newIndex = existingResponsesCount; // Index will be current length before adding
+
+    await updateDoc(messageRef, {
+      responses: arrayUnion(newResponseItemForDb),
+      currentResponseIndex: newIndex,
+      // Top-level fields will be set based on this new response after re-fetch
+      // For atomicity, we update them after ensuring the new response is part of the array
+    });
+
+    // Re-fetch to get the message with the resolved serverTimestamp for the new response
+    const updatedDocSnap = await getDoc(messageRef);
+    if (!updatedDocSnap.exists()) throw new Error("Failed to re-fetch AI message after adding response.");
+    
+    let finalMessage = convertMessageDocumentToMessage(updatedDocSnap);
+    
+    // Ensure the top-level fields are updated based on the now *truly* last response
+    // which is at the newIndex (which became finalMessage.currentResponseIndex after conversion)
+     if (finalMessage.responses && finalMessage.currentResponseIndex != null && finalMessage.currentResponseIndex < finalMessage.responses.length) {
+        const currentActualResponse = finalMessage.responses[finalMessage.currentResponseIndex];
+        await updateDoc(messageRef, {
+            text: currentActualResponse.text,
+            feedback: currentActualResponse.feedback,
+            timestamp: currentActualResponse.timestamp, // This is already a Date object from convertAIResponseTimestamp
+            isStreamingThisResponse: false, // Finalizing the stream
+        });
+        // Fetch one last time to get the fully consistent document
+        const finalSnap = await getDoc(messageRef);
+        return convertMessageDocumentToMessage(finalSnap);
+    }
+    // If somehow the above condition isn't met, return the already converted message (might be slightly out of sync on top-level)
+    return { ...finalMessage, isStreamingThisResponse: false };
+
+  } catch (error) {
+    console.error(`Error adding response to AI message ${messageId}:`, error);
+    throw error;
+  }
+};
+
+export const updateAIMessageResponseNavigationInFirestore = async (
+  sessionId: string,
+  messageId: string,
+  newIndex: number
+): Promise<Message> => {
+  const messageRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION, messageId);
+  try {
+    const docSnap = await getDoc(messageRef);
+    if (!docSnap.exists() || docSnap.data().sender !== SenderType.AI) {
+      throw new Error("AI message not found or invalid type for navigation.");
+    }
+    const messageData = convertMessageDocumentToMessage(docSnap); 
+    
+    if (!messageData.responses || newIndex < 0 || newIndex >= messageData.responses.length) {
+      console.warn("Invalid newIndex or no responses available during navigation update. Current:", messageData.currentResponseIndex, "New:", newIndex, "Total:", messageData.responses?.length);
+      // Potentially return current state or throw more specific error
+      return messageData; // Or throw new Error("Invalid navigation index.");
+    }
+    
+    const currentResponse = messageData.responses[newIndex];
+    await updateDoc(messageRef, {
+      currentResponseIndex: newIndex,
+      text: currentResponse.text,
+      feedback: currentResponse.feedback,
+      timestamp: Timestamp.fromDate(currentResponse.timestamp as Date), // Convert Date back to Firestore Timestamp for saving
+      isStreamingThisResponse: false, // Navigation implies stream is complete for this variant
+    });
+
+    // Fetch again to ensure we return the most up-to-date version from DB
+    const updatedDocSnap = await getDoc(messageRef);
+    return convertMessageDocumentToMessage(updatedDocSnap);
+
+  } catch (error) {
+    console.error(`Error updating AI message navigation for ${messageId}:`, error);
+    throw error;
+  }
+};
+
+
 export const updateMessageFeedbackInFirestore = async (
   sessionId: string,
   messageId: string,
-  feedback: 'good' | 'bad' | null
-): Promise<void> => {
+  newFeedbackValue: 'good' | 'bad' | null // Explicitly take the new value
+): Promise<Message> => {
+  const messageRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION, messageId);
   try {
-    const messageRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION, messageId);
-    await updateDoc(messageRef, { feedback });
-    console.log(`Feedback for message ${messageId} in session ${sessionId} updated to ${feedback}.`);
+    const docSnap = await getDoc(messageRef);
+    if (!docSnap.exists() || docSnap.data().sender !== SenderType.AI) {
+      throw new Error("Feedback can only be applied to AI messages.");
+    }
+    
+    let messageData = convertMessageDocumentToMessage(docSnap);
+    
+    if (!messageData.responses || typeof messageData.currentResponseIndex !== 'number' || 
+        messageData.currentResponseIndex < 0 || messageData.currentResponseIndex >= messageData.responses.length) {
+      throw new Error("Cannot update feedback: AI message has no responses or invalid index.");
+    }
+
+    const currentIdx = messageData.currentResponseIndex;
+    
+    // Create a new array of responses with the updated feedback for the specific response
+    const updatedResponses = messageData.responses.map((resp, index) => 
+      index === currentIdx ? { ...resp, feedback: newFeedbackValue } : resp
+    );
+
+    await updateDoc(messageRef, {
+      responses: updatedResponses.map(r => ({
+        ...r, 
+        timestamp: Timestamp.fromDate(r.timestamp as Date) // Convert Date to Firestore Timestamp
+      })), 
+      feedback: newFeedbackValue, // Update top-level feedback to match current response's feedback
+    });
+
+    // Re-fetch and return the updated message
+    const updatedDocSnap = await getDoc(messageRef);
+    return convertMessageDocumentToMessage(updatedDocSnap);
+
   } catch (error) {
     console.error(`Error updating feedback for message ${messageId} in session ${sessionId}:`, error);
     throw error;
   }
 };
+
 
 export const updateChatSessionTitleInFirestore = async (sessionId: string, newTitle: string): Promise<void> => {
   try {
@@ -185,7 +376,6 @@ export const deleteChatSessionFromFirestore = async (sessionId: string): Promise
     batch.delete(sessionRef);
 
     await batch.commit();
-    console.log(`Successfully deleted chat session ${sessionId} and all its messages.`);
 
   } catch (error) {
     console.error(`Error deleting chat session ${sessionId}:`, error);
