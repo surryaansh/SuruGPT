@@ -213,7 +213,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
           <div
             className={`${
               isUser
-                ? 'bg-[#35323C] rounded-2xl py-1.5 px-3' // Changed py-2 to py-1.5
+                ? 'bg-[#35323C] rounded-3xl py-1.5 px-3' // Changed py-2 to py-1.5
                 : 'py-1 px-0' 
             }`}
           >
