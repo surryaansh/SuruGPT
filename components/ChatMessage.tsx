@@ -50,7 +50,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   onNavigateAiResponse,
 }) => {
   const isUser = message.sender === SenderType.USER;
-  // displayedText always comes from message.text, which App.tsx keeps in sync with currentResponseIndex
   const displayedText = message.text; 
 
   const [isEditing, setIsEditing] = useState(false);
@@ -60,21 +59,18 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   const [showCopiedFeedbackFor, setShowCopiedFeedbackFor] = useState<string | null>(null);
   const copyFeedbackTimeoutRef = useRef<number | null>(null);
 
-  // Action buttons are ready if it's a user message, or if it's an AI message that's NOT currently streaming its *active* response variant.
   const actionButtonsReady = isUser || (message.sender === SenderType.AI && !message.isStreamingThisResponse && message.text && message.text.trim() !== '');
 
   useEffect(() => {
     if (isUser && isEditing) setEditText(message.text);
   }, [message.text, isUser, isEditing]); 
 
-  // Initial loading dots: AI message, streaming its current response, but no text yet for this current response.
   const showInitialLoadingDots = message.sender === SenderType.AI && message.isStreamingThisResponse && (!message.text || message.text.trim() === '');
-  // Typing cursor: AI message, streaming its current response, and there is some text for this current response.
   const showTypingCursor = message.sender === SenderType.AI && message.isStreamingThisResponse && message.text && message.text.trim() !== '';
 
 
   const handleCopy = (buttonIdSuffix: string) => {
-    const textToCopy = isEditing ? editText : displayedText; // Use displayedText for AI
+    const textToCopy = isUser && isEditing ? editText : displayedText; 
     onCopyText(textToCopy); 
     
     const copyButtonId = `${message.id}-${buttonIdSuffix}`;
@@ -133,15 +129,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const actionButtonClass = "p-1.5 text-[#A09CB0] hover:text-[#FF8DC7] disabled:opacity-50 disabled:hover:text-[#A09CB0] transition-colors";
   
-  // Show action buttons if they are "ready" (content loaded, not streaming this variant)
-  // AND it's not the initial loading dots phase.
   const shouldShowActionButtons = actionButtonsReady && !showInitialLoadingDots;
   
-  const isLatestStableAiMessageVisible = 
-    message.sender === SenderType.AI && 
-    isOverallLatestMessage && 
-    !message.isStreamingThisResponse && 
-    actionButtonsReady;
+  // AI message action buttons are visible if the AI message itself is stable (not streaming its current response variant)
+  const aiMessageActionsVisible = message.sender === SenderType.AI && !message.isStreamingThisResponse && actionButtonsReady;
+  // User message action buttons are hover-to-show
+  const userMessageActionsHoverToShow = isUser;
 
 
   const canNavigatePrev = message.sender === SenderType.AI && message.responses && typeof message.currentResponseIndex === 'number' && message.currentResponseIndex > 0;
@@ -182,7 +175,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       </div>
       {shouldShowActionButtons && (
         <div className={`mt-1.5 flex items-center space-x-1.5 transition-opacity duration-300 ease-in-out 
-          ${isLatestStableAiMessageVisible || !isUser ? 'opacity-100' : 'opacity-0 group-hover/message-item:opacity-100 focus-within:opacity-100'}
+          ${aiMessageActionsVisible ? 'opacity-100' : 
+            (userMessageActionsHoverToShow ? 'opacity-0 group-hover/message-item:opacity-100 focus-within:opacity-100' : 'opacity-0') // User actions on hover, others hidden if not AI stable
+          }
         `}>
           {isUser ? (
             <>
@@ -262,7 +257,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                  {showCopiedFeedbackFor === `${message.id}-ai-copy` ? <IconCheck className="w-4 h-4 text-[#FF8DC7]" /> : <IconClipboardDocumentList className="w-4 h-4" />}
               </ActionButtonWithTooltip>
 
-              {message.feedback !== 'bad' && ( // Show ThumbsUp if not 'bad'
+              {message.feedback !== 'bad' && ( 
                 <ActionButtonWithTooltip
                   onClick={() => onRateResponse(message.id, 'good')}
                   label="Good response"
@@ -274,7 +269,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 </ActionButtonWithTooltip>
               )}
 
-              {message.feedback !== 'good' && ( // Show ThumbsDown if not 'good'
+              {message.feedback !== 'good' && ( 
                 <ActionButtonWithTooltip
                   onClick={() => onRateResponse(message.id, 'bad')}
                   label="Bad response"
@@ -292,7 +287,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                   label="Retry response"
                   tooltipText="Retry"
                   className={actionButtonClass}
-                  disabled={message.isStreamingThisResponse} // Disable retry if already streaming a response for this message
+                  disabled={message.isStreamingThisResponse} 
                 >
                   <IconArrowRepeat />
                 </ActionButtonWithTooltip>
