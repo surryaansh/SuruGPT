@@ -51,9 +51,9 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({ onSendMessage, isLoading, i
   return (
     <div className="bg-[#393641] py-3 sm:py-4 px-10 border-t border-[#5A5666] sticky bottom-0 z-10">
       <div className="max-w-2xl mx-auto"> 
-        <div className="flex items-start bg-[#4A4754] rounded-xl p-1.5 shadow-sm"> {/* items-start for better alignment with growing textarea */}
+        <div className="flex items-center bg-[#4A4754] rounded-xl p-1.5 shadow-sm"> {/* Changed items-start to items-center */}
           <button 
-            className="p-2 mt-1.5 text-[#A09CB0] hover:text-[#FF8DC7] disabled:opacity-50 animate-subtleBounceOnHover" // Added mt-1.5 for alignment
+            className="p-2 text-[#A09CB0] hover:text-[#FF8DC7] disabled:opacity-50 animate-subtleBounceOnHover"
             disabled={isLoading || !isChatAvailable}
             aria-label="More options" 
           >
@@ -73,7 +73,7 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({ onSendMessage, isLoading, i
           <button
             onClick={handleSend}
             disabled={!canSend}
-            className={`p-2.5 mt-1.5 rounded-lg transition-colors self-end ${ // Added mt-1.5 and self-end
+            className={`p-2.5 rounded-lg transition-colors ${ 
               canSend ? 'bg-[#FF8DC7] hover:bg-opacity-80 text-white' : 'bg-transparent text-[#A09CB0]'
             }`}
             aria-label="Send message"

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { IconSuru, IconHeart } from '../constants'; // Import IconSuru
 
@@ -31,7 +32,7 @@ const WelcomeMessage: React.FC = () => {
             style={{ animationDelay: '0.1s' }} 
         />
         <h1 
-            className="text-2xl sm:text-3xl font-semibold text-[#EAE6F0] mb-2 animate-fadeInSlideUp" 
+            className="text-2xl sm:text-3xl text-[#EAE6F0] mb-2 animate-fadeInSlideUp" 
             style={{ animationDelay: '0.2s' }}
         >
           Hey Manvi! SuruGPT at your service!
