@@ -194,7 +194,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const shouldShowActionButtons = actionButtonsReady && !showInitialLoadingDots && (isUser || (!isUser && message.text && message.text.trim() !== ''));
   
-  const baseActionButtonsContainerClass = "mt-1.5 flex items-center space-x-1.5";
+  const baseActionButtonsContainerClass = "mt-1 flex items-center space-x-1.5"; // Changed mt-1.5 to mt-1
   let dynamicClassesForContainer = "";
 
   if (!isUser && isOverallLatestMessage && actionButtonsReady && !showInitialLoadingDots && message.text && message.text.trim() !== '') {
@@ -213,7 +213,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
           <div
             className={`${
               isUser
-                ? 'bg-[#35323C] rounded-2xl py-2 px-3'
+                ? 'bg-[#35323C] rounded-2xl py-1.5 px-3' // Changed py-2 to py-1.5
                 : 'py-1 px-0' 
             }`}
           >
