@@ -46,7 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
         const stream = await openai.chat.completions.create({
-            model: 'gpt-4.1-mini',
+            model: 'gpt-4o-mini',
             messages: messages,
             stream: true,
         });
