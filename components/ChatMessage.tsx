@@ -7,12 +7,12 @@ interface ChatMessageProps {
   message: Message;
   isStreamingAiText?: boolean;
   isOverallLatestMessage: boolean; 
-  onCopyText: (text: string) => void; // Simplified: buttonId no longer needed by parent for feedback
+  onCopyText: (text: string) => void;
   onRateResponse: (messageId: string, rating: 'good' | 'bad')
     => void;
   onRetryResponse: (aiMessageId: string, userPromptText: string) => void;
   onSaveEdit: (messageId: string, newText: string) => void;
-  previousUserMessageText?: string; // For AI retry
+  previousUserMessageText?: string; 
 }
 
 const ActionButtonWithTooltip: React.FC<{
@@ -23,10 +23,10 @@ const ActionButtonWithTooltip: React.FC<{
   className?: string;
   disabled?: boolean;
 }> = ({ onClick, label, tooltipText, children, className, disabled }) => (
-  <div className="relative"> {/* Removed 'group' from here */}
+  <div className="relative"> {/* Ensure no 'group' class here */}
     <button
       onClick={onClick}
-      className={`${className} group focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#35323C]`} // Added 'group' here
+      className={`${className || ''} group focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#35323C]`} {/* 'group' class on the button */}
       aria-label={label}
       disabled={disabled}
     >
@@ -134,7 +134,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const handleCopy = (buttonIdSuffix: string) => {
     const textToCopy = isEditing ? editText : message.text;
-    onCopyText(textToCopy); // Parent handles actual copy
+    onCopyText(textToCopy); 
     
     const copyButtonId = `${message.id}-${buttonIdSuffix}`;
     setShowCopiedFeedbackFor(copyButtonId);
@@ -196,7 +196,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   const isLatestAiMessageVisible = message.sender === SenderType.AI && isOverallLatestMessage && !isStreamingAiText && actionButtonsReady;
 
   return (
-    <div className={`group/message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}> {/* Changed 'group' to 'group/message-item' to avoid conflict if nested */}
+    <div className={`group/message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}>
       <div className={`max-w-[85%] sm:max-w-[75%]`}>
         {showInitialLoadingDots ? (
           <div className="py-1 px-0 text-base leading-relaxed">
