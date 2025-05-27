@@ -195,21 +195,28 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   const actionButtonClass = "p-1.5 text-[#A09CB0] hover:text-[#FF8DC7] disabled:opacity-50 disabled:hover:text-[#A09CB0] transition-colors";
 
   const shouldShowActionButtons = actionButtonsReady && !showInitialLoadingDots && (isUser || (!isUser && message.text && message.text.trim() !== ''));
-  const aiMessageIsStableAndHasContent = message.sender === SenderType.AI && !isStreamingAiText && message.text && message.text.trim() !== '' && actionButtonsReady;
+  
+  const commonStyling = 'mt-1.5 flex items-center space-x-1.5';
+  const animationSetup = 'transition-all duration-300 ease-in-out'; // Defines how properties change
+  const initialState = 'opacity-0 -translate-x-2'; // Defines starting visual state (hidden and offset to the left)
 
-  const commonActionContainerClasses = 'mt-1.5 flex items-center space-x-1.5 transition-all duration-300 ease-in-out';
-  let visibilityAndAnimationClasses = '';
-
+  let visibilityClasses = '';
   if (isUser) {
-    visibilityAndAnimationClasses = 'opacity-0 -translate-x-2 group-hover/message-item:opacity-100 group-hover/message-item:translate-x-0 focus-within:opacity-100 focus-within:translate-x-0';
-  } else { // AI message
-    if (aiMessageIsStableAndHasContent) {
-      visibilityAndAnimationClasses = 'opacity-100 translate-x-0';
+    // For user messages, reveal on hover/focus.
+    visibilityClasses = 'group-hover/message-item:opacity-100 group-hover/message-item:translate-x-0 focus-within:opacity-100 focus-within:translate-x-0';
+  } else { // AI Message
+    // Given shouldShowActionButtons is true, this AI message is stable (actionButtonsReady is true).
+    if (isOverallLatestMessage) {
+      // For the latest stable AI message, make it visible directly. Animation will occur from initialState.
+      visibilityClasses = 'opacity-100 translate-x-0';
     } else {
-      visibilityAndAnimationClasses = 'opacity-0 -translate-x-2 group-hover/message-item:opacity-100 group-hover/message-item:translate-x-0 focus-within:opacity-100 focus-within:translate-x-0';
+      // For older stable AI messages, only on hover/focus.
+      visibilityClasses = 'group-hover/message-item:opacity-100 group-hover/message-item:translate-x-0 focus-within:opacity-100 focus-within:translate-x-0';
     }
   }
-  const actionButtonsContainerClass = `${commonActionContainerClasses} ${visibilityAndAnimationClasses}`;
+
+  const actionButtonsContainerClass = `${commonStyling} ${animationSetup} ${initialState} ${visibilityClasses}`;
+
 
   return (
     <div className={`group/message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}>
