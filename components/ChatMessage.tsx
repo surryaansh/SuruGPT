@@ -23,10 +23,10 @@ const ActionButtonWithTooltip: React.FC<{
   className?: string;
   disabled?: boolean;
 }> = ({ onClick, label, tooltipText, children, className, disabled }) => (
-  <div className="relative">
+  <div className="relative group"> {/* Added 'group' here */}
     <button
       onClick={onClick}
-      className={`${className || ''} group focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#35323C]`}
+      className={`${className || ''} focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#35323C]`} {/* Removed 'group' from button as parent div now handles it */}
       aria-label={label}
       disabled={disabled}
     >
