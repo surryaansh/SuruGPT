@@ -26,7 +26,7 @@ const ActionButtonWithTooltip: React.FC<{
   <div className="relative"> {/* Ensure no 'group' class here */}
     <button
       onClick={onClick}
-      className={`${className || ''} group focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#35323C]`} {/* 'group' class on the button */}
+      className={`${className || ''} group focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#35323C]`}
       aria-label={label}
       disabled={disabled}
     >
