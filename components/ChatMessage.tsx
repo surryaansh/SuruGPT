@@ -227,10 +227,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 rows={1}
               />
             ) : (
-              <p className="text-sm leading-relaxed whitespace-pre-wrap text-[#EAE6F0]"> {/* Changed text-base to text-sm */}
-                {displayedText.trim()}
-                {showTypingCursor && <span className="blinking-cursor" aria-hidden="true"></span>}
-              </p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap text-[#EAE6F0]">{displayedText.trim()}{showTypingCursor && <span className="blinking-cursor" aria-hidden="true"></span>}</p>
             )}
           </div>
         )}
