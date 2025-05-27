@@ -1,18 +1,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, SenderType } from '../types';
-import { IconClipboardDocumentList, IconPencil, IconThumbUp, IconThumbDown, IconArrowRepeat, IconThumbUpSolid, IconThumbDownSolid, IconCheck } from '../constants';
+import { IconClipboardDocumentList, IconPencil, IconThumbUp, IconThumbDown, IconArrowRepeat, IconThumbUpSolid, IconThumbDownSolid, IconCheck, IconChevronLeft, IconChevronRight } from '../constants';
 
 interface ChatMessageProps {
   message: Message;
-  isStreamingAiText?: boolean;
   isOverallLatestMessage: boolean; 
   onCopyText: (text: string) => void;
-  onRateResponse: (messageId: string, rating: 'good' | 'bad')
-    => void;
+  onRateResponse: (messageId: string, rating: 'good' | 'bad') => void;
   onRetryResponse: (aiMessageId: string, userPromptText: string) => void;
   onSaveEdit: (messageId: string, newText: string) => void;
-  previousUserMessageText?: string; 
+  onNavigateAiResponse: (messageId: string, direction: 'prev' | 'next') => void;
 }
 
 const ActionButtonWithTooltip: React.FC<{
@@ -26,7 +24,7 @@ const ActionButtonWithTooltip: React.FC<{
   <div className="relative group"> {/* 'group' class on the parent div */}
     <button
       onClick={onClick}
-      className={`${className || ''} focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#35323C]`}
+      className={`${className || ''} focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#35323C] disabled:cursor-not-allowed disabled:opacity-40`}
       aria-label={label}
       disabled={disabled}
     >
@@ -44,19 +42,16 @@ const ActionButtonWithTooltip: React.FC<{
 
 const ChatMessage: React.FC<ChatMessageProps> = ({ 
   message, 
-  isStreamingAiText,
   isOverallLatestMessage, 
   onCopyText,
   onRateResponse,
   onRetryResponse,
   onSaveEdit,
-  previousUserMessageText
+  onNavigateAiResponse,
 }) => {
   const isUser = message.sender === SenderType.USER;
-  const [displayedText, setDisplayedText] = useState(isUser ? message.text : '');
-  const [showTypingCursor, setShowTypingCursor] = useState(false);
-  const typingTimeoutRef = useRef<number | null>(null);
-  const typingSpeed = 35;
+  // displayedText always comes from message.text, which App.tsx keeps in sync with currentResponseIndex
+  const displayedText = message.text; 
 
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.text);
@@ -65,75 +60,21 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   const [showCopiedFeedbackFor, setShowCopiedFeedbackFor] = useState<string | null>(null);
   const copyFeedbackTimeoutRef = useRef<number | null>(null);
 
-  const [actionButtonsReady, setActionButtonsReady] = useState(isUser); 
-  const actionButtonReadyTimeoutRef = useRef<number | null>(null);
+  // Action buttons are ready if it's a user message, or if it's an AI message that's NOT currently streaming its *active* response variant.
+  const actionButtonsReady = isUser || (message.sender === SenderType.AI && !message.isStreamingThisResponse && message.text && message.text.trim() !== '');
 
   useEffect(() => {
-    if (isUser) {
-      setActionButtonsReady(true); 
-      return;
-    }
-    if (!isUser && !isStreamingAiText && message.text && message.text.trim() !== '') {
-      if (actionButtonReadyTimeoutRef.current) clearTimeout(actionButtonReadyTimeoutRef.current);
-      actionButtonReadyTimeoutRef.current = window.setTimeout(() => {
-        setActionButtonsReady(true);
-      }, 150); 
-    } else if (isStreamingAiText || !message.text || message.text.trim() === '') {
-      setActionButtonsReady(false); 
-    }
-    return () => {
-      if (actionButtonReadyTimeoutRef.current) clearTimeout(actionButtonReadyTimeoutRef.current);
-    };
-  }, [isUser, isStreamingAiText, message.text]);
+    if (isUser && isEditing) setEditText(message.text);
+  }, [message.text, isUser, isEditing]); 
 
+  // Initial loading dots: AI message, streaming its current response, but no text yet for this current response.
+  const showInitialLoadingDots = message.sender === SenderType.AI && message.isStreamingThisResponse && (!message.text || message.text.trim() === '');
+  // Typing cursor: AI message, streaming its current response, and there is some text for this current response.
+  const showTypingCursor = message.sender === SenderType.AI && message.isStreamingThisResponse && message.text && message.text.trim() !== '';
 
-  useEffect(() => {
-    if (isUser) {
-      setDisplayedText(message.text);
-      setShowTypingCursor(false);
-      if (isEditing) setEditText(message.text); 
-      return;
-    }
-
-    if (isStreamingAiText && message.text) {
-      if (displayedText !== message.text) {
-        let currentTypedLength = displayedText.length;
-        if (message.text.length < displayedText.length || !message.text.startsWith(displayedText)) {
-             setDisplayedText('');
-             currentTypedLength = 0;
-        }
-        const type = () => {
-          if (currentTypedLength < message.text.length) {
-            setDisplayedText(message.text.substring(0, currentTypedLength + 1));
-            currentTypedLength++;
-            setShowTypingCursor(true);
-            typingTimeoutRef.current = window.setTimeout(type, typingSpeed);
-          } else {
-            setShowTypingCursor(false);
-            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-          }
-        };
-        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = window.setTimeout(type, 0);
-      }
-    } else if (!isStreamingAiText && message.text) {
-      setDisplayedText(message.text);
-      setShowTypingCursor(false);
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    } else if (isStreamingAiText && !message.text) {
-        setDisplayedText('');
-        setShowTypingCursor(false);
-    }
-
-    return () => {
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    };
-  }, [message.text, message.sender, isStreamingAiText, isUser, displayedText]); 
-
-  const showInitialLoadingDots = message.sender === SenderType.AI && isStreamingAiText && !message.text && !displayedText;
 
   const handleCopy = (buttonIdSuffix: string) => {
-    const textToCopy = isEditing ? editText : message.text;
+    const textToCopy = isEditing ? editText : displayedText; // Use displayedText for AI
     onCopyText(textToCopy); 
     
     const copyButtonId = `${message.id}-${buttonIdSuffix}`;
@@ -192,8 +133,19 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const actionButtonClass = "p-1.5 text-[#A09CB0] hover:text-[#FF8DC7] disabled:opacity-50 disabled:hover:text-[#A09CB0] transition-colors";
   
-  const shouldShowActionButtons = actionButtonsReady && !showInitialLoadingDots && (isUser || (!isUser && message.text && message.text.trim() !== ''));
-  const isLatestAiMessageVisible = message.sender === SenderType.AI && isOverallLatestMessage && !isStreamingAiText && actionButtonsReady;
+  // Show action buttons if they are "ready" (content loaded, not streaming this variant)
+  // AND it's not the initial loading dots phase.
+  const shouldShowActionButtons = actionButtonsReady && !showInitialLoadingDots;
+  
+  const isLatestStableAiMessageVisible = 
+    message.sender === SenderType.AI && 
+    isOverallLatestMessage && 
+    !message.isStreamingThisResponse && 
+    actionButtonsReady;
+
+
+  const canNavigatePrev = message.sender === SenderType.AI && message.responses && typeof message.currentResponseIndex === 'number' && message.currentResponseIndex > 0;
+  const canNavigateNext = message.sender === SenderType.AI && message.responses && typeof message.currentResponseIndex === 'number' && message.currentResponseIndex < message.responses.length - 1;
 
   return (
     <div className={`group/message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}>
@@ -230,7 +182,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       </div>
       {shouldShowActionButtons && (
         <div className={`mt-1.5 flex items-center space-x-1.5 transition-opacity duration-300 ease-in-out 
-          ${isLatestAiMessageVisible ? 'opacity-100' : 'opacity-0 group-hover/message-item:opacity-100 focus-within:opacity-100'}
+          ${isLatestStableAiMessageVisible || !isUser ? 'opacity-100' : 'opacity-0 group-hover/message-item:opacity-100 focus-within:opacity-100'}
         `}>
           {isUser ? (
             <>
@@ -272,45 +224,75 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 </ActionButtonWithTooltip>
               )}
             </>
-          ) : ( 
+          ) : ( // AI Message Actions
             <>
+              {message.responses && message.responses.length > 1 && typeof message.currentResponseIndex === 'number' && (
+                <>
+                  <ActionButtonWithTooltip
+                    onClick={() => onNavigateAiResponse(message.id, 'prev')}
+                    label="Previous response"
+                    tooltipText="Previous response"
+                    className={actionButtonClass}
+                    disabled={!canNavigatePrev || message.isStreamingThisResponse}
+                  >
+                    <IconChevronLeft className="w-4 h-4" />
+                  </ActionButtonWithTooltip>
+                  <span className="text-xs text-[#A09CB0] select-none px-0.5">
+                    {message.currentResponseIndex + 1}/{message.responses.length}
+                  </span>
+                  <ActionButtonWithTooltip
+                    onClick={() => onNavigateAiResponse(message.id, 'next')}
+                    label="Next response"
+                    tooltipText="Next response"
+                    className={actionButtonClass}
+                    disabled={!canNavigateNext || message.isStreamingThisResponse}
+                  >
+                    <IconChevronRight className="w-4 h-4" />
+                  </ActionButtonWithTooltip>
+                </>
+              )}
+
               <ActionButtonWithTooltip
                 onClick={() => handleCopy('ai-copy')}
                 label="Copy AI's response"
                 tooltipText="Copy"
                 className={actionButtonClass}
+                disabled={message.isStreamingThisResponse}
               >
                  {showCopiedFeedbackFor === `${message.id}-ai-copy` ? <IconCheck className="w-4 h-4 text-[#FF8DC7]" /> : <IconClipboardDocumentList className="w-4 h-4" />}
               </ActionButtonWithTooltip>
 
-              {message.feedback !== 'bad' && (
+              {message.feedback !== 'bad' && ( // Show ThumbsUp if not 'bad'
                 <ActionButtonWithTooltip
                   onClick={() => onRateResponse(message.id, 'good')}
                   label="Good response"
                   tooltipText="Good response"
                   className={`${actionButtonClass} ${message.feedback === 'good' ? 'text-[#FF8DC7]' : ''}`}
+                  disabled={message.isStreamingThisResponse}
                 >
                   {message.feedback === 'good' ? <IconThumbUpSolid /> : <IconThumbUp />}
                 </ActionButtonWithTooltip>
               )}
 
-              {message.feedback !== 'good' && (
+              {message.feedback !== 'good' && ( // Show ThumbsDown if not 'good'
                 <ActionButtonWithTooltip
                   onClick={() => onRateResponse(message.id, 'bad')}
                   label="Bad response"
                   tooltipText="Bad response"
                   className={`${actionButtonClass} ${message.feedback === 'bad' ? 'text-[#FF8DC7]' : ''}`}
+                  disabled={message.isStreamingThisResponse}
                 >
                   {message.feedback === 'bad' ? <IconThumbDownSolid /> : <IconThumbDown />}
                 </ActionButtonWithTooltip>
               )}
 
-              {previousUserMessageText && (
+              {message.promptText && (
                 <ActionButtonWithTooltip
-                  onClick={() => onRetryResponse(message.id, previousUserMessageText)}
+                  onClick={() => onRetryResponse(message.id, message.promptText!)}
                   label="Retry response"
                   tooltipText="Retry"
                   className={actionButtonClass}
+                  disabled={message.isStreamingThisResponse} // Disable retry if already streaming a response for this message
                 >
                   <IconArrowRepeat />
                 </ActionButtonWithTooltip>
