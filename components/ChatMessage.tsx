@@ -1,13 +1,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, SenderType } from '../types';
-import { IconClipboardDocumentList, IconPencil, IconThumbUp, IconThumbDown, IconArrowPath, IconThumbUpSolid, IconThumbDownSolid } from '../constants';
+import { IconClipboardDocumentList, IconPencil, IconThumbUp, IconThumbDown, IconArrowRepeat, IconThumbUpSolid, IconThumbDownSolid, IconCheck } from '../constants';
 
 interface ChatMessageProps {
   message: Message;
   isStreamingAiText?: boolean;
   isOverallLatestMessage: boolean; 
-  onCopyText: (text: string, buttonId: string) => void;
+  onCopyText: (text: string) => void; // Simplified: buttonId no longer needed by parent for feedback
   onRateResponse: (messageId: string, rating: 'good' | 'bad')
     => void;
   onRetryResponse: (aiMessageId: string, userPromptText: string) => void;
@@ -134,8 +134,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const handleCopy = (buttonIdSuffix: string) => {
     const textToCopy = isEditing ? editText : message.text;
-    onCopyText(textToCopy, `${message.id}-${buttonIdSuffix}`);
-    setShowCopiedFeedbackFor(`${message.id}-${buttonIdSuffix}`);
+    onCopyText(textToCopy); // Parent handles actual copy
+    
+    const copyButtonId = `${message.id}-${buttonIdSuffix}`;
+    setShowCopiedFeedbackFor(copyButtonId);
+    
     if (copyFeedbackTimeoutRef.current) clearTimeout(copyFeedbackTimeoutRef.current);
     copyFeedbackTimeoutRef.current = window.setTimeout(() => setShowCopiedFeedbackFor(null), 1500);
   };
@@ -237,7 +240,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 tooltipText="Copy my message"
                 className={actionButtonClass}
               >
-                {showCopiedFeedbackFor === `${message.id}-user-copy` ? <span className="text-xs text-[#FF8DC7] copied-feedback" aria-live="polite">Copied!</span> : <IconClipboardDocumentList />}
+                {showCopiedFeedbackFor === `${message.id}-user-copy` ? <IconCheck className="w-4 h-4 text-[#FF8DC7]" /> : <IconClipboardDocumentList className="w-4 h-4" />}
               </ActionButtonWithTooltip>
               {isEditing ? (
                 <>
@@ -277,7 +280,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 tooltipText="Copy AI's response"
                 className={actionButtonClass}
               >
-                 {showCopiedFeedbackFor === `${message.id}-ai-copy` ? <span className="text-xs text-[#FF8DC7] copied-feedback" aria-live="polite">Copied!</span> : <IconClipboardDocumentList />}
+                 {showCopiedFeedbackFor === `${message.id}-ai-copy` ? <IconCheck className="w-4 h-4 text-[#FF8DC7]" /> : <IconClipboardDocumentList className="w-4 h-4" />}
               </ActionButtonWithTooltip>
 
               {message.feedback !== 'bad' && (
@@ -309,7 +312,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                   tooltipText="Retry response"
                   className={actionButtonClass}
                 >
-                  <IconArrowPath />
+                  <IconArrowRepeat />
                 </ActionButtonWithTooltip>
               )}
             </>

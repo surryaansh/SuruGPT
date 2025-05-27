@@ -6,7 +6,7 @@ import ChatMessage from './ChatMessage';
 interface ChatMessageListProps {
   messages: Message[];
   isLoadingAiResponse: boolean;
-  onCopyText: (text: string, buttonId: string) => void;
+  onCopyText: (text: string) => void; // Simplified: no buttonId
   onRateResponse: (messageId:string, rating: 'good' | 'bad') => void;
   onRetryResponse: (aiMessageId: string, userPromptText: string) => void;
   onSaveEdit: (messageId: string, newText: string) => void;
