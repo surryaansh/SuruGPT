@@ -63,10 +63,11 @@ const convertMessageDocumentToMessage = (docSnapshot: any): Message => {
       message.timestamp = firstResp.timestamp;
       message.currentResponseIndex = 0;
     } else if (!message.responses || message.responses.length === 0) {
+      // This case handles AI messages that might have been created before the 'responses' array structure.
+      // It ensures they are compatible by creating a single-element responses array from top-level fields.
       message.text = data.text || '';
       message.feedback = data.feedback === undefined ? null : data.feedback;
       message.timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : new Date(data.timestamp || Date.now());
-      // If no responses array, create one from top-level fields for consistency
       message.responses = [{ text: message.text, feedback: message.feedback, timestamp: message.timestamp }];
       message.currentResponseIndex = 0;
     }
@@ -153,6 +154,9 @@ export const addMessageToFirestore = async (
         timestamp: currentServerTimestamp,
       };
     } else { 
+      // For AI messages, 'text' is the content of the first response.
+      // 'messageData.isStreamingThisResponse' comes from App.tsx during placeholder creation.
+      // If called after stream completion, App.tsx won't pass isStreamingThisResponse, so it defaults to false.
       const firstResponse: AIResponse = {
         text: messageData.text!,
         feedback: null,
@@ -163,7 +167,7 @@ export const addMessageToFirestore = async (
         promptText: messageData.promptText,
         responses: [firstResponse], 
         currentResponseIndex: 0,
-        text: firstResponse.text,
+        text: firstResponse.text, // Top-level fields reflect the current (first) response
         feedback: firstResponse.feedback,
         timestamp: currentServerTimestamp, 
         isStreamingThisResponse: messageData.isStreamingThisResponse || false,
@@ -177,6 +181,7 @@ export const addMessageToFirestore = async (
     
     const docSnap = await getDoc(messageRef);
     if (docSnap.exists()) {
+        // convertMessageDocumentToMessage will ensure isStreamingThisResponse is false if undefined in doc.
         return convertMessageDocumentToMessage(docSnap);
     } else {
          throw new Error("Failed to add and retrieve message from Firestore");
@@ -207,48 +212,70 @@ export const updateUserMessageTextInFirestore = async (
 export const addResponseToAIMessageInFirestore = async (
   sessionId: string,
   messageId: string,
-  newResponseText: string
+  newResponseText: string // This is the full text of the new response variant
 ): Promise<Message> => {
   const messageRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION, messageId);
   try {
+    // Get current state to determine the new index for the responses array
+    const initialDocSnap = await getDoc(messageRef);
+    if (!initialDocSnap.exists() || initialDocSnap.data().sender !== SenderType.AI) {
+      throw new Error("AI message not found or invalid type for adding response.");
+    }
+    const existingResponses = (initialDocSnap.data().responses || []) as any[];
+    const newIndex = existingResponses.length; // New response will be at this index
+
+    // 1. Add the new response (with its full text) to the 'responses' array
+    //    and update 'currentResponseIndex' to point to this new response.
+    //    Firestore's serverTimestamp() will be used for the new response's timestamp.
     const newResponseItemForDb = { 
       text: newResponseText,
       feedback: null,
       timestamp: serverTimestamp(),
     };
-
-    const docSnap = await getDoc(messageRef);
-    if (!docSnap.exists() || docSnap.data().sender !== SenderType.AI) {
-      throw new Error("AI message not found or invalid type for adding response.");
-    }
-    const existingResponsesCount = (docSnap.data().responses || []).length;
-    const newIndex = existingResponsesCount; 
-
     await updateDoc(messageRef, {
       responses: arrayUnion(newResponseItemForDb),
       currentResponseIndex: newIndex,
     });
 
-    const updatedDocSnap = await getDoc(messageRef);
-    if (!updatedDocSnap.exists()) throw new Error("Failed to re-fetch AI message after adding response.");
-    
-    let finalMessage = convertMessageDocumentToMessage(updatedDocSnap);
-    
-     if (finalMessage.responses && finalMessage.currentResponseIndex != null && finalMessage.currentResponseIndex < finalMessage.responses.length) {
-        const currentActualResponse = finalMessage.responses[finalMessage.currentResponseIndex];
-        await updateDoc(messageRef, {
-            text: currentActualResponse.text,
-            feedback: currentActualResponse.feedback,
-            timestamp: Timestamp.fromDate(currentActualResponse.timestamp as Date), // Ensure Firestore Timestamp
-            isStreamingThisResponse: false, 
-        });
-        const finalSnap = await getDoc(messageRef);
-        return convertMessageDocumentToMessage(finalSnap);
+    // 2. Read the document again. By now, serverTimestamp() for the new response
+    //    will have resolved to an actual Timestamp.
+    const docSnapAfterUnion = await getDoc(messageRef);
+    if (!docSnapAfterUnion.exists()) {
+      throw new Error("Failed to re-fetch AI message after adding response shell.");
     }
-    return { ...finalMessage, isStreamingThisResponse: false };
+    // Convert to client-side Message type. This will also set top-level text, feedback, timestamp
+    // based on the new currentResponseIndex. isStreamingThisResponse will be its current DB value.
+    const tempMessageState = convertMessageDocumentToMessage(docSnapAfterUnion);
+
+    if (!tempMessageState.responses || tempMessageState.currentResponseIndex == null ||
+        tempMessageState.currentResponseIndex < 0 || 
+        tempMessageState.currentResponseIndex >= tempMessageState.responses.length) {
+      console.error("FirebaseService Error: Inconsistent message state after adding response. Index out of bounds. Attempting recovery.");
+      // Fallback: Try to set streaming to false and return the current state.
+      await updateDoc(messageRef, { isStreamingThisResponse: false });
+      const recoverySnap = await getDoc(messageRef);
+      return convertMessageDocumentToMessage(recoverySnap);
+    }
+    
+    // 3. Prepare the final update for top-level fields and ensure isStreamingThisResponse is false.
+    //    The currentActualResponse is the newly added one, now with a resolved timestamp.
+    const currentActualResponse = tempMessageState.responses[tempMessageState.currentResponseIndex];
+    
+    await updateDoc(messageRef, {
+      text: currentActualResponse.text, // This is newResponseText
+      feedback: currentActualResponse.feedback, // Should be null for a new response
+      // Ensure the timestamp is a Firestore Timestamp object before saving.
+      // convertMessageDocumentToMessage converts Firestore Timestamps to JS Dates, so convert back.
+      timestamp: currentActualResponse.timestamp instanceof Date ? Timestamp.fromDate(currentActualResponse.timestamp) : currentActualResponse.timestamp, 
+      isStreamingThisResponse: false, // CRITICALLY ensure this is set to false
+    });
+
+    // 4. Fetch the absolute final state from Firestore and return
+    const finalSnap = await getDoc(messageRef);
+    return convertMessageDocumentToMessage(finalSnap);
 
   } catch (error) {
-    console.error(`Error adding response to AI message ${messageId}:`, error);
+    console.error(`Error adding response to AI message ${messageId} in session ${sessionId}:`, error);
     throw error;
   }
 };
@@ -264,27 +291,29 @@ export const updateAIMessageResponseNavigationInFirestore = async (
     if (!docSnap.exists() || docSnap.data().sender !== SenderType.AI) {
       throw new Error("AI message not found or invalid type for navigation.");
     }
+    // Use convertMessageDocumentToMessage to work with consistent Message structure
     const messageData = convertMessageDocumentToMessage(docSnap); 
     
     if (!messageData.responses || newIndex < 0 || newIndex >= messageData.responses.length) {
-      console.warn("Invalid newIndex or no responses available during navigation update. Current:", messageData.currentResponseIndex, "New:", newIndex, "Total:", messageData.responses?.length);
-      return messageData; 
+      console.warn(`FirebaseService Warn: Invalid newIndex (${newIndex}) or no responses for navigation. Total responses: ${messageData.responses?.length}. Message ID: ${messageId}`);
+      return messageData; // Return current state if navigation is not possible
     }
     
-    const currentResponse = messageData.responses[newIndex];
+    const newCurrentResponse = messageData.responses[newIndex];
     await updateDoc(messageRef, {
       currentResponseIndex: newIndex,
-      text: currentResponse.text,
-      feedback: currentResponse.feedback,
-      timestamp: Timestamp.fromDate(currentResponse.timestamp as Date), 
-      isStreamingThisResponse: false, 
+      text: newCurrentResponse.text,
+      feedback: newCurrentResponse.feedback,
+      // Ensure timestamp is Firestore Timestamp for saving
+      timestamp: newCurrentResponse.timestamp instanceof Date ? Timestamp.fromDate(newCurrentResponse.timestamp) : newCurrentResponse.timestamp, 
+      isStreamingThisResponse: false, // Navigating implies the response is not streaming
     });
 
     const updatedDocSnap = await getDoc(messageRef);
     return convertMessageDocumentToMessage(updatedDocSnap);
 
   } catch (error) {
-    console.error(`Error updating AI message navigation for ${messageId}:`, error);
+    console.error(`Error updating AI message navigation for ${messageId} in session ${sessionId}:`, error);
     throw error;
   }
 };
@@ -302,25 +331,29 @@ export const updateMessageFeedbackInFirestore = async (
       throw new Error("Feedback can only be applied to AI messages.");
     }
     
-    let messageData = convertMessageDocumentToMessage(docSnap);
+    let messageData = convertMessageDocumentToMessage(docSnap); // Use converter
     
     if (!messageData.responses || typeof messageData.currentResponseIndex !== 'number' || 
         messageData.currentResponseIndex < 0 || messageData.currentResponseIndex >= messageData.responses.length) {
-      throw new Error("Cannot update feedback: AI message has no responses or invalid index.");
+      throw new Error("Cannot update feedback: AI message has no responses or invalid currentResponseIndex.");
     }
 
     const currentIdx = messageData.currentResponseIndex;
     
+    // Create a new responses array with updated feedback for the specific response
     const updatedResponses = messageData.responses.map((resp, index) => 
       index === currentIdx ? { ...resp, feedback: newFeedbackValue } : resp
     );
 
+    // When saving back, ensure all timestamps in the responses array are Firestore Timestamps
+    const responsesForDb = updatedResponses.map(r => ({
+      ...r, 
+      timestamp: r.timestamp instanceof Date ? Timestamp.fromDate(r.timestamp) : r.timestamp,
+    }));
+
     await updateDoc(messageRef, {
-      responses: updatedResponses.map(r => ({
-        ...r, 
-        timestamp: Timestamp.fromDate(r.timestamp as Date) 
-      })), 
-      feedback: newFeedbackValue, 
+      responses: responsesForDb, 
+      feedback: newFeedbackValue, // Update top-level feedback to match current response's feedback
     });
 
     const updatedDocSnap = await getDoc(messageRef);
