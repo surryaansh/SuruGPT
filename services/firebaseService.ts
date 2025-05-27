@@ -50,26 +50,24 @@ const convertMessageDocumentToMessage = (docSnapshot: any): Message => {
     
     if (message.responses && message.responses.length > 0 && 
         typeof message.currentResponseIndex === 'number' && 
-        message.currentResponseIndex >= 0 && // Ensure index is not negative
+        message.currentResponseIndex >= 0 && 
         message.currentResponseIndex < message.responses.length) {
       const currentResp = message.responses[message.currentResponseIndex];
       message.text = currentResp.text;
       message.feedback = currentResp.feedback;
       message.timestamp = currentResp.timestamp;
     } else if (message.responses && message.responses.length > 0 && message.currentResponseIndex === undefined) {
-      // Default to first response if index is undefined but responses exist
       const firstResp = message.responses[0];
       message.text = firstResp.text;
       message.feedback = firstResp.feedback;
       message.timestamp = firstResp.timestamp;
       message.currentResponseIndex = 0;
     } else if (!message.responses || message.responses.length === 0) {
-      // If no responses array, ensure top-level fields are at least initialized from data if they exist
-      // or default them if not. This handles cases where data might be partially formed.
       message.text = data.text || '';
       message.feedback = data.feedback === undefined ? null : data.feedback;
       message.timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : new Date(data.timestamp || Date.now());
-      message.responses = [];
+      // If no responses array, create one from top-level fields for consistency
+      message.responses = [{ text: message.text, feedback: message.feedback, timestamp: message.timestamp }];
       message.currentResponseIndex = 0;
     }
   }
@@ -146,7 +144,7 @@ export const addMessageToFirestore = async (
 ): Promise<Message> => {
   try {
     let dataToSave: any;
-    const currentServerTimestamp = serverTimestamp(); // Use a single serverTimestamp for consistency
+    const currentServerTimestamp = serverTimestamp(); 
 
     if (messageData.sender === SenderType.USER) {
       dataToSave = {
@@ -158,16 +156,16 @@ export const addMessageToFirestore = async (
       const firstResponse: AIResponse = {
         text: messageData.text!,
         feedback: null,
-        timestamp: currentServerTimestamp as unknown as Timestamp, // Will be resolved by server
+        timestamp: currentServerTimestamp as unknown as Timestamp, 
       };
       dataToSave = {
         sender: SenderType.AI,
         promptText: messageData.promptText,
-        responses: [firstResponse], // Store the object that will be resolved
+        responses: [firstResponse], 
         currentResponseIndex: 0,
         text: firstResponse.text,
         feedback: firstResponse.feedback,
-        timestamp: currentServerTimestamp, // Top-level timestamp also reflects the first response
+        timestamp: currentServerTimestamp, 
         isStreamingThisResponse: messageData.isStreamingThisResponse || false,
       };
     }
@@ -177,7 +175,6 @@ export const addMessageToFirestore = async (
       dataToSave
     );
     
-    // Fetch the document to get server-resolved timestamps
     const docSnap = await getDoc(messageRef);
     if (docSnap.exists()) {
         return convertMessageDocumentToMessage(docSnap);
@@ -214,48 +211,40 @@ export const addResponseToAIMessageInFirestore = async (
 ): Promise<Message> => {
   const messageRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION, messageId);
   try {
-    const newResponseItemForDb = { // Structure for arrayUnion
+    const newResponseItemForDb = { 
       text: newResponseText,
       feedback: null,
       timestamp: serverTimestamp(),
     };
 
-    // Fetch current message to know the new index
     const docSnap = await getDoc(messageRef);
     if (!docSnap.exists() || docSnap.data().sender !== SenderType.AI) {
       throw new Error("AI message not found or invalid type for adding response.");
     }
     const existingResponsesCount = (docSnap.data().responses || []).length;
-    const newIndex = existingResponsesCount; // Index will be current length before adding
+    const newIndex = existingResponsesCount; 
 
     await updateDoc(messageRef, {
       responses: arrayUnion(newResponseItemForDb),
       currentResponseIndex: newIndex,
-      // Top-level fields will be set based on this new response after re-fetch
-      // For atomicity, we update them after ensuring the new response is part of the array
     });
 
-    // Re-fetch to get the message with the resolved serverTimestamp for the new response
     const updatedDocSnap = await getDoc(messageRef);
     if (!updatedDocSnap.exists()) throw new Error("Failed to re-fetch AI message after adding response.");
     
     let finalMessage = convertMessageDocumentToMessage(updatedDocSnap);
     
-    // Ensure the top-level fields are updated based on the now *truly* last response
-    // which is at the newIndex (which became finalMessage.currentResponseIndex after conversion)
      if (finalMessage.responses && finalMessage.currentResponseIndex != null && finalMessage.currentResponseIndex < finalMessage.responses.length) {
         const currentActualResponse = finalMessage.responses[finalMessage.currentResponseIndex];
         await updateDoc(messageRef, {
             text: currentActualResponse.text,
             feedback: currentActualResponse.feedback,
-            timestamp: currentActualResponse.timestamp, // This is already a Date object from convertAIResponseTimestamp
-            isStreamingThisResponse: false, // Finalizing the stream
+            timestamp: Timestamp.fromDate(currentActualResponse.timestamp as Date), // Ensure Firestore Timestamp
+            isStreamingThisResponse: false, 
         });
-        // Fetch one last time to get the fully consistent document
         const finalSnap = await getDoc(messageRef);
         return convertMessageDocumentToMessage(finalSnap);
     }
-    // If somehow the above condition isn't met, return the already converted message (might be slightly out of sync on top-level)
     return { ...finalMessage, isStreamingThisResponse: false };
 
   } catch (error) {
@@ -279,8 +268,7 @@ export const updateAIMessageResponseNavigationInFirestore = async (
     
     if (!messageData.responses || newIndex < 0 || newIndex >= messageData.responses.length) {
       console.warn("Invalid newIndex or no responses available during navigation update. Current:", messageData.currentResponseIndex, "New:", newIndex, "Total:", messageData.responses?.length);
-      // Potentially return current state or throw more specific error
-      return messageData; // Or throw new Error("Invalid navigation index.");
+      return messageData; 
     }
     
     const currentResponse = messageData.responses[newIndex];
@@ -288,11 +276,10 @@ export const updateAIMessageResponseNavigationInFirestore = async (
       currentResponseIndex: newIndex,
       text: currentResponse.text,
       feedback: currentResponse.feedback,
-      timestamp: Timestamp.fromDate(currentResponse.timestamp as Date), // Convert Date back to Firestore Timestamp for saving
-      isStreamingThisResponse: false, // Navigation implies stream is complete for this variant
+      timestamp: Timestamp.fromDate(currentResponse.timestamp as Date), 
+      isStreamingThisResponse: false, 
     });
 
-    // Fetch again to ensure we return the most up-to-date version from DB
     const updatedDocSnap = await getDoc(messageRef);
     return convertMessageDocumentToMessage(updatedDocSnap);
 
@@ -306,7 +293,7 @@ export const updateAIMessageResponseNavigationInFirestore = async (
 export const updateMessageFeedbackInFirestore = async (
   sessionId: string,
   messageId: string,
-  newFeedbackValue: 'good' | 'bad' | null // Explicitly take the new value
+  newFeedbackValue: 'good' | 'bad' | null 
 ): Promise<Message> => {
   const messageRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION, messageId);
   try {
@@ -324,7 +311,6 @@ export const updateMessageFeedbackInFirestore = async (
 
     const currentIdx = messageData.currentResponseIndex;
     
-    // Create a new array of responses with the updated feedback for the specific response
     const updatedResponses = messageData.responses.map((resp, index) => 
       index === currentIdx ? { ...resp, feedback: newFeedbackValue } : resp
     );
@@ -332,12 +318,11 @@ export const updateMessageFeedbackInFirestore = async (
     await updateDoc(messageRef, {
       responses: updatedResponses.map(r => ({
         ...r, 
-        timestamp: Timestamp.fromDate(r.timestamp as Date) // Convert Date to Firestore Timestamp
+        timestamp: Timestamp.fromDate(r.timestamp as Date) 
       })), 
-      feedback: newFeedbackValue, // Update top-level feedback to match current response's feedback
+      feedback: newFeedbackValue, 
     });
 
-    // Re-fetch and return the updated message
     const updatedDocSnap = await getDoc(messageRef);
     return convertMessageDocumentToMessage(updatedDocSnap);
 
