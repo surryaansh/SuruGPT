@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, SenderType } from '../types';
 import { IconClipboardDocumentList, IconPencil, IconThumbUp, IconThumbDown, IconArrowRepeat, IconThumbUpSolid, IconThumbDownSolid, IconCheck } from '../constants';
@@ -6,13 +5,13 @@ import { IconClipboardDocumentList, IconPencil, IconThumbUp, IconThumbDown, Icon
 interface ChatMessageProps {
   message: Message;
   isStreamingAiText?: boolean;
-  isOverallLatestMessage: boolean; 
+  isOverallLatestMessage: boolean;
   onCopyText: (text: string) => void;
   onRateResponse: (messageId: string, rating: 'good' | 'bad')
     => void;
   onRetryResponse: (aiMessageId: string, userPromptText: string) => void;
   onSaveEdit: (messageId: string, newText: string) => void;
-  previousUserMessageText?: string; 
+  previousUserMessageText?: string;
 }
 
 const ActionButtonWithTooltip: React.FC<{
@@ -42,15 +41,15 @@ const ActionButtonWithTooltip: React.FC<{
 );
 
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ 
-  message, 
-  isStreamingAiText,
-  isOverallLatestMessage, 
+const ChatMessage: React.FC<ChatMessageProps> = ({
+  message,
+  isStreamingAiText, // Prop from ChatMessageList
+  isOverallLatestMessage,
   onCopyText,
   onRateResponse,
   onRetryResponse,
   onSaveEdit,
-  previousUserMessageText
+  previousUserMessageText // Prop from ChatMessageList
 }) => {
   const isUser = message.sender === SenderType.USER;
   const [displayedText, setDisplayedText] = useState(isUser ? message.text : '');
@@ -65,21 +64,22 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   const [showCopiedFeedbackFor, setShowCopiedFeedbackFor] = useState<string | null>(null);
   const copyFeedbackTimeoutRef = useRef<number | null>(null);
 
-  const [actionButtonsReady, setActionButtonsReady] = useState(isUser); 
+  const [actionButtonsReady, setActionButtonsReady] = useState(isUser);
   const actionButtonReadyTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (isUser) {
-      setActionButtonsReady(true); 
+      setActionButtonsReady(true);
       return;
     }
+    // For AI messages, use the isStreamingAiText prop
     if (!isUser && !isStreamingAiText && message.text && message.text.trim() !== '') {
       if (actionButtonReadyTimeoutRef.current) clearTimeout(actionButtonReadyTimeoutRef.current);
       actionButtonReadyTimeoutRef.current = window.setTimeout(() => {
         setActionButtonsReady(true);
-      }, 150); 
+      }, 150);
     } else if (isStreamingAiText || !message.text || message.text.trim() === '') {
-      setActionButtonsReady(false); 
+      setActionButtonsReady(false);
     }
     return () => {
       if (actionButtonReadyTimeoutRef.current) clearTimeout(actionButtonReadyTimeoutRef.current);
@@ -91,10 +91,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     if (isUser) {
       setDisplayedText(message.text);
       setShowTypingCursor(false);
-      if (isEditing) setEditText(message.text); 
+      if (isEditing) setEditText(message.text);
       return;
     }
 
+    // Use isStreamingAiText prop for AI typing effect
     if (isStreamingAiText && message.text) {
       if (displayedText !== message.text) {
         let currentTypedLength = displayedText.length;
@@ -122,27 +123,28 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     } else if (isStreamingAiText && !message.text) {
         setDisplayedText('');
-        setShowTypingCursor(false);
+        setShowTypingCursor(false); // Should be false if no text is being streamed
     }
 
     return () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
-  }, [message.text, message.sender, isStreamingAiText, isUser, displayedText]); 
+  }, [message.text, message.sender, isStreamingAiText, isUser, displayedText]);
 
+  // Use isStreamingAiText prop for initial loading dots
   const showInitialLoadingDots = message.sender === SenderType.AI && isStreamingAiText && !message.text && !displayedText;
 
   const handleCopy = (buttonIdSuffix: string) => {
     const textToCopy = isEditing ? editText : message.text;
-    onCopyText(textToCopy); 
-    
+    onCopyText(textToCopy);
+
     const copyButtonId = `${message.id}-${buttonIdSuffix}`;
     setShowCopiedFeedbackFor(copyButtonId);
-    
+
     if (copyFeedbackTimeoutRef.current) clearTimeout(copyFeedbackTimeoutRef.current);
     copyFeedbackTimeoutRef.current = window.setTimeout(() => setShowCopiedFeedbackFor(null), 1500);
   };
-  
+
   useEffect(() => {
     return () => {
       if (copyFeedbackTimeoutRef.current) clearTimeout(copyFeedbackTimeoutRef.current);
@@ -163,7 +165,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const handleCancelEdit = () => {
     setIsEditing(false);
-    setEditText(message.text); 
+    setEditText(message.text);
   };
 
   useEffect(() => {
@@ -179,21 +181,35 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     e.target.style.height = 'auto';
     e.target.style.height = `${e.target.scrollHeight}px`;
   };
-  
+
   const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSave();
     } else if (e.key === 'Escape') {
-      e.preventDefault(); 
+      e.preventDefault();
       handleCancelEdit();
     }
   };
 
   const actionButtonClass = "p-1.5 text-[#A09CB0] hover:text-[#FF8DC7] disabled:opacity-50 disabled:hover:text-[#A09CB0] transition-colors";
-  
+
   const shouldShowActionButtons = actionButtonsReady && !showInitialLoadingDots && (isUser || (!isUser && message.text && message.text.trim() !== ''));
-  const isLatestAiMessageVisible = message.sender === SenderType.AI && isOverallLatestMessage && !isStreamingAiText && actionButtonsReady;
+  const aiMessageIsStableAndHasContent = message.sender === SenderType.AI && !isStreamingAiText && message.text && message.text.trim() !== '' && actionButtonsReady;
+
+  const commonActionContainerClasses = 'mt-1.5 flex items-center space-x-1.5 transition-all duration-300 ease-in-out';
+  let visibilityAndAnimationClasses = '';
+
+  if (isUser) {
+    visibilityAndAnimationClasses = 'opacity-0 -translate-x-2 group-hover/message-item:opacity-100 group-hover/message-item:translate-x-0 focus-within:opacity-100 focus-within:translate-x-0';
+  } else { // AI message
+    if (aiMessageIsStableAndHasContent) {
+      visibilityAndAnimationClasses = 'opacity-100 translate-x-0';
+    } else {
+      visibilityAndAnimationClasses = 'opacity-0 -translate-x-2 group-hover/message-item:opacity-100 group-hover/message-item:translate-x-0 focus-within:opacity-100 focus-within:translate-x-0';
+    }
+  }
+  const actionButtonsContainerClass = `${commonActionContainerClasses} ${visibilityAndAnimationClasses}`;
 
   return (
     <div className={`group/message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}>
@@ -206,8 +222,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
           <div
             className={`${
               isUser
-                ? 'bg-[#35323C] rounded-2xl py-2 px-3' 
-                : 'py-1 px-0' 
+                ? 'bg-[#35323C] rounded-2xl py-2 px-3'
+                : 'py-1 px-0'
             }`}
           >
             {isEditing && isUser ? (
@@ -216,7 +232,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 value={editText}
                 onChange={handleTextareaChange}
                 onKeyDown={handleTextareaKeyDown}
-                className="w-full bg-transparent text-[#EAE6F0] text-base leading-relaxed focus:outline-none resize-none border-none p-0 overflow-y-auto max-h-40" 
+                className="w-full bg-transparent text-[#EAE6F0] text-base leading-relaxed focus:outline-none resize-none border-none p-0 overflow-y-auto max-h-40"
                 rows={1}
               />
             ) : (
@@ -229,9 +245,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         )}
       </div>
       {shouldShowActionButtons && (
-        <div className={`mt-1.5 flex items-center space-x-1.5 transition-opacity duration-300 ease-in-out 
-          ${isLatestAiMessageVisible ? 'opacity-100' : 'opacity-0 group-hover/message-item:opacity-100 focus-within:opacity-100'}
-        `}>
+        <div className={actionButtonsContainerClass}>
           {isUser ? (
             <>
               <ActionButtonWithTooltip
@@ -272,7 +286,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 </ActionButtonWithTooltip>
               )}
             </>
-          ) : ( 
+          ) : (
             <>
               <ActionButtonWithTooltip
                 onClick={() => handleCopy('ai-copy')}
