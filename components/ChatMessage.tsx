@@ -19,10 +19,11 @@ const ActionButtonWithTooltip: React.FC<{
   label: string;
   tooltipText: string;
   children: React.ReactNode;
-  className?: string;
+  className?: string; // Applied to the button itself
+  wrapperClassName?: string; // Applied to the wrapping div of button + tooltip
   disabled?: boolean;
-}> = ({ onClick, label, tooltipText, children, className, disabled }) => (
-  <div className="relative group"> {/* 'group' class on the parent div */}
+}> = ({ onClick, label, tooltipText, children, className, wrapperClassName, disabled }) => (
+  <div className={`relative group ${wrapperClassName || ''}`}> {/* Apply wrapperClassName here */}
     <button
       onClick={onClick}
       className={`${className || ''} focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#35323C]`}
@@ -43,13 +44,13 @@ const ActionButtonWithTooltip: React.FC<{
 
 const ChatMessage: React.FC<ChatMessageProps> = ({
   message,
-  isStreamingAiText, // Prop from ChatMessageList
+  isStreamingAiText, 
   isOverallLatestMessage,
   onCopyText,
   onRateResponse,
   onRetryResponse,
   onSaveEdit,
-  previousUserMessageText // Prop from ChatMessageList
+  previousUserMessageText 
 }) => {
   const isUser = message.sender === SenderType.USER;
   const [displayedText, setDisplayedText] = useState(isUser ? message.text : '');
@@ -72,12 +73,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       setActionButtonsReady(true);
       return;
     }
-    // For AI messages, use the isStreamingAiText prop
     if (!isUser && !isStreamingAiText && message.text && message.text.trim() !== '') {
       if (actionButtonReadyTimeoutRef.current) clearTimeout(actionButtonReadyTimeoutRef.current);
       actionButtonReadyTimeoutRef.current = window.setTimeout(() => {
         setActionButtonsReady(true);
-      }, 150);
+      }, 150); // Small delay to ensure text is fully rendered before buttons appear
     } else if (isStreamingAiText || !message.text || message.text.trim() === '') {
       setActionButtonsReady(false);
     }
@@ -95,7 +95,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       return;
     }
 
-    // Use isStreamingAiText prop for AI typing effect
     if (isStreamingAiText && message.text) {
       if (displayedText !== message.text) {
         let currentTypedLength = displayedText.length;
@@ -123,7 +122,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     } else if (isStreamingAiText && !message.text) {
         setDisplayedText('');
-        setShowTypingCursor(false); // Should be false if no text is being streamed
+        setShowTypingCursor(false); 
     }
 
     return () => {
@@ -131,7 +130,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     };
   }, [message.text, message.sender, isStreamingAiText, isUser, displayedText]);
 
-  // Use isStreamingAiText prop for initial loading dots
   const showInitialLoadingDots = message.sender === SenderType.AI && isStreamingAiText && !message.text && !displayedText;
 
   const handleCopy = (buttonIdSuffix: string) => {
@@ -196,30 +194,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const shouldShowActionButtons = actionButtonsReady && !showInitialLoadingDots && (isUser || (!isUser && message.text && message.text.trim() !== ''));
   
-  const commonStyling = 'mt-1.5 flex items-center space-x-1.5';
-  const animationSetup = 'transition-all duration-300 ease-in-out'; // Defines how properties change
-  const initialState = 'opacity-0 -translate-x-2'; // Defines starting visual state (hidden and offset to the left)
+  const baseActionButtonsContainerClass = "mt-1.5 flex items-center space-x-1.5";
+  let dynamicClassesForContainer = "";
 
-  let visibilityClasses = '';
-  if (isUser) {
-    // For user messages, reveal on hover/focus.
-    visibilityClasses = 'group-hover/message-item:opacity-100 group-hover/message-item:translate-x-0 focus-within:opacity-100 focus-within:translate-x-0';
-  } else { // AI Message
-    // Given shouldShowActionButtons is true, this AI message is stable (actionButtonsReady is true).
-    if (isOverallLatestMessage) {
-      // For the latest stable AI message, make it visible directly. Animation will occur from initialState.
-      visibilityClasses = 'opacity-100 translate-x-0';
-    } else {
-      // For older stable AI messages, only on hover/focus.
-      visibilityClasses = 'group-hover/message-item:opacity-100 group-hover/message-item:translate-x-0 focus-within:opacity-100 focus-within:translate-x-0';
-    }
+  if (!isUser && isOverallLatestMessage && actionButtonsReady && !showInitialLoadingDots && message.text && message.text.trim() !== '') {
+    dynamicClassesForContainer = 'actions-visible-immediately';
   }
-
-  const actionButtonsContainerClass = `${commonStyling} ${animationSetup} ${initialState} ${visibilityClasses}`;
-
+  const actionButtonsContainerClass = `${baseActionButtonsContainerClass} ${dynamicClassesForContainer}`;
 
   return (
-    <div className={`group/message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}>
+    <div className={`message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}> {/* Changed from group/message-item */}
       <div className={`max-w-[85%] sm:max-w-[75%]`}>
         {showInitialLoadingDots ? (
           <div className="py-1 px-0 text-base leading-relaxed">
@@ -230,7 +214,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             className={`${
               isUser
                 ? 'bg-[#35323C] rounded-2xl py-2 px-3'
-                : 'py-1 px-0'
+                : 'py-1 px-0' 
             }`}
           >
             {isEditing && isUser ? (
@@ -260,6 +244,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 label="Copy my message"
                 tooltipText="Copy"
                 className={actionButtonClass}
+                wrapperClassName="stagger-action-button"
               >
                 {showCopiedFeedbackFor === `${message.id}-user-copy` ? <IconCheck className="w-4 h-4 text-[#FF8DC7]" /> : <IconClipboardDocumentList className="w-4 h-4" />}
               </ActionButtonWithTooltip>
@@ -270,6 +255,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                     label="Save changes"
                     tooltipText="Save"
                     className={`${actionButtonClass} text-[#86E8B3] hover:text-[#A0F0C8]`}
+                    wrapperClassName="stagger-action-button"
                   >
                     Save
                   </ActionButtonWithTooltip>
@@ -278,6 +264,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                     label="Cancel edit"
                     tooltipText="Cancel"
                     className={`${actionButtonClass} text-[#FF8585] hover:text-[#FFAAAA]`}
+                    wrapperClassName="stagger-action-button"
                   >
                     Cancel
                   </ActionButtonWithTooltip>
@@ -288,6 +275,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                   label="Edit my message"
                   tooltipText="Edit"
                   className={actionButtonClass}
+                  wrapperClassName="stagger-action-button"
                 >
                   <IconPencil className="w-4 h-4" />
                 </ActionButtonWithTooltip>
@@ -300,6 +288,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 label="Copy AI's response"
                 tooltipText="Copy"
                 className={actionButtonClass}
+                wrapperClassName="stagger-action-button"
               >
                  {showCopiedFeedbackFor === `${message.id}-ai-copy` ? <IconCheck className="w-4 h-4 text-[#FF8DC7]" /> : <IconClipboardDocumentList className="w-4 h-4" />}
               </ActionButtonWithTooltip>
@@ -310,6 +299,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                   label="Good response"
                   tooltipText="Good response"
                   className={`${actionButtonClass} ${message.feedback === 'good' ? 'text-[#FF8DC7]' : ''}`}
+                  wrapperClassName="stagger-action-button"
                 >
                   {message.feedback === 'good' ? <IconThumbUpSolid /> : <IconThumbUp />}
                 </ActionButtonWithTooltip>
@@ -321,6 +311,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                   label="Bad response"
                   tooltipText="Bad response"
                   className={`${actionButtonClass} ${message.feedback === 'bad' ? 'text-[#FF8DC7]' : ''}`}
+                  wrapperClassName="stagger-action-button"
                 >
                   {message.feedback === 'bad' ? <IconThumbDownSolid /> : <IconThumbDown />}
                 </ActionButtonWithTooltip>
@@ -332,6 +323,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                   label="Retry response"
                   tooltipText="Retry"
                   className={actionButtonClass}
+                  wrapperClassName="stagger-action-button"
                 >
                   <IconArrowRepeat />
                 </ActionButtonWithTooltip>
