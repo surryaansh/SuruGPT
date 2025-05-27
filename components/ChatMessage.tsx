@@ -33,7 +33,7 @@ const ActionButtonWithTooltip: React.FC<{
       {children}
     </button>
     <span
-      className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2 py-1 bg-[#201F23] text-white text-[10px] rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none z-30"
+      className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2 py-1 bg-[#201F23] text-white text-[10px] rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 ease-in-out pointer-events-none z-30"
       role="tooltip"
     >
       {tooltipText}
