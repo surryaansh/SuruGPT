@@ -256,7 +256,7 @@ const App: React.FC = () => {
   }, [chatReady, activeChatId, globalContextSummary, getAiResponse]);
 
 
-  const handleCopyText = useCallback(async (textToCopy: string) => {
+  const handleCopyText = useCallback(async (textToCopy: string) => { // buttonId removed
     try {
       await navigator.clipboard.writeText(textToCopy);
     } catch (err) {
