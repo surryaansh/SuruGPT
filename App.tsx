@@ -183,16 +183,19 @@ const App: React.FC = () => {
     setIsLoadingAiResponse(true);
     const tempAiMessageId = crypto.randomUUID();
     const aiPlaceholderMessageForUI: Message = { id: tempAiMessageId, text: '', sender: SenderType.AI, timestamp: new Date(), feedback: null };
-    setCurrentMessages(prevMessages => [...prevMessages, aiPlaceholderMessageForUI]);
     
-    let accumulatedAiText = '';
-    try {
+    setCurrentMessages(prevMessages => {
+      const updatedMessages = [...prevMessages, aiPlaceholderMessageForUI];
       setConversationContextFromAppMessages(
-        currentMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})), 
+        updatedMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})), 
         undefined, 
         globalContextSummary
       );
-
+      return updatedMessages;
+    });
+    
+    let accumulatedAiText = '';
+    try {
       const stream = await sendMessageStream(textForAi); 
       if (stream) {
         for await (const chunk of stream) { 
@@ -222,8 +225,23 @@ const App: React.FC = () => {
       accumulatedAiText = errorText;
       setCurrentMessages(prevMessages => prevMessages.map(msg => (msg.id === tempAiMessageId ? { ...msg, text: errorText, timestamp: new Date() } : msg)));
       if (currentSessionIdForAi) await addMessageToFirestore(currentSessionIdForAi, { text: errorText, sender: SenderType.AI });
-    } finally { setIsLoadingAiResponse(false); }
-  }, [currentMessages, globalContextSummary]); 
+    } finally { 
+      setIsLoadingAiResponse(false); 
+      setCurrentMessages(prev => {
+        const finalMessages = prev.map(msg => 
+          msg.id === tempAiMessageId && msg.text.trim() === '' && accumulatedAiText.trim() === '' 
+          ? { ...msg, text: "AI response was empty.", timestamp: new Date() } 
+          : msg
+        );
+        setConversationContextFromAppMessages(
+          finalMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
+          undefined,
+          globalContextSummary
+        );
+        return finalMessages;
+      });
+    }
+  }, [globalContextSummary]); 
 
 
   const handleSendMessage = useCallback(async (text: string) => {
@@ -232,8 +250,6 @@ const App: React.FC = () => {
       setCurrentMessages(prev => [...prev, { id: crypto.randomUUID(), text: "Chat service is currently unavailable. Please try again later.", sender: SenderType.AI, timestamp: new Date(), feedback: null }]);
       return;
     }
-    const tempUserMessageId = crypto.randomUUID();
-    // User message for UI will be replaced by the one from Firestore
     
     let currentSessionId = activeChatId;
     let finalUserMessage: Message;
@@ -248,7 +264,7 @@ const App: React.FC = () => {
       setCurrentMessages([finalUserMessage]); 
     } else {
       finalUserMessage = await addMessageToFirestore(currentSessionId, { text, sender: SenderType.USER });
-      setCurrentMessages(prevMessages => [...prevMessages.filter(m => m.id !== tempUserMessageId), finalUserMessage]);
+      setCurrentMessages(prevMessages => [...prevMessages, finalUserMessage]);
     }
     
     await getAiResponse(finalUserMessage.text, currentSessionId);
@@ -256,7 +272,7 @@ const App: React.FC = () => {
   }, [chatReady, activeChatId, globalContextSummary, getAiResponse]);
 
 
-  const handleCopyText = useCallback(async (textToCopy: string) => { // buttonId removed
+  const handleCopyText = useCallback(async (textToCopy: string) => {
     try {
       await navigator.clipboard.writeText(textToCopy);
     } catch (err) {
@@ -271,10 +287,8 @@ const App: React.FC = () => {
       prevMessages.map(msg => {
         if (msg.id === messageId) {
           const newFeedback = msg.feedback === rating ? null : rating;
-          // Optimistically update UI
           updateMessageFeedbackInFirestore(activeChatId, messageId, newFeedback).catch(error => {
             console.error("Failed to update feedback in Firestore:", error);
-            // Potentially revert UI change here or show error
           });
           return { ...msg, feedback: newFeedback };
         }
@@ -286,43 +300,49 @@ const App: React.FC = () => {
   const handleRetryAiResponse = useCallback(async (aiMessageToRetryId: string, userPromptText: string) => {
     if (!activeChatId || !userPromptText) return;
 
-    setCurrentMessages(prev => prev.filter(msg => msg.id !== aiMessageToRetryId));
-    
-    const updatedMessagesAfterRemoval = currentMessages.filter(msg => msg.id !== aiMessageToRetryId);
-     setConversationContextFromAppMessages(
-        updatedMessagesAfterRemoval.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
-        undefined,
-        globalContextSummary
+    setCurrentMessages(prev => {
+      const updatedMessagesAfterRemoval = prev.filter(msg => msg.id !== aiMessageToRetryId);
+      setConversationContextFromAppMessages(
+          updatedMessagesAfterRemoval.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
+          undefined,
+          globalContextSummary
       );
-
+      return updatedMessagesAfterRemoval;
+    });
+    
     await getAiResponse(userPromptText, activeChatId);
 
-  }, [activeChatId, getAiResponse, currentMessages, globalContextSummary]);
+  }, [activeChatId, getAiResponse, globalContextSummary]);
 
 
   const handleSaveUserEdit = useCallback(async (messageId: string, newText: string) => {
     if (!activeChatId) return;
 
-    const messageIndex = currentMessages.findIndex(msg => msg.id === messageId);
-    if (messageIndex === -1) return;
+    setCurrentMessages(prevMessages => {
+        const messageIndex = prevMessages.findIndex(msg => msg.id === messageId);
+        if (messageIndex === -1) return prevMessages; // Should not happen
 
-    await updateMessageInFirestore(activeChatId, messageId, newText);
-
-    const updatedMessage: Message = { ...currentMessages[messageIndex], text: newText, timestamp: new Date() };
-
-    const messagesUpToEdit = currentMessages.slice(0, messageIndex);
-    const newCurrentMessages = [...messagesUpToEdit, updatedMessage];
-    setCurrentMessages(newCurrentMessages);
+        const updatedMessage = { ...prevMessages[messageIndex], text: newText, timestamp: new Date() };
+        
+        // Messages up to and including the edited one for context and display
+        const messagesForContextAndDisplay = [
+            ...prevMessages.slice(0, messageIndex),
+            updatedMessage
+        ];
+        
+        setConversationContextFromAppMessages(
+            messagesForContextAndDisplay.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
+            undefined,
+            globalContextSummary
+        );
+        // Return only messages up to the edited one; subsequent AI responses will be regenerated
+        return messagesForContextAndDisplay; 
+    });
     
-     setConversationContextFromAppMessages(
-        newCurrentMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
-        undefined,
-        globalContextSummary
-      );
+    await updateMessageInFirestore(activeChatId, messageId, newText); // Persist edit
+    await getAiResponse(newText, activeChatId); // Regenerate AI response
 
-    await getAiResponse(newText, activeChatId);
-
-  }, [activeChatId, currentMessages, getAiResponse, globalContextSummary]);
+  }, [activeChatId, getAiResponse, globalContextSummary]);
 
 
   const handleRequestDeleteConfirmation = (sessionId: string, sessionTitle: string) => {
