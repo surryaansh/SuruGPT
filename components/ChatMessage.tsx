@@ -33,7 +33,7 @@ const ActionButtonWithTooltip: React.FC<{
       {children}
     </button>
     <span
-      className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2 py-1 bg-[#201F23] text-white text-[10px] rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 ease-in-out pointer-events-none z-30"
+      className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2 py-1 bg-[#201F23] text-white text-[10px] rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 ease-in-out pointer-events-none z-30 whitespace-nowrap"
       role="tooltip"
     >
       {tooltipText}
@@ -277,7 +277,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
               <ActionButtonWithTooltip
                 onClick={() => handleCopy('ai-copy')}
                 label="Copy AI's response"
-                tooltipText="Copy AI"
+                tooltipText="Copy"
                 className={actionButtonClass}
               >
                  {showCopiedFeedbackFor === `${message.id}-ai-copy` ? <IconCheck className="w-4 h-4 text-[#FF8DC7]" /> : <IconClipboardDocumentList className="w-4 h-4" />}
@@ -309,7 +309,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 <ActionButtonWithTooltip
                   onClick={() => onRetryResponse(message.id, previousUserMessageText)}
                   label="Retry response"
-                  tooltipText="Retry response"
+                  tooltipText="Retry"
                   className={actionButtonClass}
                 >
                   <IconArrowRepeat />
