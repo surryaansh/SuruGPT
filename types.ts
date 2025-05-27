@@ -6,18 +6,31 @@
 // resolves modules correctly.
 import { Timestamp } from 'firebase/firestore';
 
-export interface Message {
-  id: string; // Firestore document ID
-  text: string;
-  sender: 'user' | 'ai';
-  // FIX: Use imported Timestamp directly
-  timestamp: Date | Timestamp; // Store as Firestore Timestamp, convert to Date on fetch
-  feedback?: 'good' | 'bad' | null; // User feedback on AI messages
-}
-
 export enum SenderType {
   USER = 'user',
   AI = 'ai',
+}
+
+export interface AIResponse {
+  text: string;
+  feedback?: 'good' | 'bad' | null;
+  timestamp: Date | Timestamp; // Timestamp of when this specific response was generated
+}
+
+export interface Message {
+  id: string; // Firestore document ID
+  sender: SenderType;
+  
+  // For User messages OR the currently selected AI response text/timestamp/feedback
+  text: string;
+  timestamp: Date | Timestamp; 
+  feedback?: 'good' | 'bad' | null; 
+
+  // AI-specific fields
+  responses?: AIResponse[];
+  currentResponseIndex?: number;
+  promptText?: string; // The user prompt that led to these AI responses for retrying
+  isStreamingThisResponse?: boolean; // True if the text for responses[currentResponseIndex] is currently being streamed
 }
 
 export interface ChatSession {
