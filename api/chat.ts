@@ -14,7 +14,7 @@ if (API_KEY) {
 
 const DEFAULT_USER_ID = "default_user"; // For fetching summaries
 const DEFAULT_OPENAI_SYSTEM_PROMPT_BACKEND = "You are SuruGPT, a helpful and friendly AI assistant. Keep your responses concise and delightful, like a sprinkle of magic! ✨";
-const MAX_SEMANTIC_SUMMARIES_TO_INJECT = 3;
+const MAX_SEMANTIC_SUMMARIES_TO_INJECT = 1; // CHANGED FROM 3 to 1
 const MAX_CHARS_FOR_SEMANTIC_CONTEXT = 2500; // Max characters for the combined relevant summaries text
 
 // Helper function to calculate cosine similarity
@@ -86,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             if (queryEmbedding) {
                 console.log("/api/chat: Fetching all session summaries with embeddings.");
-                const allSummaries: StoredSessionSummary[] = await getAllSessionSummariesWithEmbeddings(DEFAULT_USER_ID); // Explicitly type allSummaries
+                const allSummaries: StoredSessionSummary[] = await getAllSessionSummariesWithEmbeddings(DEFAULT_USER_ID);
                 console.log(`/api/chat: Found ${allSummaries.length} stored session summaries.`);
 
                 if (allSummaries.length > 0) {
@@ -98,9 +98,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         .sort((a, b) => b.similarity - a.similarity); // Sort by descending similarity
 
                     const topSummaries = similarities.slice(0, MAX_SEMANTIC_SUMMARIES_TO_INJECT);
-                    console.log(`/api/chat: Top ${topSummaries.length} relevant summaries selected.`);
+                    console.log(`/api/chat: Top ${topSummaries.length} relevant summary/summaries selected (MAX_SEMANTIC_SUMMARIES_TO_INJECT is ${MAX_SEMANTIC_SUMMARIES_TO_INJECT}).`);
                     
-                    let combinedSummaryText = topSummaries.map(s => s.summaryText).join(" ");
+                    let combinedSummaryText = topSummaries.map(s => s.summaryText).join(" "); // For N=1, this is just the single summary text
                     if (combinedSummaryText.length > MAX_CHARS_FOR_SEMANTIC_CONTEXT) {
                         combinedSummaryText = combinedSummaryText.substring(0, MAX_CHARS_FOR_SEMANTIC_CONTEXT) + "...";
                         console.log("/api/chat: Combined relevant summary text truncated.");
@@ -122,6 +122,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (messagesForOpenAI.length > 0 && messagesForOpenAI[0].role === 'system') {
         messagesForOpenAI[0].content += relevantMemoryContext; // Append relevant memory to existing system prompt
+        console.log("/api/chat: Appended relevant memory context to existing system prompt.");
     } else {
         const systemMessage: OpenAI.Chat.ChatCompletionSystemMessageParam = {
             role: 'system',
@@ -133,7 +134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 
     try {
-        console.log("/api/chat: Sending to OpenAI with messages (potentially including semantic context):", JSON.stringify(messagesForOpenAI, null, 2));
+        console.log("/api/chat: Sending to OpenAI with messages (final system prompt content: '", messagesForOpenAI[0].content, "')");
         const stream = await openai.chat.completions.create({
             model: 'gpt-4o-mini', // Main chat model
             messages: messagesForOpenAI,
