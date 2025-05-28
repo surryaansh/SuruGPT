@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Message, SenderType, ChatSession } from './types';
 import Header from './components/Header';
@@ -11,7 +10,8 @@ import {
   sendMessageStream, 
   isChatAvailable as checkChatAvailability,
   startNewOpenAIChatSession as resetAiContextWithSystemPrompt,
-  setConversationContextFromAppMessages
+  setConversationContextFromAppMessages,
+  triggerMemoryUpdateForSession
 } from './services/openAIService'; 
 import {
   getChatSessions,
@@ -20,7 +20,8 @@ import {
   addMessageToFirestore,
   updateMessageInFirestore, 
   deleteChatSessionFromFirestore,
-  updateMessageFeedbackInFirestore // Added for feedback
+  updateMessageFeedbackInFirestore,
+  getUserMemory // New import
 } from './services/firebaseService';
 
 const summarizeTextForTitle = async (text: string): Promise<string | null> => {
@@ -76,6 +77,7 @@ const generateChatTitle = async (firstMessageText: string): Promise<string> => {
   return fallback;
 };
 
+const DEFAULT_USER_ID = "default_user"; // Define default user ID for memory fetching
 
 const App: React.FC = () => {
   const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
@@ -99,12 +101,16 @@ const App: React.FC = () => {
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
   const [sessionToConfirmDelete, setSessionToConfirmDelete] = useState<{id: string, title: string} | null>(null);
 
+  const handleToggleSidebar = useCallback(() => {
+    setIsSidebarOpen(prev => !prev);
+  }, []);
 
   useEffect(() => {
     const handleResizeAndUpdateInitialView = () => {
       const currentIsDesktop = window.innerWidth >= 768;
       setIsDesktopView(currentIsDesktop);
       if (!initialViewSetupDone.current) {
+        setIsSidebarOpen(currentIsDesktop); 
         initialViewSetupDone.current = true;
       }
     };
@@ -117,7 +123,8 @@ const App: React.FC = () => {
     if (initialLoadComplete.current) return;
     initialLoadComplete.current = true;
     setChatReady(checkChatAvailability()); 
-    resetAiContextWithSystemPrompt(undefined, globalContextSummary); 
+    // Initial reset without specific persistent memory; this will be added when a new chat truly starts
+    resetAiContextWithSystemPrompt(undefined, globalContextSummary, undefined); 
     const loadSessions = async () => {
       setIsSessionsLoading(true);
       try {
@@ -150,31 +157,73 @@ const App: React.FC = () => {
     } else { setGlobalContextSummary(''); }
   }, [allChatSessions]);
 
-  const handleToggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+  const processEndedSessionForMemory = useCallback(async (endedSessionId: string, endedSessionMessages: Message[]) => {
+    if (endedSessionId && endedSessionMessages.length > 0) {
+      console.log(`[App] Triggering memory update for concluded session: ${endedSessionId}`);
+      try {
+        await triggerMemoryUpdateForSession(endedSessionId, endedSessionMessages);
+        console.log(`[App] Memory update request for session ${endedSessionId} completed.`);
+      } catch (error) {
+        console.error(`[App] Failed to trigger memory update for session ${endedSessionId}:`, error);
+      }
+    }
+  }, []);
 
-  const handleNewChat = () => { 
-    setCurrentMessages([]); setActiveChatId(null);
-    resetAiContextWithSystemPrompt(undefined, globalContextSummary); 
+
+  const handleNewChat = useCallback(async () => { 
+    const endedSessionId = activeChatId;
+    const endedSessionMessages = [...currentMessages]; 
+
+    if (endedSessionId && endedSessionMessages.length > 0) {
+      await processEndedSessionForMemory(endedSessionId, endedSessionMessages);
+    }
+
+    let persistentMemoryString: string | null = null;
+    try {
+      const memoryArray = await getUserMemory(DEFAULT_USER_ID);
+      if (memoryArray && memoryArray.length > 0) {
+        persistentMemoryString = memoryArray.join(' '); 
+        console.log("[App] Fetched persistent memory for new chat:", persistentMemoryString);
+      }
+    } catch (error) {
+      console.error("[App] Failed to fetch persistent memory for new chat:", error);
+    }
+    
+    setCurrentMessages([]); 
+    setActiveChatId(null);
+    resetAiContextWithSystemPrompt(undefined, globalContextSummary, persistentMemoryString); 
     setChatReady(checkChatAvailability()); 
     if (!isDesktopView) setIsSidebarOpen(false);
-  };
+  }, [activeChatId, currentMessages, globalContextSummary, isDesktopView, processEndedSessionForMemory]);
 
   const handleSelectChat = useCallback(async (chatId: string) => { 
-    if (activeChatId === chatId && currentMessages.length > 0) {
+    const endedSessionId = activeChatId;
+    const endedSessionMessages = [...currentMessages]; 
+
+    if (endedSessionId === chatId && currentMessages.length > 0) {
         if (!isDesktopView) setIsSidebarOpen(false); return;
     }
-    setActiveChatId(chatId); setCurrentMessages([]); setIsMessagesLoading(true);
+
+    if (endedSessionId && endedSessionId !== chatId && endedSessionMessages.length > 0) {
+      await processEndedSessionForMemory(endedSessionId, endedSessionMessages);
+    }
+    
+    setActiveChatId(chatId); 
+    setCurrentMessages([]); 
+    setIsMessagesLoading(true);
     if (!isDesktopView) setIsSidebarOpen(false); 
     try {
       const messages = await getMessagesForSession(chatId);
       setCurrentMessages(messages);
+      // For old chats, do not inject new persistent memory.
+      // The context set here will use the default system prompt + global summary.
       setConversationContextFromAppMessages(messages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})), undefined, globalContextSummary);
     } catch (error) {
       console.error(`Failed to load messages for chat ${chatId}:`, error);
       setCurrentMessages([{ id: crypto.randomUUID(), text: "Error loading messages for this chat. Please try again.", sender: SenderType.AI, timestamp: new Date(), feedback: null }]);
-      resetAiContextWithSystemPrompt(undefined, globalContextSummary);
+      resetAiContextWithSystemPrompt(undefined, globalContextSummary, undefined); // Reset without persistent memory on error
     } finally { setIsMessagesLoading(false); }
-  }, [activeChatId, currentMessages.length, globalContextSummary, isDesktopView]);
+  }, [activeChatId, currentMessages, globalContextSummary, isDesktopView, processEndedSessionForMemory]);
 
   const getAiResponse = useCallback(async (
     textForAi: string,
@@ -186,11 +235,9 @@ const App: React.FC = () => {
     
     setCurrentMessages(prevMessages => {
       const updatedMessages = [...prevMessages, aiPlaceholderMessageForUI];
-      setConversationContextFromAppMessages(
-        updatedMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})), 
-        undefined, 
-        globalContextSummary
-      );
+      // Context is already set for the session, including memory if it was a new chat.
+      // No need to call setConversationContextFromAppMessages here again unless strictly managing history per call.
+      // For simplicity, assuming openAIService manages its internal conversationHistory.
       return updatedMessages;
     });
     
@@ -219,7 +266,7 @@ const App: React.FC = () => {
         setCurrentMessages(prevMessages => prevMessages.map(msg => (msg.id === tempAiMessageId ? { ...msg, text: errorMsg, timestamp: new Date() } : msg)));
         if (currentSessionIdForAi) await addMessageToFirestore(currentSessionIdForAi, { text: errorMsg, sender: SenderType.AI });
       }
-    } catch (error) { 
+    } catch (error: any) { 
       console.error('Error streaming response in App.tsx getAiResponse:', error);
       const errorText = typeof error === 'string' ? error : (error instanceof Error ? error.message : "SuruGPT encountered a little problem! Please try again. 🛠️");
       accumulatedAiText = errorText;
@@ -233,11 +280,14 @@ const App: React.FC = () => {
           ? { ...msg, text: "AI response was empty.", timestamp: new Date() } 
           : msg
         );
-        setConversationContextFromAppMessages(
-          finalMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
-          undefined,
-          globalContextSummary
-        );
+        // This call to setConversationContext is to ensure the AI's response is added to openAIService's history.
+        // It should not re-add persistent memory here.
+         setConversationContextFromAppMessages(
+           finalMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
+           undefined,
+           globalContextSummary
+           // No persistent memory here
+         );
         return finalMessages;
       });
     }
@@ -254,7 +304,20 @@ const App: React.FC = () => {
     let currentSessionId = activeChatId;
     let finalUserMessage: Message;
 
-    if (!currentSessionId) {
+    if (!currentSessionId) { // First message of a new session
+      let persistentMemoryForNewSession: string | null = null;
+      try {
+        const memoryArray = await getUserMemory(DEFAULT_USER_ID);
+        if (memoryArray && memoryArray.length > 0) {
+          persistentMemoryForNewSession = memoryArray.join(' ');
+          console.log("[App] Fetched persistent memory for first message of new session:", persistentMemoryForNewSession);
+        }
+      } catch (error) {
+        console.error("[App] Failed to fetch persistent memory for new session via send:", error);
+      }
+      // Initialize context for this new session *with* persistent memory
+      resetAiContextWithSystemPrompt(undefined, globalContextSummary, persistentMemoryForNewSession);
+
       const title = await generateChatTitle(text); 
       const newSessionFromDb = await createChatSessionInFirestore(title, text);
       currentSessionId = newSessionFromDb.id;
@@ -262,13 +325,15 @@ const App: React.FC = () => {
       setAllChatSessions(prevSessions => [newSessionFromDb, ...prevSessions]);
       setActiveChatId(currentSessionId); 
       setCurrentMessages([finalUserMessage]); 
-    } else {
+      await getAiResponse(finalUserMessage.text, currentSessionId);
+
+    } else { // Existing active session
       finalUserMessage = await addMessageToFirestore(currentSessionId, { text, sender: SenderType.USER });
       setCurrentMessages(prevMessages => [...prevMessages, finalUserMessage]);
+      // Context (including memory if it was a new chat initially) is already set in openAIService.
+      await getAiResponse(finalUserMessage.text, currentSessionId);
     }
     
-    await getAiResponse(finalUserMessage.text, currentSessionId);
-
   }, [chatReady, activeChatId, globalContextSummary, getAiResponse]);
 
 
@@ -306,6 +371,7 @@ const App: React.FC = () => {
           updatedMessagesAfterRemoval.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
           undefined,
           globalContextSummary
+          // No persistent memory here
       );
       return updatedMessagesAfterRemoval;
     });
@@ -320,11 +386,10 @@ const App: React.FC = () => {
 
     setCurrentMessages(prevMessages => {
         const messageIndex = prevMessages.findIndex(msg => msg.id === messageId);
-        if (messageIndex === -1) return prevMessages; // Should not happen
+        if (messageIndex === -1) return prevMessages; 
 
         const updatedMessage = { ...prevMessages[messageIndex], text: newText, timestamp: new Date() };
         
-        // Messages up to and including the edited one for context and display
         const messagesForContextAndDisplay = [
             ...prevMessages.slice(0, messageIndex),
             updatedMessage
@@ -334,13 +399,13 @@ const App: React.FC = () => {
             messagesForContextAndDisplay.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
             undefined,
             globalContextSummary
+            // No persistent memory here
         );
-        // Return only messages up to the edited one; subsequent AI responses will be regenerated
         return messagesForContextAndDisplay; 
     });
     
-    await updateMessageInFirestore(activeChatId, messageId, newText); // Persist edit
-    await getAiResponse(newText, activeChatId); // Regenerate AI response
+    await updateMessageInFirestore(activeChatId, messageId, newText); 
+    await getAiResponse(newText, activeChatId);
 
   }, [activeChatId, getAiResponse, globalContextSummary]);
 
@@ -353,8 +418,15 @@ const App: React.FC = () => {
   const handleConfirmDelete = async () => {
     if (!sessionToConfirmDelete) return;
     const sessionToDeleteId = sessionToConfirmDelete.id;
+    
+    if (activeChatId === sessionToDeleteId && currentMessages.length > 0) {
+        await processEndedSessionForMemory(sessionToDeleteId, [...currentMessages]);
+    }
+
+
     setAllChatSessions(prevSessions => prevSessions.filter(session => session.id !== sessionToDeleteId));
-    if (activeChatId === sessionToDeleteId) handleNewChat();
+    if (activeChatId === sessionToDeleteId) handleNewChat(); 
+    
     setIsDeleteConfirmationOpen(false);
     setSessionToConfirmDelete(null);
     try {
