@@ -72,7 +72,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // --- Memory Fetch and Relevance Filtering ---
     let initialUserMemoryArray: string[] | null = null;
     try {
-        initialUserMemoryArray = await getUserMemory(DEFAULT_USER_ID); // Returns string[] | null
+        initialUserMemoryArray = await getUserMemory(DEFAULT_USER_ID); 
+        console.log("/api/chat: Fetched initialUserMemoryArray:", initialUserMemoryArray);
     } catch (e) {
         console.error("/api/chat: Error fetching user memory, proceeding without it:", e);
     }
@@ -114,22 +115,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     let currentSystemContent = systemContentString || DEFAULT_OPENAI_SYSTEM_PROMPT_BACKEND;
 
-    const memoryMarkerBase = "\n\nKey information to remember about the user";
-    const memoryRegex = new RegExp(escapeRegExp(memoryMarkerBase) + ".*", "s");
-    currentSystemContent = currentSystemContent.replace(memoryRegex, "").trim();
+    const memoryMarkerRegex = /\n\nUse the following relevant information about the user to personalize your response:.*?($|\n\n)/s;
+    currentSystemContent = currentSystemContent.replace(memoryMarkerRegex, "").trim();
 
     const latestUserQuery = messages.filter(m => m.role === 'user').pop()?.content as string || "";
     const relevantMemoryEntries = getRelevantMemoryEntries(initialUserMemoryArray, latestUserQuery);
 
     if (relevantMemoryEntries.length > 0) {
-        const relevantMemoryString = relevantMemoryEntries.join('; '); // Join relevant facts
-        currentSystemContent += `${memoryMarkerBase} (relevant to your current query): "${relevantMemoryString}"`;
+        const relevantMemoryString = relevantMemoryEntries.join('; '); 
+        currentSystemContent += `\n\nUse the following relevant information about the user to personalize your response: "${relevantMemoryString}"`;
     }
     
     systemMessage.content = currentSystemContent.trim();
     // --- End Memory Fetch and Relevance Filtering ---
 
     try {
+        console.log("/api/chat: Sending to OpenAI with messages:", JSON.stringify(messages, null, 2));
         const stream = await openai.chat.completions.create({
             model: 'gpt-4o-mini',
             messages: messages,
@@ -163,10 +164,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             if (lastUserMessage) { 
                 const userMemoryArrayStringified = initialUserMemoryArray ? JSON.stringify(initialUserMemoryArray) : "[]";
+                
                 const memoryUpdateSystemPrompt = `You are a memory management system. Your task is to update a user's memory profile based on the latest conversation turn.
-The memory profile is a list of distinct facts or preferences.
-Output *only* the updated JSON array of strings. For example:
-["User's name is Alex.", "Prefers short answers.", "Interested in AI advancements."]`;
+The memory profile is a JSON array of distinct strings, each representing a fact or preference.
+Output *only* the updated JSON array of strings. Do not add any other text before or after the JSON array.
+Examples:
+- If new facts are identified, your output might be: ["User's name is Alex.", "Prefers short answers."]
+- If no new facts are identified and current memory is empty, output: []
+- If new facts are identified and current memory is ["Existing fact."], output: ["Existing fact.", "New fact."].`;
                 
                 const memoryUpdateUserPrompt = `Current Memory Profile (JSON array of strings):
 \`\`\`json
@@ -177,16 +182,17 @@ Latest Conversation Turn:
 User: "${lastUserMessage}"
 AI: "${currentAssistantResponse}"
 
-Review the latest conversation turn. Identify any new information, preferences, facts about the user, or corrections to existing facts in the memory.
-Update the JSON array of memory strings.
-- Add new distinct facts.
-- Modify existing facts if they are updated.
-- Remove facts that are no longer true or relevant.
-- Ensure each string in the array is a concise, standalone piece of information.
-- Keep the total number of entries manageable and focused on persistent, key information.
-- If no significant new information or changes are needed, output the original JSON array exactly as it was provided in "Current Memory Profile".
+Analyze the "Latest Conversation Turn". Identify any new explicit information, strong preferences, or key facts about the user stated or confirmed in this turn.
+- If new, distinct, and persistent-worthy information is found, add it to the memory profile as new strings in the JSON array.
+- If the conversation updates or invalidates an existing fact in the "Current Memory Profile", modify or remove it accordingly.
+- Prioritize information that seems important for long-term recall (e.g., names, explicitly stated preferences, significant life events mentioned). Avoid very transient details or questions.
+- Ensure each string in the output array is a concise, standalone piece of information.
+- If, after careful analysis, absolutely NO new persistent-worthy information can be extracted from this specific turn AND no existing memory needs modification, then output the "Current Memory Profile" as is. Otherwise, output the NEW or MODIFIED array reflecting the changes.
 
 Updated JSON Array Memory Profile:`;
+
+                console.log("/api/chat: [Memory Update] System Prompt:", memoryUpdateSystemPrompt);
+                console.log("/api/chat: [Memory Update] User Prompt:", memoryUpdateUserPrompt);
 
                 try {
                     const memoryCompletion = await openai.chat.completions.create({
@@ -195,46 +201,60 @@ Updated JSON Array Memory Profile:`;
                             { role: 'system', content: memoryUpdateSystemPrompt },
                             { role: 'user', content: memoryUpdateUserPrompt }
                         ],
-                        max_tokens: 300, // Adjusted for potential JSON array
+                        max_tokens: 350, 
                         temperature: 0.2,
                     });
                     
                     let newMemoryArray: string[] | null = null;
                     const rawMemoryOutput = memoryCompletion.choices[0]?.message?.content?.trim();
+                    console.log("/api/chat: [Memory Update] Raw LLM output:", rawMemoryOutput);
 
                     if (rawMemoryOutput) {
                         try {
-                            const parsedOutput = JSON.parse(rawMemoryOutput);
+                            // Attempt to strip markdown fences if present
+                            let jsonString = rawMemoryOutput;
+                            const markdownMatch = rawMemoryOutput.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+                            if (markdownMatch && markdownMatch[1]) {
+                                jsonString = markdownMatch[1].trim();
+                            }
+
+                            const parsedOutput = JSON.parse(jsonString);
                             if (Array.isArray(parsedOutput) && parsedOutput.every(item => typeof item === 'string')) {
-                                newMemoryArray = parsedOutput as string[];
+                                newMemoryArray = parsedOutput.filter(item => item.trim() !== ""); // Filter out empty strings
                             } else {
                                 console.warn(`/api/chat: Memory update LLM output was not a valid JSON array of strings. Output: ${rawMemoryOutput}`);
                                 if (typeof rawMemoryOutput === 'string' && !rawMemoryOutput.startsWith('[') && rawMemoryOutput.length > 0) {
-                                     newMemoryArray = [rawMemoryOutput];
+                                     newMemoryArray = [rawMemoryOutput.trim()].filter(item => item !== "");
                                      console.log("/api/chat: Salvaged plain string LLM memory output into a single-entry array.");
                                 }
                             }
                         } catch (parseError) {
                             console.warn(`/api/chat: Failed to parse memory update LLM output as JSON. Output: ${rawMemoryOutput}. Error: ${parseError}`);
                              if (typeof rawMemoryOutput === 'string' && !rawMemoryOutput.startsWith('[') && rawMemoryOutput.length > 0) {
-                                newMemoryArray = [rawMemoryOutput];
+                                newMemoryArray = [rawMemoryOutput.trim()].filter(item => item !== "");
                                 console.log("/api/chat: Salvaged plain string LLM memory output (due to parse error) into a single-entry array.");
                             }
                         }
                     }
+                    console.log("/api/chat: [Memory Update] Parsed newMemoryArray:", newMemoryArray);
 
-                    if (newMemoryArray) {
+                    if (newMemoryArray && newMemoryArray.length > 0) { // Only update if there's something new or different
                         const oldMemoryStringifiedSorted = initialUserMemoryArray ? JSON.stringify([...initialUserMemoryArray].sort()) : "[]";
                         const newMemoryStringifiedSorted = JSON.stringify([...newMemoryArray].sort());
 
                         if (newMemoryStringifiedSorted !== oldMemoryStringifiedSorted) {
-                            await updateUserMemory(DEFAULT_USER_ID, newMemoryArray); // updateUserMemory expects string[]
+                            await updateUserMemory(DEFAULT_USER_ID, newMemoryArray); 
                             console.log(`/api/chat: User memory updated for ${DEFAULT_USER_ID}.`);
                         } else {
-                            console.log(`/api/chat: User memory for ${DEFAULT_USER_ID} remains unchanged after LLM evaluation.`);
+                            console.log(`/api/chat: User memory for ${DEFAULT_USER_ID} remains unchanged after LLM evaluation (content identical after sorting).`);
                         }
-                    } else {
-                        console.warn(`/api/chat: Memory update LLM call returned or resulted in empty/invalid array for ${DEFAULT_USER_ID}. Memory not updated.`);
+                    } else if (newMemoryArray && newMemoryArray.length === 0 && initialUserMemoryArray && initialUserMemoryArray.length > 0) {
+                        // If LLM decided to clear the memory, and there was memory before.
+                        await updateUserMemory(DEFAULT_USER_ID, []);
+                        console.log(`/api/chat: User memory for ${DEFAULT_USER_ID} cleared by LLM evaluation.`);
+                    }
+                    else {
+                        console.warn(`/api/chat: Memory update LLM call resulted in empty/invalid array or no change for ${DEFAULT_USER_ID}. Memory not updated or cleared if it was already empty.`);
                     }
                 } catch (memError) {
                     console.error("/api/chat: Error during memory update LLM call:", memError);
