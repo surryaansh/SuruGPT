@@ -1,4 +1,3 @@
-
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, 
@@ -13,7 +12,8 @@ import {
   doc,
   updateDoc,
   writeBatch, 
-  deleteDoc 
+  deleteDoc,
+  setDoc // Added for upserting memory
 } from 'firebase/firestore'; 
 
 import { firebaseConfig } from './firebaseConfig.js'; 
@@ -24,6 +24,7 @@ const db = getFirestore(app);
 
 const CHAT_SESSIONS_COLLECTION = 'chat_sessions';
 const MESSAGES_SUBCOLLECTION = 'messages';
+const USER_MEMORIES_COLLECTION = 'user_memories'; // New collection for user memory
 
 const convertMessageTimestamp = (messageData: any): Message => {
   const timestampField = messageData.timestamp;
@@ -190,5 +191,33 @@ export const deleteChatSessionFromFirestore = async (sessionId: string): Promise
   } catch (error) {
     console.error(`Error deleting chat session ${sessionId}:`, error);
     throw error;
+  }
+};
+
+// Functions for user memory
+export const getUserMemory = async (userId: string): Promise<string | null> => {
+  try {
+    const memoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId);
+    const docSnap = await getDoc(memoryDocRef);
+    if (docSnap.exists()) {
+      return docSnap.data()?.memory_summary || null;
+    }
+    console.log(`No memory found for user ${userId}.`);
+    return null;
+  } catch (error) {
+    console.error(`Error fetching memory for user ${userId}:`, error);
+    return null; // Return null on error to allow chat to proceed
+  }
+};
+
+export const updateUserMemory = async (userId: string, memorySummary: string): Promise<void> => {
+  try {
+    const memoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId);
+    // Using setDoc with merge: true to create the document if it doesn't exist, or update it if it does.
+    await setDoc(memoryDocRef, { memory_summary: memorySummary, updatedAt: serverTimestamp() }, { merge: true });
+    console.log(`Memory for user ${userId} updated/created successfully.`);
+  } catch (error) {
+    console.error(`Error updating memory for user ${userId}:`, error);
+    // Do not throw, allow chat flow to continue
   }
 };
