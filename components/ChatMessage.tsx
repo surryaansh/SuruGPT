@@ -42,7 +42,7 @@ const ActionButtonWithTooltip: React.FC<{
 );
 
 
-const ChatMessage: React.FC<ChatMessageProps> = ({
+const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
   message,
   isStreamingAiText, 
   isOverallLatestMessage,
@@ -91,50 +91,60 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     if (isUser) {
       setDisplayedText(message.text);
       setShowTypingCursor(false);
-      if (isEditing) setEditText(message.text);
+      if (isEditing) setEditText(message.text); // Ensure editText is synced if message.text changes externally while editing
       return;
     }
 
+    // AI messages
     if (isStreamingAiText && message.text) {
-      if (displayedText !== message.text) {
-        let currentTypedLength = displayedText.length;
-        if (message.text.length < displayedText.length || !message.text.startsWith(displayedText)) {
-             setDisplayedText('');
-             currentTypedLength = 0;
-        }
-        const type = () => {
-          if (currentTypedLength < message.text.length) {
-            setDisplayedText(message.text.substring(0, currentTypedLength + 1));
-            currentTypedLength++;
-            setShowTypingCursor(true);
-            typingTimeoutRef.current = window.setTimeout(type, typingSpeed);
-          } else {
-            setShowTypingCursor(false);
+        // Only update if the incoming text is different, to avoid interrupting manual edits or mid-stream fixes
+        if (displayedText !== message.text) {
+            let currentTypedLength = displayedText.length;
+            // If the new text is shorter or doesn't start with the current displayed text, reset.
+            if (message.text.length < displayedText.length || !message.text.startsWith(displayedText)) {
+                setDisplayedText('');
+                currentTypedLength = 0;
+            }
+
+            const type = () => {
+                if (currentTypedLength < message.text.length) {
+                    setDisplayedText(prev => message.text.substring(0, prev.length + 1)); // More robust update
+                    currentTypedLength++; // This local var is now out of sync with displayedText.length, better to rely on displayedText.length in next iteration
+                    setShowTypingCursor(true);
+                    typingTimeoutRef.current = window.setTimeout(type, typingSpeed);
+                } else {
+                    setShowTypingCursor(false);
+                    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                }
+            };
+
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-          }
-        };
-        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = window.setTimeout(type, 0);
-      }
+            // Use displayedText.length directly for the next character to type
+            typingTimeoutRef.current = window.setTimeout(type, displayedText.length === currentTypedLength ? typingSpeed: 0);
+        }
     } else if (!isStreamingAiText && message.text) {
-      setDisplayedText(message.text);
-      setShowTypingCursor(false);
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        // Not streaming, set text directly
+        setDisplayedText(message.text);
+        setShowTypingCursor(false);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     } else if (isStreamingAiText && !message.text) {
+        // Streaming but no text yet (initial AI "thinking" state)
         setDisplayedText('');
-        setShowTypingCursor(false); 
+        setShowTypingCursor(false); // No cursor if no text is being typed
     }
+
 
     return () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
-  }, [message.text, message.sender, isStreamingAiText, isUser, displayedText]);
+  // Ensure displayedText is in dependency array if logic inside effect depends on its previous state for typing.
+  }, [message.text, message.sender, isStreamingAiText, isUser, displayedText]); 
 
   const showInitialLoadingDots = message.sender === SenderType.AI && isStreamingAiText && !message.text && !displayedText;
 
   const handleCopy = (buttonIdSuffix: string) => {
     const textToCopy = isEditing ? editText : message.text;
-    onCopyText(textToCopy.trim()); // Also trim here for consistency if needed
+    onCopyText(textToCopy.trim()); 
 
     const copyButtonId = `${message.id}-${buttonIdSuffix}`;
     setShowCopiedFeedbackFor(copyButtonId);
@@ -169,6 +179,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   useEffect(() => {
     if (isEditing && editInputRef.current) {
       editInputRef.current.focus();
+      // Auto-resize textarea
       editInputRef.current.style.height = 'auto';
       editInputRef.current.style.height = `${editInputRef.current.scrollHeight}px`;
     }
@@ -176,6 +187,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setEditText(e.target.value);
+    // Auto-resize textarea
     e.target.style.height = 'auto';
     e.target.style.height = `${e.target.scrollHeight}px`;
   };
@@ -194,26 +206,27 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
   const shouldShowActionButtons = actionButtonsReady && !showInitialLoadingDots && (isUser || (!isUser && message.text && message.text.trim() !== ''));
   
-  const baseActionButtonsContainerClass = "mt-1 flex items-center space-x-1.5"; // Changed mt-1.5 to mt-1
+  const baseActionButtonsContainerClass = "mt-1 flex items-center space-x-1.5";
   let dynamicClassesForContainer = "";
 
-  if (!isUser && isOverallLatestMessage && actionButtonsReady && !showInitialLoadingDots && message.text && message.text.trim() !== '') {
+  // If it's the latest AI message and it's not streaming (i.e., fully loaded), show buttons immediately.
+  if (!isUser && isOverallLatestMessage && !isStreamingAiText && actionButtonsReady && !showInitialLoadingDots && message.text && message.text.trim() !== '') {
     dynamicClassesForContainer = 'actions-visible-immediately';
   }
   const actionButtonsContainerClass = `${baseActionButtonsContainerClass} ${dynamicClassesForContainer}`;
 
   return (
-    <div className={`message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}> {/* Changed from group/message-item */}
+    <div className={`message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}>
       <div className={`max-w-[85%] sm:max-w-[75%]`}>
         {showInitialLoadingDots ? (
-          <div className="py-1 px-0 text-sm leading-relaxed"> {/* Changed text-base to text-sm */}
+          <div className="py-1 px-0 text-sm leading-relaxed">
             <span className="pulsating-white-dot" aria-hidden="true"></span>
           </div>
         ) : (
           <div
             className={`${
               isUser
-                ? 'bg-[#35323C] rounded-3xl py-1.5 px-3' // Changed py-2 to py-1.5
+                ? 'bg-[#35323C] rounded-3xl py-1.5 px-3'
                 : 'py-1 px-0' 
             }`}
           >
@@ -223,7 +236,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 value={editText}
                 onChange={handleTextareaChange}
                 onKeyDown={handleTextareaKeyDown}
-                className="w-full bg-transparent text-[#EAE6F0] text-sm leading-relaxed focus:outline-none resize-none border-none p-0 overflow-y-auto max-h-40" // Changed text-base to text-sm
+                className="w-full bg-transparent text-[#EAE6F0] text-sm leading-relaxed focus:outline-none resize-none border-none p-0 overflow-y-auto max-h-40"
                 rows={1}
               />
             ) : (
@@ -331,6 +344,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       )}
     </div>
   );
-};
+});
 
 export default ChatMessage;
