@@ -25,28 +25,28 @@ import {
 } from './services/firebaseService';
 
 const summarizeTextForTitle = async (text: string): Promise<string | null> => {
-  console.log("[summarizeTextForTitle] Attempting to summarize:", text);
+  console.log("[App][summarizeTextForTitle] Attempting to summarize:", text);
   try {
     const response = await fetch(`${window.location.origin}/api/summarize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ textToSummarize: text }),
     });
-    console.log('[summarizeTextForTitle] API Response Status:', response.status, response.statusText);
+    console.log('[App][summarizeTextForTitle] API Response Status:', response.status, response.statusText);
     if (!response.ok) {
       const errorBody = await response.text(); 
-      console.error('[summarizeTextForTitle] Summarization API error. Status:', response.status, 'Body:', errorBody);
+      console.error('[App][summarizeTextForTitle] Summarization API error. Status:', response.status, 'Body:', errorBody);
       return null;
     }
     const data = await response.json();
-    console.log('[summarizeTextForTitle] API Response Data:', data);
+    console.log('[App][summarizeTextForTitle] API Response Data:', data);
     if (data && data.summary && typeof data.summary === 'string' && data.summary.trim() !== "") {
       return data.summary.trim();
     }
-    console.warn('[summarizeTextForTitle] Summary was null, empty, or not a string. Data received:', data);
+    console.warn('[App][summarizeTextForTitle] Summary was null, empty, or not a string. Data received:', data);
     return null;
   } catch (error) {
-    console.error('[summarizeTextForTitle] Failed to fetch summary due to network or parsing error:', error);
+    console.error('[App][summarizeTextForTitle] Failed to fetch summary due to network or parsing error:', error);
     return null;
   }
 };
@@ -63,17 +63,17 @@ const generateFallbackTitle = (firstMessageText: string): string => {
 const generateChatTitle = async (firstMessageText: string): Promise<string> => {
   const timestampTitle = `Chat @ ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   if (!firstMessageText || firstMessageText.trim() === "") {
-    console.log("[generateChatTitle] No first message text, using timestamp title.");
+    console.log("[App][generateChatTitle] No first message text, using timestamp title.");
     return timestampTitle;
   }
-  console.log("[generateChatTitle] Attempting to generate title for:", `"${firstMessageText}"`);
+  console.log("[App][generateChatTitle] Attempting to generate title for:", `"${firstMessageText}"`);
   const summary = await summarizeTextForTitle(firstMessageText);
   if (summary) { 
-    console.log("[generateChatTitle] Using summarized title:", `"${summary}"`);
+    console.log("[App][generateChatTitle] Using summarized title:", `"${summary}"`);
     return summary;
   }
   const fallback = generateFallbackTitle(firstMessageText);
-  console.log("[generateChatTitle] Summarization failed or returned empty, using fallback title:", `"${fallback}"`);
+  console.log("[App][generateChatTitle] Summarization failed or returned empty, using fallback title:", `"${fallback}"`);
   return fallback;
 };
 
@@ -102,14 +102,67 @@ const App: React.FC = () => {
   const [sessionToConfirmDelete, setSessionToConfirmDelete] = useState<{id: string, title: string} | null>(null);
 
   const inactivityTimerRef = useRef<number | null>(null);
-  // Store activeChatId and currentMessages in refs for the timer callback to access their latest values
   const activeChatIdForTimerRef = useRef<string | null>(null);
   const currentMessagesForTimerRef = useRef<Message[]>([]);
 
+  // Effect to keep refs updated for the timer callback
   useEffect(() => {
     activeChatIdForTimerRef.current = activeChatId;
     currentMessagesForTimerRef.current = currentMessages;
   }, [activeChatId, currentMessages]);
+
+  const processEndedSessionForMemory = useCallback(async (endedSessionId: string, endedSessionMessages: Message[]) => {
+    if (endedSessionId && endedSessionMessages.length > 0 && !endedSessionId.startsWith("PENDING_")) {
+      console.log(`[App] Triggering memory update for concluded session: ${endedSessionId}`);
+      try {
+        // Fire-and-forget (background processing)
+        triggerMemoryUpdateForSession(endedSessionId, endedSessionMessages)
+          .then(() => console.log(`[App] Memory update request for session ${endedSessionId} successfully sent to backend.`))
+          .catch(err => console.error(`[App] Error in fire-and-forget memory update for session ${endedSessionId}:`, err));
+      } catch (error) { // Should not happen if triggerMemoryUpdateForSession handles its own errors
+        console.error(`[App] Immediate error trying to initiate memory update for session ${endedSessionId}:`, error);
+      }
+    } else if (endedSessionId.startsWith("PENDING_")) {
+        console.log(`[App] Skipped memory update for pending session ID: ${endedSessionId}`);
+    }
+  }, []); 
+
+  // Inactivity Timer Logic
+  useEffect(() => {
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+      inactivityTimerRef.current = null;
+      console.log("[App] Inactivity timer cleared due to dependency change or cleanup.");
+    }
+
+    if (activeChatId && currentMessages.length > 0) {
+      const sessionStillActiveId = activeChatId; // Capture current activeChatId for the timer
+      console.log(`[App] Setting inactivity timer for session: ${sessionStillActiveId} (duration: ${INACTIVITY_TIMEOUT_DURATION_MS / 1000}s)`);
+      
+      inactivityTimerRef.current = window.setTimeout(() => {
+        // CRITICAL CHECK: When the timer fires, check against the *current* main activeChatId state.
+        // Also use the refs for the data to process.
+        if (activeChatIdForTimerRef.current && // A session was active according to ref
+            activeChatIdForTimerRef.current === sessionStillActiveId && // The ref's session is the one this timer was set for
+            activeChatId === sessionStillActiveId && // The main App state *still* considers this session active
+            currentMessagesForTimerRef.current && currentMessagesForTimerRef.current.length > 0) {
+          
+          console.log(`[App] Inactivity timer fired for session: ${activeChatIdForTimerRef.current}. Processing for memory.`);
+          processEndedSessionForMemory(activeChatIdForTimerRef.current, currentMessagesForTimerRef.current);
+        } else {
+          console.log(`[App] Inactivity timer fired, but session ${sessionStillActiveId} is no longer the target, or active session has changed/ended, or no messages. Timer for ${sessionStillActiveId} ignored. Current activeChatId: ${activeChatId}`);
+        }
+      }, INACTIVITY_TIMEOUT_DURATION_MS);
+    }
+
+    return () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+        inactivityTimerRef.current = null;
+        console.log("[App] Inactivity timer cleared on effect cleanup.");
+      }
+    };
+  }, [activeChatId, currentMessages, processEndedSessionForMemory]);
 
 
   const handleToggleSidebar = useCallback(() => {
@@ -167,68 +220,34 @@ const App: React.FC = () => {
     } else { setGlobalContextSummary(''); }
   }, [allChatSessions]);
 
-  const processEndedSessionForMemory = useCallback(async (endedSessionId: string, endedSessionMessages: Message[]) => {
-    if (endedSessionId && endedSessionMessages.length > 0 && !endedSessionId.startsWith("PENDING_")) {
-      console.log(`[App] Triggering memory update for concluded session: ${endedSessionId}`);
-      try {
-        await triggerMemoryUpdateForSession(endedSessionId, endedSessionMessages);
-        console.log(`[App] Memory update request for session ${endedSessionId} processed by backend (or queued).`);
-      } catch (error) {
-        console.error(`[App] Failed to initiate memory update for session ${endedSessionId}:`, error);
-      }
-    } else if (endedSessionId.startsWith("PENDING_")) {
-        console.log(`[App] Skipped memory update for pending session ID: ${endedSessionId}`);
-    }
-  }, []); 
-
-  // Inactivity Timer Logic
-  useEffect(() => {
+  const handleNewChat = useCallback(async () => { 
     if (inactivityTimerRef.current) {
       clearTimeout(inactivityTimerRef.current);
+      inactivityTimerRef.current = null;
+      console.log("[App] Inactivity timer cleared by handleNewChat.");
     }
-
-    if (activeChatIdForTimerRef.current && currentMessagesForTimerRef.current.length > 0) {
-      inactivityTimerRef.current = window.setTimeout(() => {
-        // Check if the session is still active and has messages
-        if (activeChatIdForTimerRef.current && 
-            activeChatIdForTimerRef.current === activeChatId && // Ensures it's still the same active chat
-            currentMessagesForTimerRef.current.length > 0) {
-          console.log(`[App] Inactivity timer triggered for session: ${activeChatIdForTimerRef.current}. Processing for memory.`);
-          processEndedSessionForMemory(activeChatIdForTimerRef.current, currentMessagesForTimerRef.current)
-            .catch(err => console.error("[App] Background memory processing from inactivity timer failed:", err));
-        }
-      }, INACTIVITY_TIMEOUT_DURATION_MS);
-    }
-
-    return () => {
-      if (inactivityTimerRef.current) {
-        clearTimeout(inactivityTimerRef.current);
-      }
-    };
-  }, [activeChatId, currentMessages, processEndedSessionForMemory]); // Re-run when activeChatId or currentMessages change
-
-
-  const handleNewChat = useCallback(async () => { 
-    if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
     const endedSessionId = activeChatId;
-    const endedSessionMessages = [...currentMessages]; 
+    const endedSessionMessages = activeChatId ? [...currentMessagesForTimerRef.current] : []; // Use ref for messages
 
     setCurrentMessages([]); 
-    setActiveChatId(null);
+    setActiveChatId(null); // This will trigger the timer useEffect to clear any existing timer for the old session
     setChatReady(checkChatAvailability()); 
     if (!isDesktopView) setIsSidebarOpen(false);
 
     if (endedSessionId && endedSessionMessages.length > 0) {
-      processEndedSessionForMemory(endedSessionId, endedSessionMessages)
-        .catch(err => console.error("[App] Background memory processing for ended session failed (handleNewChat):", err));
+      processEndedSessionForMemory(endedSessionId, endedSessionMessages);
     }
     resetAiContextWithSystemPrompt(undefined, globalContextSummary); 
-  }, [activeChatId, currentMessages, globalContextSummary, isDesktopView, processEndedSessionForMemory]);
+  }, [activeChatId, globalContextSummary, isDesktopView, processEndedSessionForMemory]);
 
   const handleSelectChat = useCallback(async (chatId: string) => { 
-    if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+      inactivityTimerRef.current = null;
+      console.log("[App] Inactivity timer cleared by handleSelectChat.");
+    }
     const endedSessionId = activeChatId;
-    const endedSessionMessages = [...currentMessages]; 
+    const endedSessionMessages = activeChatId ? [...currentMessagesForTimerRef.current] : []; // Use ref
 
     if (endedSessionId === chatId && currentMessages.length > 0) {
         if (!isDesktopView) setIsSidebarOpen(false); return;
@@ -240,8 +259,7 @@ const App: React.FC = () => {
     if (!isDesktopView) setIsSidebarOpen(false); 
 
     if (endedSessionId && endedSessionId !== chatId && endedSessionMessages.length > 0) {
-      processEndedSessionForMemory(endedSessionId, endedSessionMessages)
-        .catch(err => console.error("[App] Background memory processing for ended session failed (handleSelectChat):", err));
+      processEndedSessionForMemory(endedSessionId, endedSessionMessages);
     }
     
     try {
@@ -253,7 +271,7 @@ const App: React.FC = () => {
       setCurrentMessages([{ id: crypto.randomUUID(), text: "Error loading messages for this chat. Please try again.", sender: SenderType.AI, timestamp: new Date(), feedback: null }]);
       resetAiContextWithSystemPrompt(undefined, globalContextSummary);
     } finally { setIsMessagesLoading(false); }
-  }, [activeChatId, currentMessages, globalContextSummary, isDesktopView, processEndedSessionForMemory]);
+  }, [activeChatId, currentMessages.length, globalContextSummary, isDesktopView, processEndedSessionForMemory]);
 
   const getAiResponse = useCallback(async (
     textForAi: string,
@@ -262,7 +280,6 @@ const App: React.FC = () => {
     if (!currentSessionIdForAi || currentSessionIdForAi.startsWith("PENDING_")) {
         console.error("[App] getAiResponse called with invalid or pending session ID:", currentSessionIdForAi);
         setIsLoadingAiResponse(false); 
-        // Optionally show an error message to the user
         setCurrentMessages(prev => [...prev, {
             id: crypto.randomUUID(),
             text: "Error: Could not send message. Session not fully initialized.",
@@ -328,7 +345,6 @@ const App: React.FC = () => {
     }
   }, [globalContextSummary]); 
 
-
   const handleSendMessage = useCallback(async (text: string) => {
     if (!chatReady) {
       console.warn("Chat is not ready. Cannot send message.");
@@ -355,7 +371,7 @@ const App: React.FC = () => {
 
       setCurrentMessages([optimisticUserMessage]);
       setAllChatSessions(prevSessions => [optimisticSession, ...prevSessions]);
-      setActiveChatId(tempSessionId);
+      setActiveChatId(tempSessionId); // This triggers the timer useEffect
       resetAiContextWithSystemPrompt(undefined, globalContextSummary);
 
       // Async operations
@@ -365,23 +381,19 @@ const App: React.FC = () => {
           const newSessionFromDb = await createChatSessionInFirestore(title, text);
           const actualSessionId = newSessionFromDb.id;
           
-          // Replace temporary session with actual session
+          setActiveChatId(actualSessionId); // Update activeChatId to the actual one
           setAllChatSessions(prevSessions => 
             prevSessions.map(s => s.id === tempSessionId ? newSessionFromDb : s)
           );
-          setActiveChatId(actualSessionId);
           
-          // Add user message to the actual session and update UI message ID
           const finalUserMessage = await addMessageToFirestore(actualSessionId, { text, sender: SenderType.USER });
           setCurrentMessages(prevMsgs => 
             prevMsgs.map(m => m.id === tempUserMessageId ? finalUserMessage : m)
-          );
+          ); // This will update currentMessages, re-triggering timer useEffect
           
-          // Now get AI response with the actual session ID
           await getAiResponse(finalUserMessage.text, actualSessionId);
         } catch (err) {
           console.error("Error during new chat creation or first message send:", err);
-          // Revert optimistic UI or show error
           setCurrentMessages(prev => prev.filter(m => m.id !== tempUserMessageId));
           setAllChatSessions(prev => prev.filter(s => s.id !== tempSessionId));
           if (activeChatId === tempSessionId) setActiveChatId(null);
@@ -397,12 +409,11 @@ const App: React.FC = () => {
 
     } else { // Existing active session
       const finalUserMessage = await addMessageToFirestore(activeChatId, { text, sender: SenderType.USER });
-      setCurrentMessages(prevMessages => [...prevMessages, finalUserMessage]);
+      setCurrentMessages(prevMessages => [...prevMessages, finalUserMessage]); // This will update currentMessages, re-triggering timer useEffect
       await getAiResponse(finalUserMessage.text, activeChatId);
     }
     
   }, [chatReady, activeChatId, globalContextSummary, getAiResponse]);
-
 
   const handleCopyText = useCallback(async (textToCopy: string) => {
     try {
@@ -440,12 +451,11 @@ const App: React.FC = () => {
           globalContextSummary
       );
       return updatedMessagesAfterRemoval;
-    });
+    }); // This will update currentMessages, re-triggering timer useEffect
     
     await getAiResponse(userPromptText, activeChatId);
 
   }, [activeChatId, getAiResponse, globalContextSummary]);
-
 
   const handleSaveUserEdit = useCallback(async (messageId: string, newText: string) => {
     if (!activeChatId || activeChatId.startsWith("PENDING_")) return;
@@ -467,13 +477,12 @@ const App: React.FC = () => {
             globalContextSummary
         );
         return messagesForContextAndDisplay; 
-    });
+    }); // This will update currentMessages, re-triggering timer useEffect
     
     await updateMessageInFirestore(activeChatId, messageId, newText); 
     await getAiResponse(newText, activeChatId);
 
   }, [activeChatId, getAiResponse, globalContextSummary]);
-
 
   const handleRequestDeleteConfirmation = (sessionId: string, sessionTitle: string) => {
     setSessionToConfirmDelete({id: sessionId, title: sessionTitle});
@@ -482,24 +491,27 @@ const App: React.FC = () => {
 
   const handleConfirmDelete = async () => { 
     if (!sessionToConfirmDelete) return;
-    if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+    if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+        inactivityTimerRef.current = null;
+        console.log("[App] Inactivity timer cleared by handleConfirmDelete.");
+    }
 
     const sessionToDeleteId = sessionToConfirmDelete.id;
-    const endedSessionMessages = (activeChatId === sessionToDeleteId) ? [...currentMessages] : [];
+    const endedSessionMessages = (activeChatId === sessionToDeleteId) ? [...currentMessagesForTimerRef.current] : [];
     
     setAllChatSessions(prevSessions => prevSessions.filter(session => session.id !== sessionToDeleteId));
     if (activeChatId === sessionToDeleteId) {
       setCurrentMessages([]);
-      setActiveChatId(null);
+      setActiveChatId(null); // This will trigger the timer useEffect to clear any timer
       resetAiContextWithSystemPrompt(undefined, globalContextSummary); 
     }
     
     setIsDeleteConfirmationOpen(false);
     setSessionToConfirmDelete(null);
 
-    if (endedSessionMessages.length > 0) {
-        processEndedSessionForMemory(sessionToDeleteId, endedSessionMessages)
-            .catch(err => console.error("[App] Background memory processing for deleted session failed (handleConfirmDelete):", err));
+    if (endedSessionMessages.length > 0) { // Process memory only if it was the active chat with messages
+        processEndedSessionForMemory(sessionToDeleteId, endedSessionMessages);
     }
     
     try {
@@ -563,7 +575,7 @@ const App: React.FC = () => {
       {isSidebarOpen && !isDesktopView && (
         <div className="fixed inset-0 bg-black/50 z-30 sidebar-overlay" onClick={handleToggleSidebar} aria-hidden="true"></div>
       )}
-      <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#393641] transition-all duration-300 ease-in-out ${(isSidebarOpen && isDesktopView) ? 'md:ml-64' : 'ml-0'}`}>
+      <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#393641] transition-all duration-300 ease-in-out ${(isSidebarOpen && isDesktopView) ? 'md:ml-60' : 'ml-0'}`}> {/* Adjusted ml-64 to ml-60 */}
         <Header onToggleSidebar={handleToggleSidebar} onNewChat={handleNewChat} />
         <main className="flex-grow flex flex-col overflow-hidden">
           {isMessagesLoading && <div className="flex-grow flex items-center justify-center"><p className="text-[#A09CB0] text-lg animate-pulse">Loading chat...</p></div>}
