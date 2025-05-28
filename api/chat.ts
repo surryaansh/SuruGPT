@@ -12,11 +12,27 @@ if (API_KEY) {
     console.error("CRITICAL_ERROR: OPENAI_API_KEY environment variable is not set or is empty. OpenAI functionality will be disabled.");
 }
 
-const DEFAULT_USER_ID = "default_user"; // Using a default user ID as no auth is implemented
+const DEFAULT_USER_ID = "default_user"; 
 const DEFAULT_OPENAI_SYSTEM_PROMPT_BACKEND = "You are SuruGPT, a helpful and friendly AI assistant. Keep your responses concise and delightful, like a sprinkle of magic! ✨";
 
 function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getRelevantMemoryEntries(memoryEntries: string[] | null, userQuery: string): string[] {
+  if (!userQuery || userQuery.trim() === "" || !memoryEntries || memoryEntries.length === 0) {
+    return [];
+  }
+
+  const queryWords = userQuery.toLowerCase().split(/\s+/).filter(word => word.length > 2); 
+  if (queryWords.length === 0) return [];
+
+  const relevantEntries = memoryEntries.filter(entry => {
+    const entryLower = entry.toLowerCase();
+    return queryWords.some(queryWord => entryLower.includes(queryWord));
+  });
+
+  return relevantEntries;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -45,85 +61,73 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const validRoles = ['system', 'user', 'assistant', 'tool'];
     for (const msg of messagesFromClient) {
-        // Assuming content is always string for simplicity based on current app structure.
-        // OpenAI.Chat.ChatCompletionMessageParam allows content to be string | null | ChatCompletionContentPart[]
         if (!msg || typeof msg.role !== 'string' || !validRoles.includes(msg.role) || typeof msg.content !== 'string') {
             console.error(`/api/chat: Invalid message structure in 'messages' array. Role: ${msg?.role}, Content Type: ${typeof msg?.content}. Each message must have a valid 'role' (${validRoles.join('/')}) and 'content' as a string.`, messagesFromClient);
             return res.status(400).json({ error: `Invalid message structure. Role must be one of [${validRoles.join(', ')}] and content must be a string.` });
         }
     }
     
-    // Deep copy messages to avoid mutating client's original array
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = JSON.parse(JSON.stringify(messagesFromClient));
 
-
-    // --- Memory Fetch and Injection ---
-    let userMemory: string | null = null;
+    // --- Memory Fetch and Relevance Filtering ---
+    let initialUserMemoryArray: string[] | null = null;
     try {
-        userMemory = await getUserMemory(DEFAULT_USER_ID);
+        initialUserMemoryArray = await getUserMemory(DEFAULT_USER_ID); // Returns string[] | null
     } catch (e) {
         console.error("/api/chat: Error fetching user memory, proceeding without it:", e);
     }
 
-    // Ensure there's one system message at the beginning and get a reference to it.
     let systemMessage: OpenAI.Chat.ChatCompletionSystemMessageParam;
     const firstMessage = messages[0];
 
     if (firstMessage && firstMessage.role === 'system') {
         systemMessage = firstMessage as OpenAI.Chat.ChatCompletionSystemMessageParam;
     } else {
-        // If no system message or not at the start, create/move one to the start.
         const existingSystemMessageIndex = messages.findIndex(m => m.role === 'system');
         if (existingSystemMessageIndex !== -1) {
-            // Remove existing system message from its current position
             const foundMessage = messages.splice(existingSystemMessageIndex, 1)[0];
-             // This check is mostly for type safety, findIndex should ensure role is 'system'
             if (foundMessage.role === 'system') {
                 systemMessage = foundMessage as OpenAI.Chat.ChatCompletionSystemMessageParam;
             } else {
-                 // Fallback if something unexpected happened (e.g. malformed messages array despite validation)
-                console.warn("/api/chat: Found message with non-system role during system message consolidation. Re-creating.");
                 systemMessage = { role: 'system', content: DEFAULT_OPENAI_SYSTEM_PROMPT_BACKEND };
             }
         } else {
             systemMessage = { role: 'system', content: DEFAULT_OPENAI_SYSTEM_PROMPT_BACKEND };
         }
-        messages.unshift(systemMessage); // Add/move system message to the beginning
+        messages.unshift(systemMessage);
     }
     
     let systemContentString: string;
     if (typeof systemMessage.content === 'string') {
         systemContentString = systemMessage.content;
     } else if (Array.isArray(systemMessage.content)) {
-        // Handles ChatCompletionContentPartText[] or general ChatCompletionContentPart[]
         systemContentString = systemMessage.content
-            .filter((part): part is OpenAI.Chat.ChatCompletionContentPartText => part.type === 'text') // Type guard for text parts
-            .map(textPart => textPart.text) // textPart is now ChatCompletionContentPartText
+            .filter((part): part is OpenAI.Chat.ChatCompletionContentPartText => part.type === 'text')
+            .map(textPart => textPart.text)
             .join('');
         if (systemMessage.content.some(part => part.type !== 'text')) {
             console.warn("/api/chat: System message content included non-text parts. These were ignored.");
         }
     } else {
-        // Handles null, undefined, or other unexpected types for systemMessage.content.
-        // Given OpenAI types, content is typically string or array of parts for system messages.
         systemContentString = ''; 
     }
     
     let currentSystemContent = systemContentString || DEFAULT_OPENAI_SYSTEM_PROMPT_BACKEND;
-    // Now currentSystemContent is guaranteed to be a string.
 
-    const memoryMarker = "\n\nKey information to remember about the user (ignore if not relevant to the current query):";
-    const memoryRegex = new RegExp(escapeRegExp(memoryMarker) + ".*", "s");
-    
-    currentSystemContent = currentSystemContent.replace(memoryRegex, "").trim(); // Error on this line (97) is now fixed
+    const memoryMarkerBase = "\n\nKey information to remember about the user";
+    const memoryRegex = new RegExp(escapeRegExp(memoryMarkerBase) + ".*", "s");
+    currentSystemContent = currentSystemContent.replace(memoryRegex, "").trim();
 
-    if (userMemory && userMemory.trim() !== "") {
-        currentSystemContent += `${memoryMarker} "${userMemory}"`;
+    const latestUserQuery = messages.filter(m => m.role === 'user').pop()?.content as string || "";
+    const relevantMemoryEntries = getRelevantMemoryEntries(initialUserMemoryArray, latestUserQuery);
+
+    if (relevantMemoryEntries.length > 0) {
+        const relevantMemoryString = relevantMemoryEntries.join('; '); // Join relevant facts
+        currentSystemContent += `${memoryMarkerBase} (relevant to your current query): "${relevantMemoryString}"`;
     }
     
-    // systemMessage.content expects a string. currentSystemContent is now a string.
-    systemMessage.content = currentSystemContent.trim(); // Error on this line (102) related to currentSystemContent.trim() is now fixed
-    // --- End Memory Fetch and Injection ---
+    systemMessage.content = currentSystemContent.trim();
+    // --- End Memory Fetch and Relevance Filtering ---
 
     try {
         const stream = await openai.chat.completions.create({
@@ -142,7 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     res.write(content);
                     currentAssistantResponse += content;
                 } else {
-                    console.warn("/api/chat: Attempted to write to an ended stream (client might have disconnected). Chunk dropped:", content);
+                    console.warn("/api/chat: Attempted to write to an ended stream. Chunk dropped:", content);
                     break; 
                 }
             }
@@ -158,10 +162,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const lastUserMessage = typeof lastUserMessageContent === 'string' ? lastUserMessageContent : "";
 
             if (lastUserMessage) { 
-                const memoryUpdatePrompt = `You are a memory management system. Your task is to update a user's memory profile based on the latest conversation turn.
-Current Memory Profile:
-\`\`\`
-${userMemory || "No existing memory."}
+                const userMemoryArrayStringified = initialUserMemoryArray ? JSON.stringify(initialUserMemoryArray) : "[]";
+                const memoryUpdateSystemPrompt = `You are a memory management system. Your task is to update a user's memory profile based on the latest conversation turn.
+The memory profile is a list of distinct facts or preferences.
+Output *only* the updated JSON array of strings. For example:
+["User's name is Alex.", "Prefers short answers.", "Interested in AI advancements."]`;
+                
+                const memoryUpdateUserPrompt = `Current Memory Profile (JSON array of strings):
+\`\`\`json
+${userMemoryArrayStringified}
 \`\`\`
 
 Latest Conversation Turn:
@@ -169,33 +178,63 @@ User: "${lastUserMessage}"
 AI: "${currentAssistantResponse}"
 
 Review the latest conversation turn. Identify any new information, preferences, facts about the user, or corrections to existing facts in the memory.
-Based on this, provide an updated, concise memory profile string (max 150 words).
-If no significant new information or changes are needed, output the original memory profile exactly as it was provided in "Current Memory Profile".
-Focus on extracting persistent facts and preferences, not just summarizing this single turn.
+Update the JSON array of memory strings.
+- Add new distinct facts.
+- Modify existing facts if they are updated.
+- Remove facts that are no longer true or relevant.
+- Ensure each string in the array is a concise, standalone piece of information.
+- Keep the total number of entries manageable and focused on persistent, key information.
+- If no significant new information or changes are needed, output the original JSON array exactly as it was provided in "Current Memory Profile".
 
-Updated Memory Profile:`;
+Updated JSON Array Memory Profile:`;
 
                 try {
                     const memoryCompletion = await openai.chat.completions.create({
                         model: 'gpt-4o-mini', 
                         messages: [
-                            { role: 'system', content: "You are an AI assistant that refines and updates a user's memory profile based on conversation. Output only the memory profile string."},
-                            { role: 'user', content: memoryUpdatePrompt }
+                            { role: 'system', content: memoryUpdateSystemPrompt },
+                            { role: 'user', content: memoryUpdateUserPrompt }
                         ],
-                        max_tokens: 250, 
-                        temperature: 0.3,
+                        max_tokens: 300, // Adjusted for potential JSON array
+                        temperature: 0.2,
                     });
-                    const newMemoryString = memoryCompletion.choices[0]?.message?.content?.trim();
+                    
+                    let newMemoryArray: string[] | null = null;
+                    const rawMemoryOutput = memoryCompletion.choices[0]?.message?.content?.trim();
 
-                    if (newMemoryString) {
-                        if (newMemoryString !== userMemory) {
-                            await updateUserMemory(DEFAULT_USER_ID, newMemoryString);
-                            console.log(`/api/chat: User memory updated for ${DEFAULT_USER_ID}. New memory: "${newMemoryString}"`);
+                    if (rawMemoryOutput) {
+                        try {
+                            const parsedOutput = JSON.parse(rawMemoryOutput);
+                            if (Array.isArray(parsedOutput) && parsedOutput.every(item => typeof item === 'string')) {
+                                newMemoryArray = parsedOutput as string[];
+                            } else {
+                                console.warn(`/api/chat: Memory update LLM output was not a valid JSON array of strings. Output: ${rawMemoryOutput}`);
+                                if (typeof rawMemoryOutput === 'string' && !rawMemoryOutput.startsWith('[') && rawMemoryOutput.length > 0) {
+                                     newMemoryArray = [rawMemoryOutput];
+                                     console.log("/api/chat: Salvaged plain string LLM memory output into a single-entry array.");
+                                }
+                            }
+                        } catch (parseError) {
+                            console.warn(`/api/chat: Failed to parse memory update LLM output as JSON. Output: ${rawMemoryOutput}. Error: ${parseError}`);
+                             if (typeof rawMemoryOutput === 'string' && !rawMemoryOutput.startsWith('[') && rawMemoryOutput.length > 0) {
+                                newMemoryArray = [rawMemoryOutput];
+                                console.log("/api/chat: Salvaged plain string LLM memory output (due to parse error) into a single-entry array.");
+                            }
+                        }
+                    }
+
+                    if (newMemoryArray) {
+                        const oldMemoryStringifiedSorted = initialUserMemoryArray ? JSON.stringify([...initialUserMemoryArray].sort()) : "[]";
+                        const newMemoryStringifiedSorted = JSON.stringify([...newMemoryArray].sort());
+
+                        if (newMemoryStringifiedSorted !== oldMemoryStringifiedSorted) {
+                            await updateUserMemory(DEFAULT_USER_ID, newMemoryArray); // updateUserMemory expects string[]
+                            console.log(`/api/chat: User memory updated for ${DEFAULT_USER_ID}.`);
                         } else {
                             console.log(`/api/chat: User memory for ${DEFAULT_USER_ID} remains unchanged after LLM evaluation.`);
                         }
                     } else {
-                        console.warn(`/api/chat: Memory update LLM call returned empty for ${DEFAULT_USER_ID}. Memory not updated.`);
+                        console.warn(`/api/chat: Memory update LLM call returned or resulted in empty/invalid array for ${DEFAULT_USER_ID}. Memory not updated.`);
                     }
                 } catch (memError) {
                     console.error("/api/chat: Error during memory update LLM call:", memError);
@@ -221,7 +260,7 @@ Updated Memory Profile:`;
                 });
             }
         } else {
-            console.error("/api/chat: Error occurred after stream response had already ended. Client connection may be broken.");
+            console.error("/api/chat: Error occurred after stream response had already ended.");
         }
     }
 }
