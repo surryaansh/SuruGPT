@@ -29,3 +29,14 @@ export interface ChatSession {
   firstMessageTextForTitle?: string; // Store first message text to regenerate title if needed
   userId?: string; // For future multi-user/login feature
 }
+
+// This interface is used in firebaseService.ts for fetching summaries
+// and needs to be consistent with the data structure in Firestore.
+export interface StoredSessionSummary {
+  id: string; // Firestore document ID of the summary entry
+  sessionId: string; // Original chat session ID
+  summaryText: string;
+  embeddingVector: number[];
+  createdAt: Date;
+  contentHash?: string; // Hash of the session content when this summary was created
+}
