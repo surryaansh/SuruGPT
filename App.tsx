@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Message, SenderType, ChatSession } from './types';
 import Header from './components/Header';
@@ -161,21 +162,32 @@ const App: React.FC = () => {
     if (endedSessionId && endedSessionMessages.length > 0) {
       console.log(`[App] Triggering memory update for concluded session: ${endedSessionId}`);
       try {
+        // This is now a background task, not awaited directly in UI handlers
         await triggerMemoryUpdateForSession(endedSessionId, endedSessionMessages);
-        console.log(`[App] Memory update request for session ${endedSessionId} completed.`);
+        console.log(`[App] Memory update request for session ${endedSessionId} processed by backend (or queued).`);
       } catch (error) {
-        console.error(`[App] Failed to trigger memory update for session ${endedSessionId}:`, error);
+        // Log here if triggerMemoryUpdateForSession itself throws an error (e.g., network error before sending)
+        // The actual backend processing error is handled within triggerMemoryUpdateForSession
+        console.error(`[App] Failed to initiate memory update for session ${endedSessionId}:`, error);
       }
     }
-  }, []);
+  }, []); // No dependencies, as it's a utility function
 
 
   const handleNewChat = useCallback(async () => { 
     const endedSessionId = activeChatId;
     const endedSessionMessages = [...currentMessages]; 
 
+    // Clear UI state for the new chat immediately
+    setCurrentMessages([]); 
+    setActiveChatId(null);
+    setChatReady(checkChatAvailability()); 
+    if (!isDesktopView) setIsSidebarOpen(false);
+
+    // Process ended session's memory in the background
     if (endedSessionId && endedSessionMessages.length > 0) {
-      await processEndedSessionForMemory(endedSessionId, endedSessionMessages);
+      processEndedSessionForMemory(endedSessionId, endedSessionMessages)
+        .catch(err => console.error("[App] Background memory processing for ended session failed (handleNewChat):", err));
     }
 
     let persistentMemoryString: string | null = null;
@@ -189,11 +201,7 @@ const App: React.FC = () => {
       console.error("[App] Failed to fetch persistent memory for new chat:", error);
     }
     
-    setCurrentMessages([]); 
-    setActiveChatId(null);
     resetAiContextWithSystemPrompt(undefined, globalContextSummary, persistentMemoryString); 
-    setChatReady(checkChatAvailability()); 
-    if (!isDesktopView) setIsSidebarOpen(false);
   }, [activeChatId, currentMessages, globalContextSummary, isDesktopView, processEndedSessionForMemory]);
 
   const handleSelectChat = useCallback(async (chatId: string) => { 
@@ -203,15 +211,19 @@ const App: React.FC = () => {
     if (endedSessionId === chatId && currentMessages.length > 0) {
         if (!isDesktopView) setIsSidebarOpen(false); return;
     }
-
-    if (endedSessionId && endedSessionId !== chatId && endedSessionMessages.length > 0) {
-      await processEndedSessionForMemory(endedSessionId, endedSessionMessages);
-    }
     
+    // Update UI for the selected chat immediately
     setActiveChatId(chatId); 
     setCurrentMessages([]); 
     setIsMessagesLoading(true);
     if (!isDesktopView) setIsSidebarOpen(false); 
+
+    // Process ended session's memory in the background
+    if (endedSessionId && endedSessionId !== chatId && endedSessionMessages.length > 0) {
+      processEndedSessionForMemory(endedSessionId, endedSessionMessages)
+        .catch(err => console.error("[App] Background memory processing for ended session failed (handleSelectChat):", err));
+    }
+    
     try {
       const messages = await getMessagesForSession(chatId);
       setCurrentMessages(messages);
@@ -415,26 +427,38 @@ const App: React.FC = () => {
     setIsDeleteConfirmationOpen(true);
   };
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = async () => { // Made handleConfirmDelete async for clarity, though not strictly needed with fire-and-forget
     if (!sessionToConfirmDelete) return;
     const sessionToDeleteId = sessionToConfirmDelete.id;
+    const endedSessionMessages = (activeChatId === sessionToDeleteId) ? [...currentMessages] : [];
     
-    if (activeChatId === sessionToDeleteId && currentMessages.length > 0) {
-        await processEndedSessionForMemory(sessionToDeleteId, [...currentMessages]);
-    }
-
-
+    // Update UI first
     setAllChatSessions(prevSessions => prevSessions.filter(session => session.id !== sessionToDeleteId));
-    if (activeChatId === sessionToDeleteId) handleNewChat(); 
+    if (activeChatId === sessionToDeleteId) {
+      // If deleting active chat, clear UI and set up for a new chat state
+      setCurrentMessages([]);
+      setActiveChatId(null);
+      // No need to fetch memory for "new chat" here, handleNewChat does that if user actually clicks new chat
+      resetAiContextWithSystemPrompt(undefined, globalContextSummary, undefined); 
+    }
     
     setIsDeleteConfirmationOpen(false);
     setSessionToConfirmDelete(null);
+
+    // Process memory in background if there were messages in the deleted active chat
+    if (endedSessionMessages.length > 0) {
+        processEndedSessionForMemory(sessionToDeleteId, endedSessionMessages)
+            .catch(err => console.error("[App] Background memory processing for deleted session failed (handleConfirmDelete):", err));
+    }
+    
     try {
       await deleteChatSessionFromFirestore(sessionToDeleteId); 
       console.log(`Chat session ${sessionToDeleteId} successfully deleted from Firestore.`);
     } catch (error: any) {
       console.error('Error deleting chat session from Firestore:', error);
       alert(`Error deleting chat: ${error.message}. The chat was removed from your view, but may still exist on the server. Please refresh or try again later.`);
+      // Potentially re-fetch sessions or add the session back to UI if Firestore delete failed critically
+      // For now, UI is already updated.
     }
   };
 
