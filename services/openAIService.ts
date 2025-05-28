@@ -1,4 +1,3 @@
-
 import { Message, SenderType } from '../types';
 
 export interface AdaptedStreamingChunk {
@@ -9,17 +8,20 @@ let conversationHistory: { role: 'system' | 'user' | 'assistant'; content: strin
 
 const DEFAULT_SYSTEM_PROMPT = "You are SuruGPT, a helpful and friendly AI assistant. Keep your responses concise and delightful, like a sprinkle of magic! ✨";
 
-const initializeBaseHistory = (systemPrompt?: string, globalSummary?: string): void => {
+const initializeBaseHistory = (systemPrompt?: string, globalSummary?: string, persistentMemoryString?: string): void => {
   let finalSystemContent = systemPrompt || DEFAULT_SYSTEM_PROMPT;
   if (globalSummary && globalSummary.trim().length > 0) {
     finalSystemContent += `\n\nFor your broader awareness, ${globalSummary}`;
   }
+  if (persistentMemoryString && persistentMemoryString.trim().length > 0) {
+    finalSystemContent += `\n\nKey information to remember about the user: ${persistentMemoryString}`;
+  }
   conversationHistory = [{ role: 'system', content: finalSystemContent }];
-  console.log("Local chat session initialized with system prompt and global summary (if provided).");
+  console.log("Local chat session initialized. System Prompt:", finalSystemContent);
 };
 
-export const startNewOpenAIChatSession = (systemPrompt?: string, globalSummary?: string): boolean => {
-  initializeBaseHistory(systemPrompt, globalSummary);
+export const startNewOpenAIChatSession = (systemPrompt?: string, globalSummary?: string, persistentMemoryString?: string): boolean => {
+  initializeBaseHistory(systemPrompt, globalSummary, persistentMemoryString);
   return true;
 };
 
@@ -27,8 +29,9 @@ export const setConversationContextFromAppMessages = (
   appMessages: Message[], 
   systemPrompt?: string, 
   globalSummary?: string
+  // No persistentMemoryString here; old chats load with their original context (or default system prompt + global summary)
 ): boolean => {
-  initializeBaseHistory(systemPrompt, globalSummary); // This sets the system prompt including global summary
+  initializeBaseHistory(systemPrompt, globalSummary); // No NEW persistent memory injection for loading old chats
   appMessages.forEach(msg => {
     conversationHistory.push({
       role: msg.sender === SenderType.USER ? 'user' : 'assistant',
@@ -52,7 +55,7 @@ export const sendMessageStream = async (
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ messages: conversationHistory }),
+      body: JSON.stringify({ messages: conversationHistory }), 
     });
 
     if (!response.ok) {
@@ -109,7 +112,7 @@ export const sendMessageStream = async (
         const lastChunk = decoder.decode(); 
         if (lastChunk) {
             currentAssistantResponse += lastChunk;
-            yield { text: lastChunk };
+            yield { text: lastChunk }; 
         }
         if (currentAssistantResponse.trim()) {
             const lastMessage = conversationHistory[conversationHistory.length -1];
@@ -139,10 +142,33 @@ export const sendMessageStream = async (
   }
 };
 
+export const triggerMemoryUpdateForSession = async (sessionId: string, messages: Message[]): Promise<void> => {
+  console.log(`[openAIService] Requesting memory update for session ${sessionId}`);
+  try {
+    const response = await fetch(`${window.location.origin}/api/processSessionForMemory`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId, sessionMessages: messages }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: "Unknown error during memory update." }));
+      console.error(`[openAIService] Error updating memory for session ${sessionId}: ${response.status}`, errorData);
+      throw new Error(errorData.error || `Memory update failed with status ${response.status}`);
+    }
+    console.log(`[openAIService] Memory update for session ${sessionId} successfully processed by backend.`);
+  } catch (error) {
+    console.error(`[openAIService] Client-side error triggering memory update for session ${sessionId}:`, error);
+    // Decide if this error should be propagated or just logged
+    // For now, just log, as it's a background task.
+  }
+};
+
+
 export const isChatAvailable = (): boolean => {
   return true; 
 };
 
-// Initialize with default system prompt and no global summary initially.
-// App.tsx will call resetAiContextWithSystemPrompt with an updated summary once sessions are loaded.
 initializeBaseHistory(DEFAULT_SYSTEM_PROMPT, "");
