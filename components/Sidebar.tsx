@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { IconSidebarClose, IconHeart, IconSearch, IconPencil, IconEllipsisVertical, IconTrash, IconNewChat } from '../constants';
 import { ChatSession } from '../types';
@@ -41,7 +40,7 @@ const groupChatSessionsByDate = (sessions: ChatSession[]): GroupedChatSessions[]
 
   const groups: { [key: string]: ChatSession[] } = { Today: [], Yesterday: [], 'Previous 7 days': [], 'Previous 30 days': [], Older: [] };
   sessions.forEach(session => {
-    const sessionDate = session.createdAt instanceof Date ? session.createdAt : new Date(session.createdAt);
+    const sessionDate = session.createdAt instanceof Date ? session.createdAt : new Date(session.createdAt); // Ensure Date object
     const sessionDay = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate());
     if (sessionDay.getTime() === today.getTime()) groups.Today.push(session);
     else if (sessionDay.getTime() === yesterday.getTime()) groups.Yesterday.push(session);
@@ -52,7 +51,96 @@ const groupChatSessionsByDate = (sessions: ChatSession[]): GroupedChatSessions[]
   return Object.entries(groups).map(([heading, chats]) => ({ heading, chats })).filter(group => group.chats.length > 0);
 };
 
-const MENU_WIDTH = 148; // px, reduced from 160
+const MENU_WIDTH = 148; // px
+
+interface ChatSessionItemProps {
+  chat: ChatSession;
+  isActive: boolean;
+  isEditing: boolean;
+  editingTitle: string;
+  activeContextMenuSessionId: string | null;
+  onSelectChat: (chatId: string) => void;
+  handleEllipsisClick: (e: React.MouseEvent, session: ChatSession) => void;
+  handleEditInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleEditInputKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  submitRename: () => void;
+  ellipsisRefs: React.MutableRefObject<Record<string, HTMLButtonElement | null>>;
+  animationDelay: string;
+}
+
+const ChatSessionItem: React.FC<ChatSessionItemProps> = React.memo(({
+  chat,
+  isActive,
+  isEditing,
+  editingTitle,
+  activeContextMenuSessionId,
+  onSelectChat,
+  handleEllipsisClick,
+  handleEditInputChange,
+  handleEditInputKeyDown,
+  submitRename,
+  ellipsisRefs,
+  animationDelay
+}) => {
+  return (
+    <li 
+      key={chat.id}
+      role="button"
+      tabIndex={0}
+      onClick={() => {
+          if (!isEditing) {
+              onSelectChat(chat.id);
+          }
+      }}
+      onKeyDown={(e) => { 
+          if (e.key === 'Enter' || e.key === ' ') { 
+              e.preventDefault(); 
+              if (!isEditing) {
+                  onSelectChat(chat.id);
+              }
+          }
+      }}
+      className={`group relative flex items-center justify-between p-2 my-0.5 rounded-lg animate-fadeInSlideUp outline-none transition-all duration-150 ease-in-out focus-visible:ring-2 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#2D2A32]
+        ${isActive 
+          ? 'bg-[#4A4754]' 
+          : 'hover:bg-[#3c3a43] focus:bg-[#3c3a43]' 
+        }`}
+      style={{ animationDelay }}
+      aria-current={isActive ? "page" : undefined}
+    >
+      {isEditing ? (
+        <input
+          type="text"
+          value={editingTitle}
+          onChange={handleEditInputChange}
+          onKeyDown={handleEditInputKeyDown}
+          onBlur={submitRename}
+          autoFocus
+          className="flex-grow min-w-0 p-0 bg-transparent text-[#FF8DC7] rounded-md text-xs border-none focus:outline-none focus:ring-0"
+          onClick={(e) => e.stopPropagation()} // Prevent li's onClick when editing
+        />
+      ) : (
+        <div className={`flex-grow min-w-0 text-left truncate text-xs ${isActive ? 'font-semibold text-[#FF8DC7]' : 'text-[#EAE6F0]'}`}>
+          {chat.title}
+        </div>
+      )}
+      {!isEditing && (
+        <button
+          ref={el => { if(el) ellipsisRefs.current[chat.id] = el; }}
+          onClick={(e) => handleEllipsisClick(e, chat)}
+          className={`p-0.5 text-[#A09CB0] hover:text-[#FF8DC7] rounded-md focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] flex-shrink-0 transition-opacity group-hover:scale-110
+              ${activeContextMenuSessionId === chat.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}
+          aria-label={`More options for chat: ${chat.title}`}
+          aria-haspopup="true"
+          aria-expanded={activeContextMenuSessionId === chat.id}
+        >
+          <IconEllipsisVertical className="w-4 h-4" />
+        </button>
+      )}
+    </li>
+  );
+});
+
 
 const Sidebar: React.FC<SidebarProps> = ({
   isOpen, onClose, onNewChat, chatSessions, activeChatId, onSelectChat,
@@ -132,18 +220,17 @@ const Sidebar: React.FC<SidebarProps> = ({
         let top = buttonRect.bottom + verticalOffset;
         let left = buttonRect.right + horizontalOffset;
 
+        // Ensure menu stays within viewport
         if (left + MENU_WIDTH > window.innerWidth) { 
             left = buttonRect.left - MENU_WIDTH - horizontalOffset; 
         }
-        if (left < 0) { 
-            left = horizontalOffset; 
+        if (left < 0) { left = horizontalOffset; }
+
+        const menuHeightEstimate = contextMenuRef.current?.offsetHeight || 80; // Estimate or measure if possible
+        if (top + menuHeightEstimate > window.innerHeight) {
+             top = buttonRect.top - menuHeightEstimate - verticalOffset; 
         }
-        if (top + (contextMenuRef.current?.offsetHeight || 80) > window.innerHeight) {
-             top = buttonRect.top - (contextMenuRef.current?.offsetHeight || 80) - verticalOffset; 
-        }
-         if (top < 0) { 
-            top = verticalOffset; 
-        }
+         if (top < 0) { top = verticalOffset; }
 
         setContextMenuPosition({ top, left });
         setActiveContextMenuSessionId(session.id);
@@ -197,12 +284,12 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (e.key === 'Enter') submitRename();
     if (e.key === 'Escape') {
       const originalSession = chatSessions.find(s => s.id === editingSessionId);
-      if (originalSession) setEditingTitle(originalSession.title);
+      if (originalSession) setEditingTitle(originalSession.title); // Revert on escape
       setEditingSessionId(null); 
     }
   };
 
-  const groupedSessions = groupChatSessionsByDate(displayedSessions);
+  const groupedSessions = useMemo(() => groupChatSessionsByDate(displayedSessions), [displayedSessions]);
 
   return (
     <>
@@ -259,62 +346,21 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </h3>
                     <ul>
                       {sessionGroup.chats.map((chat, index) => (
-                        <li 
+                        <ChatSessionItem
                           key={chat.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => {
-                              if (editingSessionId !== chat.id) {
-                                  onSelectChat(chat.id);
-                                  closeContextMenu(); 
-                              }
-                          }}
-                          onKeyDown={(e) => { 
-                              if (e.key === 'Enter' || e.key === ' ') { 
-                                  e.preventDefault(); 
-                                  if (editingSessionId !== chat.id) {
-                                      onSelectChat(chat.id);
-                                      closeContextMenu();
-                                  }
-                              }
-                          }}
-                          className={`group relative flex items-center justify-between p-2 my-0.5 rounded-lg animate-fadeInSlideUp outline-none transition-all duration-150 ease-in-out focus-visible:ring-2 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#2D2A32]
-                            ${activeChatId === chat.id 
-                              ? 'bg-[#4A4754]' 
-                              : 'hover:bg-[#3c3a43] focus:bg-[#3c3a43]' 
-                            }`}
-                          style={{ animationDelay: `${(groupIndex * 0.1) + (index * 0.03)}s` }}
-                          aria-current={activeChatId === chat.id ? "page" : undefined}
-                        >
-                          {editingSessionId === chat.id ? (
-                            <input
-                              type="text"
-                              value={editingTitle}
-                              onChange={handleEditInputChange}
-                              onKeyDown={handleEditInputKeyDown}
-                              onBlur={submitRename}
-                              autoFocus
-                              className="flex-grow min-w-0 p-0 bg-transparent text-[#FF8DC7] rounded-md text-xs border-none focus:outline-none focus:ring-0"
-                            />
-                          ) : (
-                            <div className={`flex-grow min-w-0 text-left truncate text-xs ${activeChatId === chat.id ? 'font-semibold text-[#FF8DC7]' : 'text-[#EAE6F0]'}`}>
-                              {chat.title}
-                            </div>
-                          )}
-                          {editingSessionId !== chat.id && (
-                            <button
-                              ref={el => { if(el) ellipsisRefs.current[chat.id] = el; }}
-                              onClick={(e) => handleEllipsisClick(e, chat)}
-                              className={`p-0.5 text-[#A09CB0] hover:text-[#FF8DC7] rounded-md focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] flex-shrink-0 transition-opacity group-hover:scale-110
-                                  ${activeContextMenuSessionId === chat.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}
-                              aria-label={`More options for chat: ${chat.title}`}
-                              aria-haspopup="true"
-                              aria-expanded={activeContextMenuSessionId === chat.id}
-                            >
-                              <IconEllipsisVertical className="w-4 h-4" />
-                            </button>
-                          )}
-                        </li>
+                          chat={chat}
+                          isActive={activeChatId === chat.id}
+                          isEditing={editingSessionId === chat.id}
+                          editingTitle={editingTitle}
+                          activeContextMenuSessionId={activeContextMenuSessionId}
+                          onSelectChat={() => { onSelectChat(chat.id); closeContextMenu(); }}
+                          handleEllipsisClick={handleEllipsisClick}
+                          handleEditInputChange={handleEditInputChange}
+                          handleEditInputKeyDown={handleEditInputKeyDown}
+                          submitRename={submitRename}
+                          ellipsisRefs={ellipsisRefs}
+                          animationDelay={`${(groupIndex * 0.1) + (index * 0.03)}s`}
+                        />
                       ))}
                     </ul>
                   </div>
@@ -326,7 +372,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Context Menu - Rendered at the top level of the sidebar, positioned fixed */}
       {activeContextMenuSessionId && contextMenuPosition && currentSessionForMenu && (
         <div
           ref={contextMenuRef}
