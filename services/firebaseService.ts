@@ -13,7 +13,7 @@ import {
   doc,
   updateDoc,
   writeBatch, 
-  setDoc 
+  // setDoc // No longer needed for main memory_json_array
 } from 'firebase/firestore'; 
 
 import { firebaseConfig } from './firebaseConfig.js'; 
@@ -25,6 +25,7 @@ const db = getFirestore(app);
 const CHAT_SESSIONS_COLLECTION = 'chat_sessions';
 const MESSAGES_SUBCOLLECTION = 'messages';
 const USER_MEMORIES_COLLECTION = 'user_memories';
+const SESSION_SUMMARIES_SUBCOLLECTION = 'session_summaries';
 
 const convertMessageTimestamp = (messageData: any): Message => {
   const timestampField = messageData.timestamp;
@@ -170,11 +171,24 @@ export const updateChatSessionTitleInFirestore = async (sessionId: string, newTi
 
 export const deleteChatSessionFromFirestore = async (sessionId: string): Promise<void> => {
   try {
+    // Also delete associated session summaries if they exist
+    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, "default_user"); // Assuming DEFAULT_USER_ID
+    const summariesColRef = collection(userMemoryDocRef, SESSION_SUMMARIES_SUBCOLLECTION);
+    const summariesQuery = query(summariesColRef, where("sessionId", "==", sessionId));
+    const summariesSnapshot = await getDocs(summariesQuery);
+
+    const batch = writeBatch(db);
+
+    if (!summariesSnapshot.empty) {
+        summariesSnapshot.forEach(summaryDoc => {
+            batch.delete(summaryDoc.ref);
+        });
+        console.log(`Marked summaries for session ${sessionId} for deletion.`);
+    }
+
     const messagesPath = collection(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION);
     const messagesQuery = query(messagesPath);
     const messagesSnapshot = await getDocs(messagesQuery);
-
-    const batch = writeBatch(db);
 
     if (!messagesSnapshot.empty) {
       messagesSnapshot.forEach(messageDoc => {
@@ -186,7 +200,7 @@ export const deleteChatSessionFromFirestore = async (sessionId: string): Promise
     batch.delete(sessionRef);
 
     await batch.commit();
-    console.log(`Successfully deleted chat session ${sessionId} and all its messages.`);
+    console.log(`Successfully deleted chat session ${sessionId}, its messages, and associated summaries.`);
 
   } catch (error) {
     console.error(`Error deleting chat session ${sessionId}:`, error);
@@ -194,43 +208,62 @@ export const deleteChatSessionFromFirestore = async (sessionId: string): Promise
   }
 };
 
-// Functions for user memory
-export const getUserMemory = async (userId: string): Promise<string[] | null> => {
+// getUserMemory and updateUserMemory (for memory_json_array) are removed.
+
+// Function for session summaries with embeddings (store)
+export const addSessionSummaryWithEmbedding = async (
+  userId: string,
+  sessionId: string,
+  summaryText: string,
+  embeddingVector: number[]
+): Promise<void> => {
   try {
-    const memoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId);
-    const docSnap = await getDoc(memoryDocRef);
-    if (docSnap.exists()) {
-      const memoryJsonArrayString = docSnap.data()?.memory_json_array;
-      if (memoryJsonArrayString && typeof memoryJsonArrayString === 'string') {
-        try {
-          const parsedMemory = JSON.parse(memoryJsonArrayString);
-          if (Array.isArray(parsedMemory) && parsedMemory.every(item => typeof item === 'string')) {
-            return parsedMemory as string[];
-          }
-          console.warn(`Stored memory for user ${userId} is not a valid JSON array of strings.`);
-          return null;
-        } catch (e) {
-          console.error(`Error parsing memory JSON for user ${userId}:`, e);
-          return null;
-        }
-      }
-      return null; // Field exists but not a string, or is empty
-    }
-    console.log(`No memory found for user ${userId}.`);
-    return null;
+    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId);
+    const summariesColRef = collection(userMemoryDocRef, SESSION_SUMMARIES_SUBCOLLECTION);
+    await addDoc(summariesColRef, {
+      sessionId,
+      summaryText,
+      embeddingVector,
+      createdAt: serverTimestamp(),
+    });
+    console.log(`Session summary and embedding for session ${sessionId} (user ${userId}) added successfully.`);
   } catch (error) {
-    console.error(`Error fetching memory for user ${userId}:`, error);
-    return null;
+    console.error(`Error adding session summary and embedding for session ${sessionId} (user ${userId}):`, error);
   }
 };
 
-export const updateUserMemory = async (userId: string, memoryArray: string[]): Promise<void> => {
+// New function to get all session summaries with embeddings
+export interface StoredSessionSummary {
+  id: string; // Firestore document ID of the summary entry
+  sessionId: string; // Original chat session ID
+  summaryText: string;
+  embeddingVector: number[];
+  createdAt: Date;
+}
+
+export const getAllSessionSummariesWithEmbeddings = async (userId: string): Promise<StoredSessionSummary[]> => {
   try {
-    const memoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId);
-    const memoryJsonArrayString = JSON.stringify(memoryArray);
-    await setDoc(memoryDocRef, { memory_json_array: memoryJsonArrayString, updatedAt: serverTimestamp() }, { merge: true });
-    console.log(`Memory for user ${userId} updated/created successfully.`);
+    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId);
+    const summariesColRef = collection(userMemoryDocRef, SESSION_SUMMARIES_SUBCOLLECTION);
+    const summariesQuery = query(summariesColRef, orderBy('createdAt', 'desc')); // Get most recent first
+    
+    const querySnapshot = await getDocs(summariesQuery);
+    return querySnapshot.docs.map(docSnapshot => {
+      const data = docSnapshot.data();
+      return {
+        id: docSnapshot.id,
+        sessionId: data.sessionId,
+        summaryText: data.summaryText,
+        embeddingVector: data.embeddingVector,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
+      } as StoredSessionSummary;
+    });
   } catch (error) {
-    console.error(`Error updating memory for user ${userId}:`, error);
+    console.error(`Error fetching session summaries with embeddings for user ${userId}:`, error);
+    return []; // Return empty array on error
   }
 };
+
+// Need to re-import `where` if it's used.
+// It IS used now in deleteChatSessionFromFirestore
+import { where } from 'firebase/firestore';

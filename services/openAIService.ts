@@ -1,3 +1,4 @@
+
 import { Message, SenderType } from '../types';
 
 export interface AdaptedStreamingChunk {
@@ -8,20 +9,20 @@ let conversationHistory: { role: 'system' | 'user' | 'assistant'; content: strin
 
 const DEFAULT_SYSTEM_PROMPT = "You are SuruGPT, a helpful and friendly AI assistant. Keep your responses concise and delightful, like a sprinkle of magic! ✨";
 
-const initializeBaseHistory = (systemPrompt?: string, globalSummary?: string, persistentMemoryString?: string): void => {
+// Removed persistentMemoryString from parameters
+const initializeBaseHistory = (systemPrompt?: string, globalSummary?: string): void => {
   let finalSystemContent = systemPrompt || DEFAULT_SYSTEM_PROMPT;
   if (globalSummary && globalSummary.trim().length > 0) {
     finalSystemContent += `\n\nFor your broader awareness, ${globalSummary}`;
   }
-  if (persistentMemoryString && persistentMemoryString.trim().length > 0) {
-    finalSystemContent += `\n\nKey information to remember about the user: ${persistentMemoryString}`;
-  }
+  // Logic for persistentMemoryString is removed.
   conversationHistory = [{ role: 'system', content: finalSystemContent }];
-  console.log("Local chat session initialized. System Prompt:", finalSystemContent);
+  console.log("Local chat session initialized. System Prompt (without direct persistent memory injection):", finalSystemContent);
 };
 
-export const startNewOpenAIChatSession = (systemPrompt?: string, globalSummary?: string, persistentMemoryString?: string): boolean => {
-  initializeBaseHistory(systemPrompt, globalSummary, persistentMemoryString);
+// Removed persistentMemoryString from parameters
+export const startNewOpenAIChatSession = (systemPrompt?: string, globalSummary?: string): boolean => {
+  initializeBaseHistory(systemPrompt, globalSummary);
   return true;
 };
 
@@ -29,9 +30,9 @@ export const setConversationContextFromAppMessages = (
   appMessages: Message[], 
   systemPrompt?: string, 
   globalSummary?: string
-  // No persistentMemoryString here; old chats load with their original context (or default system prompt + global summary)
 ): boolean => {
-  initializeBaseHistory(systemPrompt, globalSummary); // No NEW persistent memory injection for loading old chats
+  // No NEW persistent memory injection for loading old chats
+  initializeBaseHistory(systemPrompt, globalSummary); 
   appMessages.forEach(msg => {
     conversationHistory.push({
       role: msg.sender === SenderType.USER ? 'user' : 'assistant',
@@ -50,6 +51,7 @@ export const sendMessageStream = async (
 
   try {
     const apiUrl = `${window.location.origin}/api/chat`;
+    // The backend /api/chat will now handle fetching and injecting relevant semantic memory
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -103,6 +105,9 @@ export const sendMessageStream = async (
             if (lastMessageInHistory.role === 'user') {
                  conversationHistory.push({ role: 'assistant', content: currentAssistantResponse });
             } else if (lastMessageInHistory.role === 'assistant' && lastMessageInHistory.content !== currentAssistantResponse) {
+                // This case might indicate an issue if AI responds multiple times without user input,
+                // or if client retries add assistant message to history.
+                // For now, let's assume it's a new segment of the assistant's response.
                 conversationHistory.push({ role: 'assistant', content: currentAssistantResponse });
             }
         } else {
@@ -117,12 +122,16 @@ export const sendMessageStream = async (
         if (currentAssistantResponse.trim()) {
             const lastMessage = conversationHistory[conversationHistory.length -1];
             if(lastMessage && lastMessage.role === 'assistant') { 
+                // If the last message is already assistant, update it if different (e.g. from final decode).
+                // This ensures the very last piece of text is captured.
                 if (lastMessage.content !== currentAssistantResponse) {
                     lastMessage.content = currentAssistantResponse; 
                 }
             } else if (lastMessage && lastMessage.role === 'user') {
+                // If last message was user, this is a new assistant response.
                 conversationHistory.push({ role: 'assistant', content: currentAssistantResponse });
             } else if (!lastMessage || (conversationHistory.length === 1 && conversationHistory[0].role === 'system')) { 
+                 // If history is empty or only system prompt, this is the first assistant response.
                  conversationHistory.push({ role: 'assistant', content: currentAssistantResponse });
             }
         }
@@ -161,8 +170,6 @@ export const triggerMemoryUpdateForSession = async (sessionId: string, messages:
     console.log(`[openAIService] Memory update for session ${sessionId} successfully processed by backend.`);
   } catch (error) {
     console.error(`[openAIService] Client-side error triggering memory update for session ${sessionId}:`, error);
-    // Decide if this error should be propagated or just logged
-    // For now, just log, as it's a background task.
   }
 };
 
@@ -171,4 +178,5 @@ export const isChatAvailable = (): boolean => {
   return true; 
 };
 
+// Initialize with no persistent memory string from here.
 initializeBaseHistory(DEFAULT_SYSTEM_PROMPT, "");
