@@ -13,11 +13,13 @@ import {
   doc,
   updateDoc,
   writeBatch, 
-  where // Moved import to the top
+  where, // Already at the top
+  limit // Added for fetching the most recent summary
 } from 'firebase/firestore'; 
 
 import { firebaseConfig } from './firebaseConfig.js'; 
-import { ChatSession, Message, SenderType } from '../types';
+import { ChatSession, Message, SenderType } from '../types'; // StoredSessionSummary will be imported from types.ts
+import type { StoredSessionSummary } from '../types'; // Import the updated interface
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -217,40 +219,34 @@ export const deleteChatSessionFromFirestore = async (sessionId: string): Promise
   }
 };
 
-// Function for session summaries with embeddings (store)
-export const addSessionSummaryWithEmbedding = async (
-  userId: string, // userId parameter is kept for potential future multi-user extension
+// Renamed and updated to include contentHash
+export const addSessionSummaryWithEmbeddingAndHash = async (
+  userId: string,
   sessionId: string,
   summaryText: string,
-  embeddingVector: number[]
+  embeddingVector: number[],
+  contentHash: string // New parameter
 ): Promise<void> => {
   try {
-    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId); // Uses the passed userId
+    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId);
     const summariesColRef = collection(userMemoryDocRef, SESSION_SUMMARIES_SUBCOLLECTION);
     await addDoc(summariesColRef, {
       sessionId,
       summaryText,
       embeddingVector,
+      contentHash, // Store the hash
       createdAt: serverTimestamp(),
     });
-    console.log(`Session summary and embedding for session ${sessionId} (user ${userId}) added successfully.`);
+    console.log(`Session summary, embedding, and hash for session ${sessionId} (user ${userId}) added successfully.`);
   } catch (error) {
-    console.error(`Error adding session summary and embedding for session ${sessionId} (user ${userId}):`, error);
+    console.error(`Error adding session summary, embedding, and hash for session ${sessionId} (user ${userId}):`, error);
   }
 };
 
-// New function to get all session summaries with embeddings
-export interface StoredSessionSummary {
-  id: string; // Firestore document ID of the summary entry
-  sessionId: string; // Original chat session ID
-  summaryText: string;
-  embeddingVector: number[];
-  createdAt: Date;
-}
-
+// Updated to fetch contentHash
 export const getAllSessionSummariesWithEmbeddings = async (userId: string): Promise<StoredSessionSummary[]> => {
   try {
-    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId); // Uses the passed userId
+    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId);
     const summariesColRef = collection(userMemoryDocRef, SESSION_SUMMARIES_SUBCOLLECTION);
     const summariesQuery = query(summariesColRef, orderBy('createdAt', 'desc')); 
     
@@ -263,10 +259,42 @@ export const getAllSessionSummariesWithEmbeddings = async (userId: string): Prom
         summaryText: data.summaryText,
         embeddingVector: data.embeddingVector,
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
+        contentHash: data.contentHash, // Fetch contentHash
       } as StoredSessionSummary;
     });
   } catch (error) {
     console.error(`Error fetching session summaries with embeddings for user ${userId}:`, error);
     return []; 
+  }
+};
+
+// New function to get the most recent summary for a specific session ID
+export const getMostRecentSummaryForSession = async (userId: string, sessionId: string): Promise<StoredSessionSummary | null> => {
+  try {
+    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId);
+    const summariesColRef = collection(userMemoryDocRef, SESSION_SUMMARIES_SUBCOLLECTION);
+    const q = query(
+      summariesColRef, 
+      where("sessionId", "==", sessionId), 
+      orderBy('createdAt', 'desc'), 
+      limit(1)
+    );
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      const docSnapshot = querySnapshot.docs[0];
+      const data = docSnapshot.data();
+      return {
+        id: docSnapshot.id,
+        sessionId: data.sessionId,
+        summaryText: data.summaryText,
+        embeddingVector: data.embeddingVector,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
+        contentHash: data.contentHash,
+      } as StoredSessionSummary;
+    }
+    return null;
+  } catch (error) {
+    console.error(`Error fetching most recent summary for session ${sessionId}, user ${userId}:`, error);
+    return null;
   }
 };
