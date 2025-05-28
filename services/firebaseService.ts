@@ -1,3 +1,4 @@
+
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, 
@@ -12,8 +13,8 @@ import {
   doc,
   updateDoc,
   writeBatch, 
-  deleteDoc,
-  setDoc // Added for upserting memory
+  // deleteDoc, // Removed unused import
+  setDoc 
 } from 'firebase/firestore'; 
 
 import { firebaseConfig } from './firebaseConfig.js'; 
