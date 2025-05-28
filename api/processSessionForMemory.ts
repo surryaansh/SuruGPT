@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import OpenAI from 'openai';
 // Removed getUserMemory and updateUserMemory imports
 import { addSessionSummaryWithEmbedding } from '../services/firebaseService.js';
-import { Message as AppMessage, SenderType } from '../types';
+import { Message as AppMessage, SenderType } from '../types.js'; // Added .js extension
 
 const API_KEY = process.env.OPENAI_API_KEY;
 let openai: OpenAI | null = null;
