@@ -165,31 +165,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (lastUserMessage) { 
                 const userMemoryArrayStringified = initialUserMemoryArray ? JSON.stringify(initialUserMemoryArray) : "[]";
                 
-                const memoryUpdateSystemPrompt = `You are a memory management system. Your task is to update a user's memory profile based on the latest conversation turn.
-The memory profile is a JSON array of distinct strings, each representing a fact or preference.
-Output *only* the updated JSON array of strings. Do not add any other text before or after the JSON array.
-Examples:
-- If new facts are identified, your output might be: ["User's name is Alex.", "Prefers short answers."]
-- If no new facts are identified and current memory is empty, output: []
-- If new facts are identified and current memory is ["Existing fact."], output: ["Existing fact.", "New fact."].`;
+                const memoryUpdateSystemPrompt = `You are a User Memory Updater.
+Input: Current memory (JSON array of strings), latest User message, latest AI message.
+Task: Update the memory. Add new facts/preferences. Modify/remove outdated ones. Each fact must be a distinct string.
+Output: ONLY the new JSON array of strings. Example: ["Fact 1", "Fact 2"]. If no changes, output original array. If empty and no new facts, output [].`;
                 
-                const memoryUpdateUserPrompt = `Current Memory Profile (JSON array of strings):
+                const memoryUpdateUserPrompt = `Current Memory (JSON array):
 \`\`\`json
 ${userMemoryArrayStringified}
 \`\`\`
+User said: "${lastUserMessage}"
+AI said: "${currentAssistantResponse}"
 
-Latest Conversation Turn:
-User: "${lastUserMessage}"
-AI: "${currentAssistantResponse}"
-
-Analyze the "Latest Conversation Turn". Identify any new explicit information, strong preferences, or key facts about the user stated or confirmed in this turn.
-- If new, distinct, and persistent-worthy information is found, add it to the memory profile as new strings in the JSON array.
-- If the conversation updates or invalidates an existing fact in the "Current Memory Profile", modify or remove it accordingly.
-- Prioritize information that seems important for long-term recall (e.g., names, explicitly stated preferences, significant life events mentioned). Avoid very transient details or questions.
-- Ensure each string in the output array is a concise, standalone piece of information.
-- If, after careful analysis, absolutely NO new persistent-worthy information can be extracted from this specific turn AND no existing memory needs modification, then output the "Current Memory Profile" as is. Otherwise, output the NEW or MODIFIED array reflecting the changes.
-
-Updated JSON Array Memory Profile:`;
+New Memory (JSON array):`;
 
                 console.log("/api/chat: [Memory Update] System Prompt:", memoryUpdateSystemPrompt);
                 console.log("/api/chat: [Memory Update] User Prompt:", memoryUpdateUserPrompt);
@@ -211,7 +199,6 @@ Updated JSON Array Memory Profile:`;
 
                     if (rawMemoryOutput) {
                         try {
-                            // Attempt to strip markdown fences if present
                             let jsonString = rawMemoryOutput;
                             const markdownMatch = rawMemoryOutput.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
                             if (markdownMatch && markdownMatch[1]) {
@@ -220,7 +207,7 @@ Updated JSON Array Memory Profile:`;
 
                             const parsedOutput = JSON.parse(jsonString);
                             if (Array.isArray(parsedOutput) && parsedOutput.every(item => typeof item === 'string')) {
-                                newMemoryArray = parsedOutput.filter(item => item.trim() !== ""); // Filter out empty strings
+                                newMemoryArray = parsedOutput.filter(item => item.trim() !== ""); 
                             } else {
                                 console.warn(`/api/chat: Memory update LLM output was not a valid JSON array of strings. Output: ${rawMemoryOutput}`);
                                 if (typeof rawMemoryOutput === 'string' && !rawMemoryOutput.startsWith('[') && rawMemoryOutput.length > 0) {
@@ -238,7 +225,7 @@ Updated JSON Array Memory Profile:`;
                     }
                     console.log("/api/chat: [Memory Update] Parsed newMemoryArray:", newMemoryArray);
 
-                    if (newMemoryArray && newMemoryArray.length > 0) { // Only update if there's something new or different
+                    if (newMemoryArray && newMemoryArray.length > 0) { 
                         const oldMemoryStringifiedSorted = initialUserMemoryArray ? JSON.stringify([...initialUserMemoryArray].sort()) : "[]";
                         const newMemoryStringifiedSorted = JSON.stringify([...newMemoryArray].sort());
 
@@ -249,7 +236,6 @@ Updated JSON Array Memory Profile:`;
                             console.log(`/api/chat: User memory for ${DEFAULT_USER_ID} remains unchanged after LLM evaluation (content identical after sorting).`);
                         }
                     } else if (newMemoryArray && newMemoryArray.length === 0 && initialUserMemoryArray && initialUserMemoryArray.length > 0) {
-                        // If LLM decided to clear the memory, and there was memory before.
                         await updateUserMemory(DEFAULT_USER_ID, []);
                         console.log(`/api/chat: User memory for ${DEFAULT_USER_ID} cleared by LLM evaluation.`);
                     }
