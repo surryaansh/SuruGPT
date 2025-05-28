@@ -1,7 +1,8 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import OpenAI from 'openai';
-import { getAllSessionSummariesWithEmbeddings, StoredSessionSummary } from '../services/firebaseService.js';
+import { getAllSessionSummariesWithEmbeddings } from '../services/firebaseService.js';
+import type { StoredSessionSummary } from '../types.js'; // Corrected import path
 
 const API_KEY = process.env.OPENAI_API_KEY;
 let openai: OpenAI | null = null;
