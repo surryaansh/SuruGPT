@@ -1,8 +1,9 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import OpenAI from 'openai';
-import { getUserMemory, updateUserMemory } from '../services/firebaseService.js';
-import { Message as AppMessage } from '../types'; // Assuming your Message type is exported from types.ts
+// Removed getUserMemory and updateUserMemory imports
+import { addSessionSummaryWithEmbedding } from '../services/firebaseService.js';
+import { Message as AppMessage, SenderType } from '../types';
 
 const API_KEY = process.env.OPENAI_API_KEY;
 let openai: OpenAI | null = null;
@@ -13,7 +14,20 @@ if (API_KEY) {
     console.error("CRITICAL_ERROR: OPENAI_API_KEY environment variable is not set. Memory processing functionality will be disabled.");
 }
 
-const DEFAULT_USER_ID = "default_user"; 
+const DEFAULT_USER_ID = "default_user";
+const MAX_CHARS_FOR_FULL_SESSION_SUMMARY_CONTEXT = 15000; // For 1-2 sentence summary of the full session
+// MAX_MAIN_MEMORY_ENTRIES is no longer needed as we are not maintaining a rolling list in the main document.
+
+// Helper function to create a text representation of the conversation
+const getConversationAsText = (messages: AppMessage[], charLimit?: number): string => {
+    let conversationText = messages.map(m => `${m.sender === SenderType.USER ? 'User' : 'AI'}: ${m.text}`).join("\n\n");
+    if (charLimit && conversationText.length > charLimit) {
+        conversationText = conversationText.substring(0, charLimit) + "\n\n... (conversation truncated due to length)";
+        console.log(`/api/processSessionForMemory: Conversation text for processing was truncated to ${charLimit} chars.`);
+    }
+    return conversationText;
+};
+
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method !== 'POST') {
@@ -33,6 +47,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { sessionId, sessionMessages } = body as { sessionId?: string, sessionMessages?: AppMessage[] };
 
+    if (!sessionId || typeof sessionId !== 'string') {
+        return res.status(400).json({ error: 'Invalid request body: "sessionId" string is required.' });
+    }
     if (!sessionMessages || !Array.isArray(sessionMessages)) {
         return res.status(400).json({ error: 'Invalid request body: "sessionMessages" array is required.' });
     }
@@ -42,122 +59,63 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ message: "No messages in session to process for memory." });
     }
 
-    console.log(`/api/processSessionForMemory: Received request for session ${sessionId || 'Unknown'}. Messages count: ${sessionMessages.length}`);
+    console.log(`/api/processSessionForMemory: Received request for session ${sessionId}. Messages count: ${sessionMessages.length}`);
+
+    let newSessionSummaryText: string | null = null;
 
     try {
-        let initialUserMemoryArray: string[] | null = null;
-        try {
-            initialUserMemoryArray = await getUserMemory(DEFAULT_USER_ID);
-            console.log("/api/processSessionForMemory: Fetched initialUserMemoryArray:", initialUserMemoryArray);
-        } catch (e) {
-            console.error("/api/processSessionForMemory: Error fetching user memory, proceeding as if empty:", e);
-            initialUserMemoryArray = []; // Treat as empty on error for update logic
-        }
-
-        const lastFewMessages = sessionMessages.slice(-6); // Get last ~3 turns (user + AI = 1 turn)
-        let conversationSnippet = "";
-
-        if (lastFewMessages.length > 0) {
-            conversationSnippet = "Context from the conversation that just ended:\n" +
-                lastFewMessages.map(m => `${m.sender === 'user' ? 'User' : 'AI'}: ${m.text}`).join("\n");
-        } else {
-            // This case should be caught by the length check at the beginning, but as a fallback:
-            console.log("/api/processSessionForMemory: No conversation snippet to use for memory update. Session ID:", sessionId);
-            return res.status(200).json({ message: "No meaningful conversation snippet to process." });
-        }
+        const fullConversationTextForSummary = getConversationAsText(sessionMessages, MAX_CHARS_FOR_FULL_SESSION_SUMMARY_CONTEXT);
         
-        const userMemoryArrayStringified = initialUserMemoryArray ? JSON.stringify(initialUserMemoryArray) : "[]";
-        
-        const memoryUpdateSystemPrompt = `You are a User Memory Updater.
-Input: Current memory (JSON array of strings), and context from a recently concluded conversation.
-Task: Update the memory. Add new facts/preferences. Modify/remove outdated ones. Each fact must be a distinct string.
-Output: ONLY the new JSON array of strings. Example: ["Fact 1", "Fact 2"]. If no changes, output original array. If empty and no new facts, output [].`;
-        
-        const memoryUpdateUserPrompt = `Current Memory (JSON array):
-\`\`\`json
-${userMemoryArrayStringified}
-\`\`\`
+        const sessionSummarizationSystemPrompt = `You are an expert conversation analyst. Based on the following chat transcript, provide a compact memory entry (1–2 sentences max). This entry should summarize the entire conversation, capturing the user's key preferences, emotional tones if notable, and any important facts or decisions made that should be remembered. Respond ONLY with the 1-2 sentence memory entry.`;
+        const sessionSummarizationUserPrompt = `Conversation Transcript:
+---
+${fullConversationTextForSummary}
+---
+Compact Memory Entry (1-2 sentences for future recall):`;
 
-${conversationSnippet}
-
-New Memory (JSON array):`;
-
-        console.log("/api/processSessionForMemory: System Prompt for LLM:", memoryUpdateSystemPrompt);
-        console.log("/api/processSessionForMemory: User Prompt for LLM:", memoryUpdateUserPrompt);
-
-        const memoryCompletion = await openai.chat.completions.create({
-            model: 'gpt-4o-mini', 
+        console.log("/api/processSessionForMemory (Session Summary): Sending request to LLM (gpt-4.1-nano) for session summary.");
+        const summaryCompletion = await openai.chat.completions.create({
+            model: 'gpt-4.1-nano', // Model for session summarization, as per user request
             messages: [
-                { role: 'system', content: memoryUpdateSystemPrompt },
-                { role: 'user', content: memoryUpdateUserPrompt }
+                { role: 'system', content: sessionSummarizationSystemPrompt },
+                { role: 'user', content: sessionSummarizationUserPrompt }
             ],
-            max_tokens: 350, 
-            temperature: 0.2,
+            max_tokens: 150, // Max tokens for the summary
+            temperature: 0.5,
         });
-        
-        let newMemoryArray: string[] | null = null;
-        const rawMemoryOutput = memoryCompletion.choices[0]?.message?.content?.trim();
-        console.log("/api/processSessionForMemory: Raw LLM output for memory:", rawMemoryOutput);
 
-        if (rawMemoryOutput) {
-            try {
-                let jsonString = rawMemoryOutput;
-                const markdownMatch = rawMemoryOutput.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
-                if (markdownMatch && markdownMatch[1]) {
-                    jsonString = markdownMatch[1].trim();
-                }
+        newSessionSummaryText = summaryCompletion.choices[0]?.message?.content?.trim() || null;
 
-                const parsedOutput = JSON.parse(jsonString);
-                if (Array.isArray(parsedOutput) && parsedOutput.every(item => typeof item === 'string')) {
-                    newMemoryArray = parsedOutput.filter(item => item.trim() !== ""); 
-                } else {
-                    console.warn(`/api/processSessionForMemory: LLM output was not a valid JSON array of strings. Output: ${rawMemoryOutput}`);
-                    if (typeof rawMemoryOutput === 'string' && !rawMemoryOutput.startsWith('[') && rawMemoryOutput.length > 0) {
-                         newMemoryArray = [rawMemoryOutput.trim()].filter(item => item !== "");
-                         console.log("/api/processSessionForMemory: Salvaged plain string LLM memory output into a single-entry array.");
-                    }
-                }
-            } catch (parseError) {
-                console.warn(`/api/processSessionForMemory: Failed to parse LLM output as JSON. Output: ${rawMemoryOutput}. Error: ${parseError}`);
-                 if (typeof rawMemoryOutput === 'string' && !rawMemoryOutput.startsWith('[') && rawMemoryOutput.length > 0) {
-                    newMemoryArray = [rawMemoryOutput.trim()].filter(item => item !== "");
-                    console.log("/api/processSessionForMemory: Salvaged plain string LLM memory output (due to parse error) into a single-entry array.");
-                }
-            }
-        }
-        console.log("/api/processSessionForMemory: Parsed newMemoryArray:", newMemoryArray);
+        if (newSessionSummaryText && newSessionSummaryText.length > 0) {
+            console.log(`/api/processSessionForMemory (Session Summary): Generated compact summary for session ${sessionId}: "${newSessionSummaryText}"`);
 
-        if (newMemoryArray && newMemoryArray.length > 0) { 
-            const oldMemoryStringifiedSorted = initialUserMemoryArray ? JSON.stringify([...initialUserMemoryArray].sort()) : "[]";
-            const newMemoryStringifiedSorted = JSON.stringify([...newMemoryArray].sort());
+            // Logic for updating the main memory_json_array directly is removed.
+            // We only store this summary with its embedding.
 
-            if (newMemoryStringifiedSorted !== oldMemoryStringifiedSorted) {
-                await updateUserMemory(DEFAULT_USER_ID, newMemoryArray); 
-                console.log(`/api/processSessionForMemory: User memory updated for ${DEFAULT_USER_ID}.`);
+            console.log("/api/processSessionForMemory (Embedding): Requesting embedding for summary using 'text-embedding-3-small'.");
+            const embeddingResponse = await openai.embeddings.create({
+                model: "text-embedding-3-small", // Model for embedding generation
+                input: newSessionSummaryText,
+            });
+
+            if (embeddingResponse && embeddingResponse.data && embeddingResponse.data[0] && embeddingResponse.data[0].embedding) {
+                const embeddingVector = embeddingResponse.data[0].embedding;
+                console.log(`/api/processSessionForMemory (Embedding): Embedding generated for summary of session ${sessionId}.`);
+                // Store this summary and its embedding
+                await addSessionSummaryWithEmbedding(DEFAULT_USER_ID, sessionId, newSessionSummaryText, embeddingVector);
             } else {
-                console.log(`/api/processSessionForMemory: User memory for ${DEFAULT_USER_ID} remains unchanged after LLM evaluation (content identical after sorting).`);
+                console.error(`/api/processSessionForMemory (Embedding): Failed to generate a valid embedding for session ${sessionId}.`, embeddingResponse);
             }
-        } else if (newMemoryArray && newMemoryArray.length === 0 && initialUserMemoryArray && initialUserMemoryArray.length > 0) {
-            await updateUserMemory(DEFAULT_USER_ID, []); // Explicitly clear memory if LLM returns empty array
-            console.log(`/api/processSessionForMemory: User memory for ${DEFAULT_USER_ID} cleared by LLM evaluation.`);
-        } else {
-            console.warn(`/api/processSessionForMemory: LLM call resulted in empty/invalid array or no change for ${DEFAULT_USER_ID}. Memory not updated or cleared if it was already empty.`);
-        }
-        
-        return res.status(200).json({ message: "Memory processed successfully." });
 
+        } else {
+            console.log(`/api/processSessionForMemory (Session Summary): No summary text generated by LLM for session ${sessionId}. Summary and embedding will not be stored.`);
+        }
     } catch (error: any) {
-        console.error('/api/processSessionForMemory: Error during memory processing:', error);
+        console.error('/api/processSessionForMemory (Session Summary/Embedding): Error during processing:', error);
         if (error instanceof OpenAI.APIError) {
             console.error(`/api/processSessionForMemory: OpenAI API Error Details: Status=${error.status}, Type=${error.type}, Code=${error.code}, Param=${error.param}, Message=${error.message}`);
-            return res.status(error.status || 500).json({ 
-                error: `OpenAI API Error: ${error.name || 'Unknown Error'}`,
-                details: error.message 
-            });
         }
-        return res.status(500).json({ 
-            error: 'Failed to process session for memory.',
-            details: error.message || 'An unexpected server error occurred.'
-        });
     }
+    
+    return res.status(200).json({ message: "Session processed for summary and embedding storage." });
 }
