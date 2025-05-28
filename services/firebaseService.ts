@@ -13,7 +13,6 @@ import {
   doc,
   updateDoc,
   writeBatch, 
-  // deleteDoc, // Removed unused import
   setDoc 
 } from 'firebase/firestore'; 
 
@@ -25,14 +24,14 @@ const db = getFirestore(app);
 
 const CHAT_SESSIONS_COLLECTION = 'chat_sessions';
 const MESSAGES_SUBCOLLECTION = 'messages';
-const USER_MEMORIES_COLLECTION = 'user_memories'; // New collection for user memory
+const USER_MEMORIES_COLLECTION = 'user_memories';
 
 const convertMessageTimestamp = (messageData: any): Message => {
   const timestampField = messageData.timestamp;
   return {
     ...messageData,
     timestamp: timestampField instanceof Timestamp ? timestampField.toDate() : new Date(timestampField),
-    feedback: messageData.feedback === undefined ? null : messageData.feedback, // Ensure feedback defaults to null
+    feedback: messageData.feedback === undefined ? null : messageData.feedback,
   } as Message;
 };
 
@@ -111,7 +110,7 @@ export const addMessageToFirestore = async (
       {
         ...messageData,
         timestamp: serverTimestamp(), 
-        feedback: null, // Initialize feedback as null
+        feedback: null,
       }
     );
     const docSnap = await getDoc(messageRef);
@@ -196,29 +195,42 @@ export const deleteChatSessionFromFirestore = async (sessionId: string): Promise
 };
 
 // Functions for user memory
-export const getUserMemory = async (userId: string): Promise<string | null> => {
+export const getUserMemory = async (userId: string): Promise<string[] | null> => {
   try {
     const memoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId);
     const docSnap = await getDoc(memoryDocRef);
     if (docSnap.exists()) {
-      return docSnap.data()?.memory_summary || null;
+      const memoryJsonArrayString = docSnap.data()?.memory_json_array;
+      if (memoryJsonArrayString && typeof memoryJsonArrayString === 'string') {
+        try {
+          const parsedMemory = JSON.parse(memoryJsonArrayString);
+          if (Array.isArray(parsedMemory) && parsedMemory.every(item => typeof item === 'string')) {
+            return parsedMemory as string[];
+          }
+          console.warn(`Stored memory for user ${userId} is not a valid JSON array of strings.`);
+          return null;
+        } catch (e) {
+          console.error(`Error parsing memory JSON for user ${userId}:`, e);
+          return null;
+        }
+      }
+      return null; // Field exists but not a string, or is empty
     }
     console.log(`No memory found for user ${userId}.`);
     return null;
   } catch (error) {
     console.error(`Error fetching memory for user ${userId}:`, error);
-    return null; // Return null on error to allow chat to proceed
+    return null;
   }
 };
 
-export const updateUserMemory = async (userId: string, memorySummary: string): Promise<void> => {
+export const updateUserMemory = async (userId: string, memoryArray: string[]): Promise<void> => {
   try {
     const memoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId);
-    // Using setDoc with merge: true to create the document if it doesn't exist, or update it if it does.
-    await setDoc(memoryDocRef, { memory_summary: memorySummary, updatedAt: serverTimestamp() }, { merge: true });
+    const memoryJsonArrayString = JSON.stringify(memoryArray);
+    await setDoc(memoryDocRef, { memory_json_array: memoryJsonArrayString, updatedAt: serverTimestamp() }, { merge: true });
     console.log(`Memory for user ${userId} updated/created successfully.`);
   } catch (error) {
     console.error(`Error updating memory for user ${userId}:`, error);
-    // Do not throw, allow chat flow to continue
   }
 };
