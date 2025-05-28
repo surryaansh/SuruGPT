@@ -86,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             if (queryEmbedding) {
                 console.log("/api/chat: Fetching all session summaries with embeddings.");
-                const allSummaries = await getAllSessionSummariesWithEmbeddings(DEFAULT_USER_ID);
+                const allSummaries: StoredSessionSummary[] = await getAllSessionSummariesWithEmbeddings(DEFAULT_USER_ID); // Explicitly type allSummaries
                 console.log(`/api/chat: Found ${allSummaries.length} stored session summaries.`);
 
                 if (allSummaries.length > 0) {
