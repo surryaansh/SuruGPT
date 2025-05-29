@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { IconMenu, IconHeart } from '../constants';
+import { IconOpenSidebar, IconHeart } from '../constants'; // Updated import
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -16,7 +16,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onNewChat }) => {
         className="p-1.5 sm:p-2 text-[#EAE6F0] hover:text-[#FF8DC7] flex-shrink-0"
         aria-label="Open menu"
       >
-        <IconMenu className="w-5 h-5 sm:w-6 sm:h-6" />
+        <IconOpenSidebar className="w-5 h-5 sm:w-6 sm:h-6" /> {/* Replaced IconMenu */}
       </button>
 
       {/* Center Title: Allows shrinking and truncation. */}
