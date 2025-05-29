@@ -37,14 +37,13 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
         const container = scrollContainerRef.current;
 
         if (element && container) {
-          console.log(`[ChatMessageList] Attempting to scroll message ${scrollToMessageId} to top using scrollTop.`);
+          console.log(`[ChatMessageList] Attempting to scroll message ${scrollToMessageId} to top using getBoundingClientRect method.`);
           const timer = setTimeout(() => {
-            // Calculate the scroll position: element.offsetTop is relative to its offsetParent.
-            // The offsetParent is the <div className="max-w-2xl mx-auto ..."> which is the direct child of the scroll container content area (after pt-11).
-            // So, element.offsetTop is the desired scrollTop value for the container.
-            container.scrollTo({ top: element.offsetTop, behavior: 'smooth' });
+            // Calculate the scroll position to bring the element's top to the container's top
+            const newScrollTop = container.scrollTop + element.getBoundingClientRect().top - container.getBoundingClientRect().top;
+            container.scrollTo({ top: newScrollTop, behavior: 'smooth' });
             onScrollToMessageComplete(); // Reset the trigger
-            console.log(`[ChatMessageList] Scroll initiated for ${scrollToMessageId}, onScrollToMessageComplete called.`);
+            console.log(`[ChatMessageList] Scroll initiated for ${scrollToMessageId} to target scrollTop ${newScrollTop}, onScrollToMessageComplete called.`);
           }, 50); // Small delay for DOM readiness
           return () => clearTimeout(timer);
         } else {
