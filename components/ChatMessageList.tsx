@@ -26,37 +26,54 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
   chatLoadScrollKey
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null); // Ref for the scrollable container
 
   // Effect to scroll a specific user message to the top
   useEffect(() => {
-    if (scrollToMessageId && messages.find(m => m.id === scrollToMessageId)) { // Ensure message exists in current list
-      const element = document.getElementById(scrollToMessageId);
-      if (element) {
-        console.log(`[ChatMessageList] Scrolling to user message ID: ${scrollToMessageId}`);
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      } else {
-        console.warn(`[ChatMessageList] User message Element with ID ${scrollToMessageId} not found for scrolling, though present in messages prop.`);
+    if (scrollToMessageId) {
+      const messageExistsInData = messages.some(m => m.id === scrollToMessageId);
+      if (messageExistsInData) {
+        const element = document.getElementById(scrollToMessageId);
+        const container = scrollContainerRef.current;
+
+        if (element && container) {
+          console.log(`[ChatMessageList] Attempting to scroll message ${scrollToMessageId} to top using scrollTop.`);
+          const timer = setTimeout(() => {
+            // Calculate the scroll position: element.offsetTop is relative to its offsetParent.
+            // The offsetParent is the <div className="max-w-2xl mx-auto ..."> which is the direct child of the scroll container content area (after pt-11).
+            // So, element.offsetTop is the desired scrollTop value for the container.
+            container.scrollTo({ top: element.offsetTop, behavior: 'smooth' });
+            onScrollToMessageComplete(); // Reset the trigger
+            console.log(`[ChatMessageList] Scroll initiated for ${scrollToMessageId}, onScrollToMessageComplete called.`);
+          }, 50); // Small delay for DOM readiness
+          return () => clearTimeout(timer);
+        } else {
+          if (!element) console.warn(`[ChatMessageList] Element ${scrollToMessageId} not found for scrolling to top.`);
+          if (!container) console.warn(`[ChatMessageList] Scroll container ref not found for scrolling ${scrollToMessageId}.`);
+          // Call complete anyway to avoid getting stuck if element never found
+          const errorClearTimer = setTimeout(onScrollToMessageComplete, 100);
+          return () => clearTimeout(errorClearTimer);
+        }
       }
-      // Always call complete to reset the state in App.tsx,
-      // to prevent getting stuck if element is somehow not found despite being in messages.
-      onScrollToMessageComplete(); 
-    } else if (scrollToMessageId) {
-      // This case means scrollToMessageId is set, but the message isn't in the list yet.
-      // The effect will re-run when 'messages' updates.
-      // console.log(`[ChatMessageList] scrollToMessageId ${scrollToMessageId} is set, but message not yet in 'messages' prop. Waiting for messages update.`);
+      // If message doesn't exist in data yet, effect will re-run when `messages` updates.
     }
-  }, [scrollToMessageId, onScrollToMessageComplete, messages]); // Added messages back to dependency array
+  }, [scrollToMessageId, messages, onScrollToMessageComplete]);
 
   // Effect to scroll to the bottom when a chat is loaded (signaled by chatLoadScrollKey)
   useEffect(() => {
     if (chatLoadScrollKey && messages.length > 0) { 
-      console.log(`[ChatMessageList] Chat loaded (key: ${chatLoadScrollKey}), scrolling to bottom.`);
-      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }); 
+      console.log(`[ChatMessageList] Chat loaded (key: ${chatLoadScrollKey}), attempting to scroll to bottom.`);
+      const timer = setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }); 
+        console.log(`[ChatMessageList] Scrolled to bottom for key: ${chatLoadScrollKey}.`);
+      }, 50); // Small delay to ensure DOM is fully rendered
+      return () => clearTimeout(timer);
     }
-  }, [chatLoadScrollKey, messages.length]); 
+  }, [chatLoadScrollKey, messages]); // Depend on `messages` to ensure it re-evaluates if messages load slightly after key change
 
   return (
     <div 
+      ref={scrollContainerRef} // Assign ref to the scrollable container
       className="flex-grow px-6 pt-11 overflow-y-auto chat-message-list-scroll-container" 
       tabIndex={-1} 
     >
