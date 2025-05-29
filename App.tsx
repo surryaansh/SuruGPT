@@ -622,9 +622,9 @@ const App: React.FC = () => {
       {isSidebarOpen && !isDesktopView && (
         <div className="fixed inset-0 bg-black/50 z-30 sidebar-overlay" onClick={handleToggleSidebar} aria-hidden="true"></div>
       )}
-      <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#393641] transition-all duration-300 ease-in-out ${(isSidebarOpen && isDesktopView) ? 'md:ml-60' : 'ml-0'}`}> {/* Adjusted ml-64 to ml-60 */}
+      <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#393641] transition-all duration-300 ease-in-out ${(isSidebarOpen && isDesktopView) ? 'md:ml-60' : 'ml-0'}`}>
         <Header onToggleSidebar={handleToggleSidebar} onNewChat={handleNewChat} />
-        <main className="flex-grow flex flex-col overflow-hidden">
+        <main className="flex-grow flex flex-col overflow-hidden bg-[#2E2B36]"> {/* Changed background here */}
           {isMessagesLoading && <div className="flex-grow flex items-center justify-center"><p className="text-[#A09CB0] text-lg animate-pulse">Loading chat...</p></div>}
           {!isMessagesLoading && showWelcome && <WelcomeMessage />}
           {!isMessagesLoading && !showWelcome && 
