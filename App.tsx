@@ -105,6 +105,9 @@ const App: React.FC = () => {
   const activeChatIdForTimerRef = useRef<string | null>(null);
   const currentMessagesForTimerRef = useRef<Message[]>([]);
 
+  const [scrollToMessageId, setScrollToMessageId] = useState<string | null>(null);
+  const [chatLoadScrollKey, setChatLoadScrollKey] = useState<number | null>(null); // For scrolling to bottom on chat load
+
   // Effect to keep refs updated for the timer callback
   useEffect(() => {
     activeChatIdForTimerRef.current = activeChatId;
@@ -262,6 +265,7 @@ const App: React.FC = () => {
 
     setCurrentMessages([]); 
     setActiveChatId(null); 
+    setChatLoadScrollKey(Date.now()); // Reset scroll for new chat (typically empty, but good practice)
     // setChatReady(checkChatAvailability()); // Already checked on initial load, and OpenAI context will be reset by activeChatId change effect
     if (!isDesktopView) setIsSidebarOpen(false);
 
@@ -297,6 +301,7 @@ const App: React.FC = () => {
     try {
       const messages = await getMessagesForSession(chatId);
       setCurrentMessages(messages);
+      setChatLoadScrollKey(Date.now()); // Trigger scroll to bottom for newly loaded chat
       // setConversationContextFromAppMessages is part of resetAiContextWithSystemPrompt now,
       // which is triggered by setActiveChatId changing and the subsequent useEffect.
       // For selected chats, the history needs to be explicitly loaded into the AI context.
@@ -397,16 +402,16 @@ const App: React.FC = () => {
       return;
     }
     
-    if (!activeChatId) { 
-      const tempUserMessageId = crypto.randomUUID();
-      const tempSessionId = `PENDING_${crypto.randomUUID()}`;
+    const userMessageId = crypto.randomUUID(); // Pre-generate user message ID for scroll-to-top
+    const userMessageForUi: Message = {
+      id: userMessageId,
+      text,
+      sender: SenderType.USER,
+      timestamp: new Date(),
+    };
 
-      const optimisticUserMessage: Message = {
-        id: tempUserMessageId,
-        text,
-        sender: SenderType.USER,
-        timestamp: new Date(),
-      };
+    if (!activeChatId) { 
+      const tempSessionId = `PENDING_${crypto.randomUUID()}`;
       const optimisticSession: ChatSession = {
         id: tempSessionId,
         title: text.substring(0, 30) + (text.length > 30 ? "..." : "") || "New Chat...",
@@ -414,9 +419,10 @@ const App: React.FC = () => {
         firstMessageTextForTitle: text,
       };
 
-      setCurrentMessages([optimisticUserMessage]);
+      setCurrentMessages([userMessageForUi]);
       setAllChatSessions(prevSessions => [optimisticSession, ...prevSessions]);
       setActiveChatId(tempSessionId); // This will trigger AI context reset via useEffect
+      setScrollToMessageId(userMessageId); // Scroll this new user message to top
 
       (async () => {
         try {
@@ -424,8 +430,6 @@ const App: React.FC = () => {
           const newSessionFromDb = await createChatSessionInFirestore(title, text);
           const actualSessionId = newSessionFromDb.id;
           
-          // Critical: Update activeChatId to the actual ID from DB.
-          // This ensures subsequent operations (like getAiResponse) use the correct ID.
           setActiveChatId(actualSessionId); 
           
           setAllChatSessions(prevSessions => 
@@ -434,15 +438,25 @@ const App: React.FC = () => {
           
           const finalUserMessage = await addMessageToFirestore(actualSessionId, { text, sender: SenderType.USER });
           setCurrentMessages(prevMsgs => 
-            prevMsgs.map(m => m.id === tempUserMessageId ? finalUserMessage : m)
+            // Replace the UI-only message with the one from DB (which now has the correct ID from DB if different, and final timestamp)
+            // We need to ensure the ID used for scroll-to-top is still relevant.
+            // Since we pre-generated userMessageId and used it for UI and scroll, we might not need to replace it here
+            // if addMessageToFirestore returns a message with the same ID or if we just update its timestamp.
+            // For simplicity, assuming addMessageToFirestore returns a message with a new ID.
+            // So we find the original optimistic message by its TEXT content if IDs might change.
+            // Or, more robustly, if addMessageToFirestore can take an ID, pass userMessageId.
+            // For now, let's assume addMessageToFirestore creates a new ID.
+            // We'll update the UI message's ID to the one from DB *if* it's different from the pre-generated userMessageId
+            // This is a bit complex. Let's ensure `finalUserMessage` is the one for the UI.
+            prevMsgs.map(m => (m.id === userMessageId ? { ...finalUserMessage, id: userMessageId } : m)) // Keep original ID for scroll
           ); 
           
           await getAiResponse(finalUserMessage.text, actualSessionId);
         } catch (err) {
           console.error("Error during new chat creation or first message send:", err);
-          setCurrentMessages(prev => prev.filter(m => m.id !== tempUserMessageId));
+          setCurrentMessages(prev => prev.filter(m => m.id !== userMessageId));
           setAllChatSessions(prev => prev.filter(s => s.id !== tempSessionId));
-          if (activeChatId === tempSessionId) setActiveChatId(null); // Reset activeChatId if it was the temp one
+          if (activeChatId === tempSessionId) setActiveChatId(null); 
           setCurrentMessages(prev => [...prev, { 
             id: crypto.randomUUID(), 
             text: "Failed to start new chat. Please try again.", 
@@ -454,8 +468,15 @@ const App: React.FC = () => {
       })();
 
     } else { 
+      // For existing chat, add user message to UI first, then to DB
+      setCurrentMessages(prevMessages => [...prevMessages, userMessageForUi]); 
+      setScrollToMessageId(userMessageId); // Scroll this new user message to top
+      
       const finalUserMessage = await addMessageToFirestore(activeChatId, { text, sender: SenderType.USER });
-      setCurrentMessages(prevMessages => [...prevMessages, finalUserMessage]); 
+       // Optional: update the message in currentMessages if DB op changed anything (e.g. timestamp)
+      setCurrentMessages(prevMessages => 
+          prevMessages.map(msg => msg.id === userMessageId ? { ...finalUserMessage, id: userMessageId } : msg)
+      );
       await getAiResponse(finalUserMessage.text, activeChatId);
     }
     
@@ -506,6 +527,8 @@ const App: React.FC = () => {
 
   const handleSaveUserEdit = useCallback(async (messageId: string, newText: string) => {
     if (!activeChatId || activeChatId.startsWith("PENDING_")) return;
+    
+    setScrollToMessageId(messageId); // Scroll edited message to top
 
     setCurrentMessages(prevMessages => {
         const messageIndex = prevMessages.findIndex(msg => msg.id === messageId);
@@ -552,6 +575,7 @@ const App: React.FC = () => {
     if (activeChatId === sessionToDeleteId) {
       setCurrentMessages([]);
       setActiveChatId(null); // This will trigger AI context reset via useEffect
+      setChatLoadScrollKey(Date.now()); // Ensure clean state for scroll
     }
     
     setIsDeleteConfirmationOpen(false);
@@ -604,6 +628,11 @@ const App: React.FC = () => {
     }
   };
 
+  const handleScrollToMessageComplete = useCallback(() => {
+    setScrollToMessageId(null);
+    // console.log("[App] Scroll to message complete, reset scrollToMessageId.");
+  }, []);
+
   const showWelcome = !activeChatId && currentMessages.length === 0 && chatReady && !isSessionsLoading && !isMessagesLoading;
 
   return (
@@ -635,6 +664,9 @@ const App: React.FC = () => {
               onRateResponse={handleRateResponse}
               onRetryResponse={handleRetryAiResponse}
               onSaveEdit={handleSaveUserEdit}
+              scrollToMessageId={scrollToMessageId}
+              onScrollToMessageComplete={handleScrollToMessageComplete}
+              chatLoadScrollKey={chatLoadScrollKey} // Pass the key
             />}
         </main>
         <ChatInputBar onSendMessage={handleSendMessage} isLoading={isLoadingAiResponse} isChatAvailable={chatReady} />
