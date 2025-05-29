@@ -53,10 +53,10 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
   previousUserMessageText 
 }) => {
   const isUser = message.sender === SenderType.USER;
-  const [displayedText, setDisplayedText] = useState('');
+  const [displayedText, setDisplayedText] = useState(isUser ? message.text : '');
   const [showTypingCursor, setShowTypingCursor] = useState(false);
   const typingTimeoutRef = useRef<number | null>(null);
-  const typingSpeed = 25; // Adjusted typing speed
+  const typingSpeed = 35;
 
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.text);
@@ -77,7 +77,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
       if (actionButtonReadyTimeoutRef.current) clearTimeout(actionButtonReadyTimeoutRef.current);
       actionButtonReadyTimeoutRef.current = window.setTimeout(() => {
         setActionButtonsReady(true);
-      }, 150); 
+      }, 150); // Small delay to ensure text is fully rendered before buttons appear
     } else if (isStreamingAiText || !message.text || message.text.trim() === '') {
       setActionButtonsReady(false);
     }
@@ -87,57 +87,58 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
   }, [isUser, isStreamingAiText, message.text]);
 
 
-  // Effect for managing displayed text and typing animation
   useEffect(() => {
-    if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
+    if (isUser) {
+      setDisplayedText(message.text);
+      setShowTypingCursor(false);
+      if (isEditing) setEditText(message.text); // Ensure editText is synced if message.text changes externally while editing
+      return;
     }
 
-    if (isUser) {
+    // AI messages
+    if (isStreamingAiText && message.text) {
+        // Only update if the incoming text is different, to avoid interrupting manual edits or mid-stream fixes
+        if (displayedText !== message.text) {
+            let currentTypedLength = displayedText.length;
+            // If the new text is shorter or doesn't start with the current displayed text, reset.
+            if (message.text.length < displayedText.length || !message.text.startsWith(displayedText)) {
+                setDisplayedText('');
+                currentTypedLength = 0;
+            }
+
+            const type = () => {
+                if (currentTypedLength < message.text.length) {
+                    setDisplayedText(prev => message.text.substring(0, prev.length + 1)); // More robust update
+                    currentTypedLength++; // This local var is now out of sync with displayedText.length, better to rely on displayedText.length in next iteration
+                    setShowTypingCursor(true);
+                    typingTimeoutRef.current = window.setTimeout(type, typingSpeed);
+                } else {
+                    setShowTypingCursor(false);
+                    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                }
+            };
+
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            // Use displayedText.length directly for the next character to type
+            typingTimeoutRef.current = window.setTimeout(type, displayedText.length === currentTypedLength ? typingSpeed: 0);
+        }
+    } else if (!isStreamingAiText && message.text) {
+        // Not streaming, set text directly
         setDisplayedText(message.text);
         setShowTypingCursor(false);
-        if (isEditing && editText !== message.text) { // Sync editText if prop message.text changes during edit
-            setEditText(message.text);
-        }
-        return; // Done with user messages
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    } else if (isStreamingAiText && !message.text) {
+        // Streaming but no text yet (initial AI "thinking" state)
+        setDisplayedText('');
+        setShowTypingCursor(false); // No cursor if no text is being typed
     }
 
-    // AI Message Logic:
-    if (isStreamingAiText) {
-        // If message.text (target, full accumulated chunk) is available and displayedText needs to catch up
-        if (message.text && displayedText !== message.text) {
-            setShowTypingCursor(true);
-            typingTimeoutRef.current = window.setTimeout(() => {
-                // Progressively reveal text
-                // Ensure we don't try to substring beyond message.text length if displayedText somehow got longer
-                const nextLength = Math.min(displayedText.length + 1, message.text.length);
-                setDisplayedText(message.text.substring(0, nextLength));
-            }, typingSpeed);
-        } else if (message.text && displayedText === message.text) {
-            // Typing complete for the current message.text
-            setShowTypingCursor(false);
-        } else if (!message.text) { // Streaming but no text yet (e.g., AI is "thinking")
-            if (displayedText !== '') setDisplayedText(''); // Reset displayed text if it's not already empty
-            setShowTypingCursor(false); // `showInitialLoadingDots` handles the "thinking" visual
-        }
-    } else { // Not streaming AI text (message is final and complete)
-        setDisplayedText(message.text || ''); // Set to final text, or empty string if null/undefined
-        setShowTypingCursor(false);
-    }
 
     return () => {
-        if (typingTimeoutRef.current) {
-            clearTimeout(typingTimeoutRef.current);
-        }
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
-  }, [message.id, message.text, isUser, isStreamingAiText, displayedText, isEditing, editText]);
-
-  // Effect to initialize or reset displayedText when message.id changes (i.e., it's a new message instance)
-  // or if the sender type changes (highly unlikely for an existing message but defensive).
-  useEffect(() => {
-      setDisplayedText(isUser ? message.text : ''); // AI messages start empty for typing effect, user messages show full text.
-  }, [message.id, isUser]); // Run only when message ID or user type changes
-
+  // Ensure displayedText is in dependency array if logic inside effect depends on its previous state for typing.
+  }, [message.text, message.sender, isStreamingAiText, isUser, displayedText]); 
 
   const showInitialLoadingDots = message.sender === SenderType.AI && isStreamingAiText && !message.text && !displayedText;
 
@@ -178,6 +179,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
   useEffect(() => {
     if (isEditing && editInputRef.current) {
       editInputRef.current.focus();
+      // Auto-resize textarea
       editInputRef.current.style.height = 'auto';
       editInputRef.current.style.height = `${editInputRef.current.scrollHeight}px`;
     }
@@ -185,6 +187,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setEditText(e.target.value);
+    // Auto-resize textarea
     e.target.style.height = 'auto';
     e.target.style.height = `${e.target.scrollHeight}px`;
   };
@@ -206,6 +209,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
   const baseActionButtonsContainerClass = "mt-1 flex items-center space-x-1.5";
   let dynamicClassesForContainer = "";
 
+  // If it's the latest AI message and it's not streaming (i.e., fully loaded), show buttons immediately.
   if (!isUser && isOverallLatestMessage && !isStreamingAiText && actionButtonsReady && !showInitialLoadingDots && message.text && message.text.trim() !== '') {
     dynamicClassesForContainer = 'actions-visible-immediately';
   }
@@ -215,15 +219,15 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
     <div id={message.id} className={`message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}>
       <div className={`max-w-[85%] sm:max-w-[75%]`}>
         {showInitialLoadingDots ? (
-          <div className="py-1.5 px-0 text-sm leading-relaxed"> 
+          <div className="py-1.5 px-0 text-sm leading-relaxed"> {/* Adjusted py for AI loading dots */}
             <span className="pulsating-white-dot" aria-hidden="true"></span>
           </div>
         ) : (
           <div
             className={`${
               isUser
-                ? 'bg-[#4A4754] rounded-3xl py-2 px-3.5' 
-                : 'py-1.5 px-0' 
+                ? 'bg-[#4A4754] rounded-3xl py-2 px-3.5' // Updated user bubble background and padding
+                : 'py-1.5 px-0' // Updated AI message container padding
             }`}
           >
             {isEditing && isUser ? (
