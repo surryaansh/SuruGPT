@@ -56,7 +56,7 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({ onSendMessage, isLoading, i
   const canSend = inputValue.trim() !== '' && !isLoading && effectiveIsChatAvailable;
 
   return (
-    <div className="bg-[#393641] py-3 sm:py-4 px-4 sm:px-6 md:px-10 border-t border-[#5A5666] sticky bottom-0 z-10">
+    <div className="bg-[#2E2B36] py-3 sm:py-4 px-4 sm:px-6 md:px-10 sticky bottom-0 z-10"> {/* Removed border, updated background */}
       <div className="max-w-2xl mx-auto"> 
         <div className="flex items-center bg-[#4A4754] rounded-xl p-1.5 shadow-sm">
           <button 
