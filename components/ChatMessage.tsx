@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, SenderType } from '../types';
 import { IconClipboardDocumentList, IconPencil, IconThumbUp, IconThumbDown, IconArrowRepeat, IconThumbUpSolid, IconThumbDownSolid, IconCheck } from '../constants';
@@ -217,7 +216,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
   const actionButtonsContainerClass = `${baseActionButtonsContainerClass} ${dynamicClassesForContainer}`;
 
   return (
-    <div className={`message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}>
+    <div id={message.id} className={`message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}>
       <div className={`max-w-[85%] sm:max-w-[75%]`}>
         {showInitialLoadingDots ? (
           <div className="py-1.5 px-0 text-sm leading-relaxed"> {/* Adjusted py for AI loading dots */}
