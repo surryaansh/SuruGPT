@@ -40,7 +40,7 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
       // Always call complete to reset the state in App.tsx, even if element not found, to prevent getting stuck
       onScrollToMessageComplete(); 
     }
-  }, [scrollToMessageId, onScrollToMessageComplete, messages]); // Added messages to re-evaluate if element appears later
+  }, [scrollToMessageId, onScrollToMessageComplete]); // Removed messages from dependency array
 
   // Effect to scroll to the bottom when a chat is loaded (signaled by chatLoadScrollKey)
   useEffect(() => {
@@ -52,10 +52,10 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
 
   return (
     <div 
-      className="flex-grow px-6 py-11 overflow-y-auto chat-message-list-scroll-container"
+      className="flex-grow px-6 pt-11 overflow-y-auto chat-message-list-scroll-container" // Changed py-11 to pt-11
       tabIndex={-1} // Allows focus for programmatic scrolling if needed, but main scrolling is via JS
     >
-      <div className="max-w-2xl mx-auto space-y-9">
+      <div className="max-w-2xl mx-auto space-y-9 pb-11"> {/* Added pb-11 here */}
         {messages.map((msg, index) => {
           const isOverallLatestMessage = index === messages.length - 1;
           const isStreamingAiText =
@@ -82,8 +82,8 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
             />
           );
         })}
-        <div ref={messagesEndRef} />
       </div>
+      <div ref={messagesEndRef} style={{ height: '1px' }} /> {/* Moved messagesEndRef here and gave it minimal height */}
     </div>
   );
 };
