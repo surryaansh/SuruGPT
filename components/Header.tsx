@@ -22,7 +22,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onNewChat }) => {
       {/* Center Title: Allows shrinking and truncation. */}
       <div className="flex-grow flex items-center justify-center min-w-0 px-1 sm:px-2">
         {/* Chevron icon removed from here */}
-        <span className="text-[#EAE6F0] text-lg sm:text-xl font-semibold truncate">SuruGPT</span>
+        <span className="text-[#EAE6F0] text-lg sm:text-xl font-normal truncate">SuruGPT</span>
       </div>
       
       {/* Right Button: New Chat */}
