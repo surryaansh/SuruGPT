@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, SenderType } from '../types';
 import { IconClipboardDocumentList, IconPencil, IconThumbUp, IconThumbDown, IconArrowRepeat, IconThumbUpSolid, IconThumbDownSolid, IconCheck } from '../constants';
@@ -23,10 +24,10 @@ const ActionButtonWithTooltip: React.FC<{
   wrapperClassName?: string; // Applied to the wrapping div of button + tooltip
   disabled?: boolean;
 }> = ({ onClick, label, tooltipText, children, className, wrapperClassName, disabled }) => (
-  <div className={`relative group ${wrapperClassName || ''}`}> {/* Apply wrapperClassName here */}
+  <div className={\`relative group \${wrapperClassName || ''}\`}> {/* Apply wrapperClassName here */}
     <button
       onClick={onClick}
-      className={`${className || ''} focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#35323C]`}
+      className={\`\${className || ''} focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#35323C]\`}
       aria-label={label}
       disabled={disabled}
     >
@@ -56,7 +57,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
   const [displayedText, setDisplayedText] = useState(isUser ? message.text : '');
   const [showTypingCursor, setShowTypingCursor] = useState(false);
   const typingTimeoutRef = useRef<number | null>(null);
-  const typingSpeed = 35;
+  const typingSpeed = 25; // Adjusted from 35ms
 
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.text);
@@ -146,7 +147,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
     const textToCopy = isEditing ? editText : message.text;
     onCopyText(textToCopy.trim()); 
 
-    const copyButtonId = `${message.id}-${buttonIdSuffix}`;
+    const copyButtonId = \`\${message.id}-\${buttonIdSuffix}\`;
     setShowCopiedFeedbackFor(copyButtonId);
 
     if (copyFeedbackTimeoutRef.current) clearTimeout(copyFeedbackTimeoutRef.current);
@@ -181,7 +182,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
       editInputRef.current.focus();
       // Auto-resize textarea
       editInputRef.current.style.height = 'auto';
-      editInputRef.current.style.height = `${editInputRef.current.scrollHeight}px`;
+      editInputRef.current.style.height = \`\${editInputRef.current.scrollHeight}px\`;
     }
   }, [isEditing]);
 
@@ -189,7 +190,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
     setEditText(e.target.value);
     // Auto-resize textarea
     e.target.style.height = 'auto';
-    e.target.style.height = `${e.target.scrollHeight}px`;
+    e.target.style.height = \`\${e.target.scrollHeight}px\`;
   };
 
   const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -213,22 +214,22 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
   if (!isUser && isOverallLatestMessage && !isStreamingAiText && actionButtonsReady && !showInitialLoadingDots && message.text && message.text.trim() !== '') {
     dynamicClassesForContainer = 'actions-visible-immediately';
   }
-  const actionButtonsContainerClass = `${baseActionButtonsContainerClass} ${dynamicClassesForContainer}`;
+  const actionButtonsContainerClass = \`\${baseActionButtonsContainerClass} \${dynamicClassesForContainer}\`;
 
   return (
-    <div id={message.id} className={`message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}>
-      <div className={`max-w-[85%] sm:max-w-[75%]`}>
+    <div id={message.id} className={\`message-item flex flex-col animate-fadeInSlideUp \${isUser ? 'items-end' : 'items-start'}\`}>
+      <div className={\`max-w-[85%] sm:max-w-[75%]\`}>
         {showInitialLoadingDots ? (
           <div className="py-1.5 px-0 text-sm leading-relaxed"> {/* Adjusted py for AI loading dots */}
             <span className="pulsating-white-dot" aria-hidden="true"></span>
           </div>
         ) : (
           <div
-            className={`${
+            className={\`\${
               isUser
                 ? 'bg-[#4A4754] rounded-3xl py-2 px-3.5' // Updated user bubble background and padding
                 : 'py-1.5 px-0' // Updated AI message container padding
-            }`}
+            }\`}
           >
             {isEditing && isUser ? (
               <textarea
@@ -256,7 +257,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
                 className={actionButtonClass}
                 wrapperClassName="stagger-action-button"
               >
-                {showCopiedFeedbackFor === `${message.id}-user-copy` ? <IconCheck className="w-4 h-4 text-[#FF8DC7]" /> : <IconClipboardDocumentList className="w-4 h-4" />}
+                {showCopiedFeedbackFor === \`\${message.id}-user-copy\` ? <IconCheck className="w-4 h-4 text-[#FF8DC7]" /> : <IconClipboardDocumentList className="w-4 h-4" />}
               </ActionButtonWithTooltip>
               {isEditing ? (
                 <>
@@ -264,7 +265,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
                     onClick={handleSave}
                     label="Save changes"
                     tooltipText="Save"
-                    className={`${actionButtonClass} text-[#86E8B3] hover:text-[#A0F0C8]`}
+                    className={\`\${actionButtonClass} text-[#86E8B3] hover:text-[#A0F0C8]\`}
                     wrapperClassName="stagger-action-button"
                   >
                     Save
@@ -273,7 +274,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
                     onClick={handleCancelEdit}
                     label="Cancel edit"
                     tooltipText="Cancel"
-                    className={`${actionButtonClass} text-[#FF8585] hover:text-[#FFAAAA]`}
+                    className={\`\${actionButtonClass} text-[#FF8585] hover:text-[#FFAAAA]\`}
                     wrapperClassName="stagger-action-button"
                   >
                     Cancel
@@ -300,7 +301,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
                 className={actionButtonClass}
                 wrapperClassName="stagger-action-button"
               >
-                 {showCopiedFeedbackFor === `${message.id}-ai-copy` ? <IconCheck className="w-4 h-4 text-[#FF8DC7]" /> : <IconClipboardDocumentList className="w-4 h-4" />}
+                 {showCopiedFeedbackFor === \`\${message.id}-ai-copy\` ? <IconCheck className="w-4 h-4 text-[#FF8DC7]" /> : <IconClipboardDocumentList className="w-4 h-4" />}
               </ActionButtonWithTooltip>
 
               {message.feedback !== 'bad' && (
@@ -308,7 +309,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
                   onClick={() => onRateResponse(message.id, 'good')}
                   label="Good response"
                   tooltipText="Good response"
-                  className={`${actionButtonClass} ${message.feedback === 'good' ? 'text-[#FF8DC7]' : ''}`}
+                  className={\`\${actionButtonClass} \${message.feedback === 'good' ? 'text-[#FF8DC7]' : ''}\`}
                   wrapperClassName="stagger-action-button"
                 >
                   {message.feedback === 'good' ? <IconThumbUpSolid /> : <IconThumbUp />}
@@ -320,7 +321,7 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
                   onClick={() => onRateResponse(message.id, 'bad')}
                   label="Bad response"
                   tooltipText="Bad response"
-                  className={`${actionButtonClass} ${message.feedback === 'bad' ? 'text-[#FF8DC7]' : ''}`}
+                  className={\`\${actionButtonClass} \${message.feedback === 'bad' ? 'text-[#FF8DC7]' : ''}\`}
                   wrapperClassName="stagger-action-button"
                 >
                   {message.feedback === 'bad' ? <IconThumbDownSolid /> : <IconThumbDown />}
