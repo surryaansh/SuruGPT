@@ -43,21 +43,21 @@ const ActionButtonWithTooltip: React.FC<{
 );
 
 
-const ChatMessageComponent: React.FC<ChatMessageProps> = ({
+const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
   message,
-  isStreamingAiText,
+  isStreamingAiText, 
   isOverallLatestMessage,
   onCopyText,
   onRateResponse,
   onRetryResponse,
   onSaveEdit,
-  previousUserMessageText
+  previousUserMessageText 
 }) => {
   const isUser = message.sender === SenderType.USER;
   const [displayedText, setDisplayedText] = useState(isUser ? message.text : '');
   const [showTypingCursor, setShowTypingCursor] = useState(false);
   const typingTimeoutRef = useRef<number | null>(null);
-  const typingSpeed = 25; // Adjusted from 35ms
+  const typingSpeed = 35;
 
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.text);
@@ -139,13 +139,13 @@ const ChatMessageComponent: React.FC<ChatMessageProps> = ({
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
   // Ensure displayedText is in dependency array if logic inside effect depends on its previous state for typing.
-  }, [message.text, message.sender, isStreamingAiText, isUser, displayedText]);
+  }, [message.text, message.sender, isStreamingAiText, isUser, displayedText]); 
 
   const showInitialLoadingDots = message.sender === SenderType.AI && isStreamingAiText && !message.text && !displayedText;
 
   const handleCopy = (buttonIdSuffix: string) => {
     const textToCopy = isEditing ? editText : message.text;
-    onCopyText(textToCopy.trim());
+    onCopyText(textToCopy.trim()); 
 
     const copyButtonId = `${message.id}-${buttonIdSuffix}`;
     setShowCopiedFeedbackFor(copyButtonId);
@@ -206,7 +206,7 @@ const ChatMessageComponent: React.FC<ChatMessageProps> = ({
   const actionButtonClass = "p-1.5 text-[#A09CB0] hover:text-[#FF8DC7] disabled:opacity-50 disabled:hover:text-[#A09CB0] transition-colors";
 
   const shouldShowActionButtons = actionButtonsReady && !showInitialLoadingDots && (isUser || (!isUser && message.text && message.text.trim() !== ''));
-
+  
   const baseActionButtonsContainerClass = "mt-1 flex items-center space-x-1.5";
   let dynamicClassesForContainer = "";
 
@@ -217,7 +217,7 @@ const ChatMessageComponent: React.FC<ChatMessageProps> = ({
   const actionButtonsContainerClass = `${baseActionButtonsContainerClass} ${dynamicClassesForContainer}`;
 
   return (
-    <div id={message.id} className={`message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}>
+    <div className={`message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}>
       <div className={`max-w-[85%] sm:max-w-[75%]`}>
         {showInitialLoadingDots ? (
           <div className="py-1.5 px-0 text-sm leading-relaxed"> {/* Adjusted py for AI loading dots */}
@@ -345,8 +345,6 @@ const ChatMessageComponent: React.FC<ChatMessageProps> = ({
       )}
     </div>
   );
-};
-
-const ChatMessage = React.memo(ChatMessageComponent);
+});
 
 export default ChatMessage;
