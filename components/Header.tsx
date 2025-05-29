@@ -9,7 +9,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onNewChat }) => {
   return (
-    <header className="bg-[#393641] p-3 sm:p-4 flex items-center justify-between sticky top-0 z-20 border-b border-[#5A5666]">
+    <header className="bg-[#2E2B36] p-3 sm:p-4 flex items-center justify-between sticky top-0 z-20"> {/* Removed border, updated background */}
       {/* Left Button: Menu */}
       <button 
         onClick={onToggleSidebar}
@@ -22,7 +22,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onNewChat }) => {
       {/* Center Title: Allows shrinking and truncation. */}
       <div className="flex-grow flex items-center justify-center min-w-0 px-1 sm:px-2">
         {/* Chevron icon removed from here */}
-        <span className="text-[#EAE6F0] text-lg sm:text-xl font-normal truncate">SuruGPT</span>
+        <span className="text-[#EAE6F0] text-lg sm:text-xl font-normal truncate">SuruGPT</span> {/* font-semibold to font-normal */}
       </div>
       
       {/* Right Button: New Chat */}
