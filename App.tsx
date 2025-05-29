@@ -27,7 +27,7 @@ import {
 const summarizeTextForTitle = async (text: string): Promise<string | null> => {
   console.log("[App][summarizeTextForTitle] Attempting to summarize:", text);
   try {
-    const response = await fetch(\`\${window.location.origin}/api/summarize\`, {
+    const response = await fetch(`${window.location.origin}/api/summarize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ textToSummarize: text }),
@@ -49,10 +49,12 @@ const summarizeTextForTitle = async (text: string): Promise<string | null> => {
     console.error('[App][summarizeTextForTitle] Failed to fetch summary due to network or parsing error:', error);
     return null;
   }
+  // Add explicit return to satisfy TypeScript compiler for all paths in an async function
+  return null; 
 };
 
 const generateFallbackTitle = (firstMessageText: string): string => {
-  if (!firstMessageText) return \`Chat @ \${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\`;
+  if (!firstMessageText) return `Chat @ ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   const words = firstMessageText.split(' ');
   if (words.length > 5) { 
     return words.slice(0, 5).join(' ') + '...';
@@ -61,19 +63,19 @@ const generateFallbackTitle = (firstMessageText: string): string => {
 };
 
 const generateChatTitle = async (firstMessageText: string): Promise<string> => {
-  const timestampTitle = \`Chat @ \${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\`;
+  const timestampTitle = `Chat @ ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   if (!firstMessageText || firstMessageText.trim() === "") {
     console.log("[App][generateChatTitle] No first message text, using timestamp title.");
     return timestampTitle;
   }
-  console.log("[App][generateChatTitle] Attempting to generate title for:", \`"\${firstMessageText}"\`);
+  console.log("[App][generateChatTitle] Attempting to generate title for:", `"${firstMessageText}"`);
   const summary = await summarizeTextForTitle(firstMessageText);
   if (summary) { 
-    console.log("[App][generateChatTitle] Using summarized title:", \`"\${summary}"\`);
+    console.log("[App][generateChatTitle] Using summarized title:", `"${summary}"`);
     return summary;
   }
   const fallback = generateFallbackTitle(firstMessageText);
-  console.log("[App][generateChatTitle] Summarization failed or returned empty, using fallback title:", \`"\${fallback}"\`);
+  console.log("[App][generateChatTitle] Summarization failed or returned empty, using fallback title:", `"${fallback}"`);
   return fallback;
 };
 
@@ -116,19 +118,19 @@ const App: React.FC = () => {
 
   const processEndedSessionForMemory = useCallback(async (endedSessionId: string, endedSessionMessages: Message[]) => {
     if (endedSessionId && endedSessionMessages.length > 0 && !endedSessionId.startsWith("PENDING_")) {
-      console.log(\`[App] Triggering memory update for concluded session: \${endedSessionId}\`);
+      console.log(`[App] Triggering memory update for concluded session: ${endedSessionId}`);
       try {
         // Fire-and-forget (background processing)
         triggerMemoryUpdateForSession(endedSessionId, endedSessionMessages)
-          .then(() => console.log(\`[App] Memory update request for session \${endedSessionId} successfully sent to backend.\`))
-          .catch(err => console.error(\`[App] Error in fire-and-forget memory update for session \${endedSessionId}:\`, err));
+          .then(() => console.log(`[App] Memory update request for session ${endedSessionId} successfully sent to backend.`))
+          .catch(err => console.error(`[App] Error in fire-and-forget memory update for session ${endedSessionId}:`, err));
       } catch (error) { // Should not happen if triggerMemoryUpdateForSession handles its own errors
-        console.error(\`[App] Immediate error trying to initiate memory update for session \${endedSessionId}:\`, error);
+        console.error(`[App] Immediate error trying to initiate memory update for session ${endedSessionId}:`, error);
       }
     } else if (endedSessionId.startsWith("PENDING_")) {
-        console.log(\`[App] Skipped memory update for pending session ID: \${endedSessionId}\`);
+        console.log(`[App] Skipped memory update for pending session ID: ${endedSessionId}`);
     } else if (endedSessionMessages.length === 0) {
-        console.log(\`[App] Skipped memory update for session \${endedSessionId} as it has no messages.\`);
+        console.log(`[App] Skipped memory update for session ${endedSessionId} as it has no messages.`);
     }
   }, []); 
 
@@ -142,7 +144,7 @@ const App: React.FC = () => {
 
     if (activeChatId && currentMessages.length > 0) {
       const sessionStillActiveId = activeChatId; 
-      console.log(\`[App] Setting inactivity timer for session: \${sessionStillActiveId} (duration: \${INACTIVITY_TIMEOUT_DURATION_MS / 1000}s)\`);
+      console.log(`[App] Setting inactivity timer for session: ${sessionStillActiveId} (duration: ${INACTIVITY_TIMEOUT_DURATION_MS / 1000}s)`);
       
       inactivityTimerRef.current = window.setTimeout(() => {
         if (activeChatIdForTimerRef.current && 
@@ -150,10 +152,10 @@ const App: React.FC = () => {
             activeChatId === sessionStillActiveId && 
             currentMessagesForTimerRef.current && currentMessagesForTimerRef.current.length > 0) {
           
-          console.log(\`[App] Inactivity timer fired for session: \${activeChatIdForTimerRef.current}. Processing for memory.\`);
+          console.log(`[App] Inactivity timer fired for session: ${activeChatIdForTimerRef.current}. Processing for memory.`);
           processEndedSessionForMemory(activeChatIdForTimerRef.current, currentMessagesForTimerRef.current);
         } else {
-          console.log(\`[App] Inactivity timer fired, but session \${sessionStillActiveId} is no longer the target, or active session has changed/ended, or no messages. Timer for \${sessionStillActiveId} ignored. Current activeChatId: \${activeChatId}\`);
+          console.log(`[App] Inactivity timer fired, but session ${sessionStillActiveId} is no longer the target, or active session has changed/ended, or no messages. Timer for ${sessionStillActiveId} ignored. Current activeChatId: ${activeChatId}`);
         }
       }, INACTIVITY_TIMEOUT_DURATION_MS);
     }
@@ -199,14 +201,14 @@ const App: React.FC = () => {
         // ---- START OF NEW LOGIC to process potentially unprocessed last session ----
         if (sessions.length > 0) {
           const lastKnownSessionFromDB = sessions[0]; // Most recent session by 'createdAt' from DB
-          console.log(\`[App] On app load, identified last known session from DB: \${lastKnownSessionFromDB.id} - "\${lastKnownSessionFromDB.title}".\`);
-          console.log(\`[App] Attempting to process this session for memory if it wasn't processed before (e.g., due to tab close).\`);
+          console.log(`[App] On app load, identified last known session from DB: ${lastKnownSessionFromDB.id} - "${lastKnownSessionFromDB.title}".`);
+          console.log(`[App] Attempting to process this session for memory if it wasn't processed before (e.g., due to tab close).`);
           try {
             const messagesOfLastSession = await getMessagesForSession(lastKnownSessionFromDB.id);
             // Note: processEndedSessionForMemory itself checks if messagesOfLastSession.length > 0
             await processEndedSessionForMemory(lastKnownSessionFromDB.id, messagesOfLastSession);
           } catch (error) {
-            console.error(\`[App] Error loading messages or processing DB's last session \${lastKnownSessionFromDB.id} on app load:\`, error);
+            console.error(`[App] Error loading messages or processing DB's last session ${lastKnownSessionFromDB.id} on app load:`, error);
           }
         } else {
           console.log("[App] No existing chat sessions found in DB on fresh load.");
@@ -238,7 +240,7 @@ const App: React.FC = () => {
         }
       }
       if (uniqueRecentTitles.length > 0) {
-        setGlobalContextSummary(\`Key topics from recent chat sessions include: \${uniqueRecentTitles.join('; ')}.\`);
+        setGlobalContextSummary(`Key topics from recent chat sessions include: ${uniqueRecentTitles.join('; ')}.`);
       } else { setGlobalContextSummary(''); }
     } else { setGlobalContextSummary(''); }
   }, [allChatSessions]);
@@ -306,7 +308,7 @@ const App: React.FC = () => {
        );
 
     } catch (error) {
-      console.error(\`Failed to load messages for chat \${chatId}:\`, error);
+      console.error(`Failed to load messages for chat ${chatId}:`, error);
       setCurrentMessages([{ id: crypto.randomUUID(), text: "Error loading messages for this chat. Please try again.", sender: SenderType.AI, timestamp: new Date(), feedback: null }]);
     } finally { setIsMessagesLoading(false); }
   }, [activeChatId, currentMessages.length, globalContextSummary, isDesktopView, processEndedSessionForMemory]);
@@ -399,7 +401,7 @@ const App: React.FC = () => {
     };
 
     if (!activeChatId) { 
-      const tempSessionId = \`PENDING_\${crypto.randomUUID()}\`;
+      const tempSessionId = `PENDING_${crypto.randomUUID()}`;
       const optimisticSession: ChatSession = {
         id: tempSessionId,
         title: text.substring(0, 30) + (text.length > 30 ? "..." : "") || "New Chat...",
@@ -561,10 +563,10 @@ const App: React.FC = () => {
     
     try {
       await deleteChatSessionFromFirestore(sessionToDeleteId); 
-      console.log(\`Chat session \${sessionToDeleteId} successfully deleted from Firestore.\`);
+      console.log(`Chat session ${sessionToDeleteId} successfully deleted from Firestore.`);
     } catch (error: any) {
       console.error('Error deleting chat session from Firestore:', error);
-      alert(\`Error deleting chat: \${error.message}. The chat was removed from your view, but may still exist on the server. Please refresh or try again later.\`);
+      alert(`Error deleting chat: ${error.message}. The chat was removed from your view, but may still exist on the server. Please refresh or try again later.`);
     }
   };
 
@@ -582,15 +584,15 @@ const App: React.FC = () => {
       )
     );
     try {
-      const response = await fetch(\`\${window.location.origin}/api/renameChat\`, {
+      const response = await fetch(`${window.location.origin}/api/renameChat`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, newTitle }),
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || \`Failed to rename chat: \${response.statusText}\`);
+        throw new Error(errorData.error || `Failed to rename chat: ${response.statusText}`);
       }
-      console.log(\`Chat session \${sessionId} renamed to "\${newTitle}" successfully on server.\`);
+      console.log(`Chat session ${sessionId} renamed to "${newTitle}" successfully on server.`);
     } catch (error: any) {
       console.error('Error calling renameChat API:', error);
       setAllChatSessions(prevSessions =>
@@ -598,7 +600,7 @@ const App: React.FC = () => {
           session.id === sessionId ? { ...session, title: originalTitle } : session
         )
       );
-      alert(\`Error renaming chat: \${error.message}. Reverted to original title.\`);
+      alert(`Error renaming chat: ${error.message}. Reverted to original title.`);
     }
   };
 
@@ -622,7 +624,7 @@ const App: React.FC = () => {
       {isSidebarOpen && !isDesktopView && (
         <div className="fixed inset-0 bg-black/50 z-30 sidebar-overlay" onClick={handleToggleSidebar} aria-hidden="true"></div>
       )}
-      <div className={\`relative z-10 flex flex-col flex-grow h-full bg-[#2E2B36] transition-all duration-300 ease-in-out \${(isSidebarOpen && isDesktopView) ? 'md:ml-60' : 'ml-0'}\`}> {/* Unified background */}
+      <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#2E2B36] transition-all duration-300 ease-in-out ${(isSidebarOpen && isDesktopView) ? 'md:ml-60' : 'ml-0'}`}> {/* Unified background */}
         <Header onToggleSidebar={handleToggleSidebar} onNewChat={handleNewChat} />
         <main className="flex-grow flex flex-col overflow-hidden bg-[#2E2B36]"> {/* This already had the target color */}
           {isMessagesLoading && <div className="flex-grow flex items-center justify-center"><p className="text-[#A09CB0] text-lg animate-pulse">Loading chat...</p></div>}
