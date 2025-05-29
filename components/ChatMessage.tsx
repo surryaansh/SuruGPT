@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, SenderType } from '../types';
 import { IconClipboardDocumentList, IconPencil, IconThumbUp, IconThumbDown, IconArrowRepeat, IconThumbUpSolid, IconThumbDownSolid, IconCheck } from '../constants';
@@ -219,15 +220,15 @@ const ChatMessage: React.FC<ChatMessageProps> = React.memo(({
     <div className={`message-item flex flex-col animate-fadeInSlideUp ${isUser ? 'items-end' : 'items-start'}`}>
       <div className={`max-w-[85%] sm:max-w-[75%]`}>
         {showInitialLoadingDots ? (
-          <div className="py-1 px-0 text-sm leading-relaxed">
+          <div className="py-1.5 px-0 text-sm leading-relaxed"> {/* Adjusted py for AI loading dots */}
             <span className="pulsating-white-dot" aria-hidden="true"></span>
           </div>
         ) : (
           <div
             className={`${
               isUser
-                ? 'bg-[#35323C] rounded-3xl py-1.5 px-3'
-                : 'py-1 px-0' 
+                ? 'bg-[#4A4754] rounded-3xl py-2 px-3.5' // Updated user bubble background and padding
+                : 'py-1.5 px-0' // Updated AI message container padding
             }`}
           >
             {isEditing && isUser ? (
