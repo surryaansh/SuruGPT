@@ -29,33 +29,38 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
 
   // Effect to scroll a specific user message to the top
   useEffect(() => {
-    if (scrollToMessageId) {
+    if (scrollToMessageId && messages.find(m => m.id === scrollToMessageId)) { // Ensure message exists in current list
       const element = document.getElementById(scrollToMessageId);
       if (element) {
-        // console.log(`[ChatMessageList] Scrolling to message ID: ${scrollToMessageId}`);
+        console.log(`[ChatMessageList] Scrolling to user message ID: ${scrollToMessageId}`);
         element.scrollIntoView({ behavior: 'smooth', block: 'start' });
       } else {
-        // console.warn(`[ChatMessageList] Element with ID ${scrollToMessageId} not found for scrolling.`);
+        console.warn(`[ChatMessageList] User message Element with ID ${scrollToMessageId} not found for scrolling, though present in messages prop.`);
       }
-      // Always call complete to reset the state in App.tsx, even if element not found, to prevent getting stuck
+      // Always call complete to reset the state in App.tsx,
+      // to prevent getting stuck if element is somehow not found despite being in messages.
       onScrollToMessageComplete(); 
+    } else if (scrollToMessageId) {
+      // This case means scrollToMessageId is set, but the message isn't in the list yet.
+      // The effect will re-run when 'messages' updates.
+      // console.log(`[ChatMessageList] scrollToMessageId ${scrollToMessageId} is set, but message not yet in 'messages' prop. Waiting for messages update.`);
     }
-  }, [scrollToMessageId, onScrollToMessageComplete]); // Removed messages from dependency array
+  }, [scrollToMessageId, onScrollToMessageComplete, messages]); // Added messages back to dependency array
 
   // Effect to scroll to the bottom when a chat is loaded (signaled by chatLoadScrollKey)
   useEffect(() => {
-    if (chatLoadScrollKey && messages.length > 0) { // Ensure key changed and there are messages
-      // console.log(`[ChatMessageList] Chat loaded (key: ${chatLoadScrollKey}), scrolling to bottom.`);
-      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }); // 'auto' for instant scroll
+    if (chatLoadScrollKey && messages.length > 0) { 
+      console.log(`[ChatMessageList] Chat loaded (key: ${chatLoadScrollKey}), scrolling to bottom.`);
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }); 
     }
-  }, [chatLoadScrollKey, messages.length]); // Depend on key and messages.length
+  }, [chatLoadScrollKey, messages.length]); 
 
   return (
     <div 
-      className="flex-grow px-6 pt-11 overflow-y-auto chat-message-list-scroll-container" // Changed py-11 to pt-11
-      tabIndex={-1} // Allows focus for programmatic scrolling if needed, but main scrolling is via JS
+      className="flex-grow px-6 pt-11 overflow-y-auto chat-message-list-scroll-container" 
+      tabIndex={-1} 
     >
-      <div className="max-w-2xl mx-auto space-y-9 pb-11"> {/* Added pb-11 here */}
+      <div className="max-w-2xl mx-auto space-y-9 pb-11"> 
         {messages.map((msg, index) => {
           const isOverallLatestMessage = index === messages.length - 1;
           const isStreamingAiText =
@@ -70,7 +75,7 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
 
           return (
             <ChatMessage
-              key={msg.id} // Ensure key is on the ChatMessage itself
+              key={msg.id} 
               message={msg}
               isStreamingAiText={isStreamingAiText}
               isOverallLatestMessage={isOverallLatestMessage}
@@ -83,7 +88,7 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
           );
         })}
       </div>
-      <div ref={messagesEndRef} style={{ height: '1px' }} /> {/* Moved messagesEndRef here and gave it minimal height */}
+      <div ref={messagesEndRef} style={{ height: '1px' }} /> 
     </div>
   );
 };
