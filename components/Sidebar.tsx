@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { IconSidebarClose, IconHeart, IconSearch, IconPencil, IconEllipsisVertical, IconTrash, IconNewChat } from '../constants';
+import { IconLayoutSidebar, IconHeart, IconSearch, IconPencil, IconEllipsisVertical, IconTrash, IconNewChat } from '../constants';
 import { ChatSession } from '../types';
 
 interface SidebarProps {
@@ -303,7 +304,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <IconHeart className="w-6 h-6 text-[#FF8DC7]" />
             <div className="relative group">
               <button onClick={onClose} className="p-0.5 text-[#A09CB0] hover:text-[#FF8DC7]" aria-label="Close sidebar">
-                <IconSidebarClose className="w-5 h-5" />
+                <IconLayoutSidebar className="w-5 h-5" /> {/* Replaced icon here */}
               </button>
               <span className="absolute right-0 top-full mt-2 w-max px-2 py-1 bg-[#393641] text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">Close sidebar</span>
             </div>
