@@ -6,13 +6,10 @@ import ChatMessage from './ChatMessage';
 interface ChatMessageListProps {
   messages: Message[];
   isLoadingAiResponse: boolean;
-  onCopyText: (text: string) => void; 
+  onCopyText: (text: string) => void; // Simplified: no buttonId
   onRateResponse: (messageId:string, rating: 'good' | 'bad') => void;
   onRetryResponse: (aiMessageId: string, userPromptText: string) => void;
   onSaveEdit: (messageId: string, newText: string) => void;
-  // Removed: scrollToMessageId: string | null; 
-  // Removed: onScrollToMessageComplete: () => void; 
-  // Removed: chatLoadScrollKey: number | null; 
 }
 
 const ChatMessageList: React.FC<ChatMessageListProps> = ({ 
@@ -21,19 +18,23 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
   onCopyText,
   onRateResponse,
   onRetryResponse,
-  onSaveEdit,
-  // Removed props: scrollToMessageId, onScrollToMessageComplete, chatLoadScrollKey
+  onSaveEdit
 }) => {
-  // Removed refs: messagesEndRef, scrollContainerRef
-  // Removed all useEffect hooks related to custom scrolling
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [messages, isLoadingAiResponse]);
 
   return (
     <div 
-      // Removed ref: scrollContainerRef
-      className="flex-grow px-6 pt-11 overflow-y-auto chat-message-list-scroll-container" 
-      tabIndex={-1} 
+      className="flex-grow px-6 py-11 overflow-y-auto chat-message-list-scroll-container"
+      tabIndex={-1}
     >
-      <div className="max-w-2xl mx-auto space-y-9 pb-11"> 
+      <div className="max-w-2xl mx-auto space-y-9">
         {messages.map((msg, index) => {
           const isOverallLatestMessage = index === messages.length - 1;
           const isStreamingAiText =
@@ -48,10 +49,10 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
 
           return (
             <ChatMessage
-              key={msg.id} 
+              key={msg.id}
               message={msg}
               isStreamingAiText={isStreamingAiText}
-              isOverallLatestMessage={isOverallLatestMessage}
+              isOverallLatestMessage={isOverallLatestMessage} // Pass the new prop
               onCopyText={onCopyText}
               onRateResponse={onRateResponse}
               onRetryResponse={onRetryResponse}
@@ -60,8 +61,8 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({
             />
           );
         })}
+        <div ref={messagesEndRef} />
       </div>
-      {/* Removed div for messagesEndRef */}
     </div>
   );
 };
