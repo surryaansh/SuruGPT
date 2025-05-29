@@ -607,7 +607,7 @@ const App: React.FC = () => {
   const showWelcome = !activeChatId && currentMessages.length === 0 && chatReady && !isSessionsLoading && !isMessagesLoading;
 
   return (
-    <div className="flex flex-col h-full bg-[#2D2A32] overflow-hidden">
+    <div className="flex flex-col h-full bg-[#2E2B36] overflow-hidden"> {/* Unified background */}
       <Sidebar 
         isOpen={isSidebarOpen} 
         onClose={handleToggleSidebar} 
@@ -622,9 +622,9 @@ const App: React.FC = () => {
       {isSidebarOpen && !isDesktopView && (
         <div className="fixed inset-0 bg-black/50 z-30 sidebar-overlay" onClick={handleToggleSidebar} aria-hidden="true"></div>
       )}
-      <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#393641] transition-all duration-300 ease-in-out ${(isSidebarOpen && isDesktopView) ? 'md:ml-60' : 'ml-0'}`}>
+      <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#2E2B36] transition-all duration-300 ease-in-out ${(isSidebarOpen && isDesktopView) ? 'md:ml-60' : 'ml-0'}`}> {/* Unified background */}
         <Header onToggleSidebar={handleToggleSidebar} onNewChat={handleNewChat} />
-        <main className="flex-grow flex flex-col overflow-hidden bg-[#2E2B36]"> {/* Changed background here */}
+        <main className="flex-grow flex flex-col overflow-hidden bg-[#2E2B36]"> {/* This already had the target color */}
           {isMessagesLoading && <div className="flex-grow flex items-center justify-center"><p className="text-[#A09CB0] text-lg animate-pulse">Loading chat...</p></div>}
           {!isMessagesLoading && showWelcome && <WelcomeMessage />}
           {!isMessagesLoading && !showWelcome && 
