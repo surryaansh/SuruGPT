@@ -49,8 +49,6 @@ const summarizeTextForTitle = async (text: string): Promise<string | null> => {
     console.error('[App][summarizeTextForTitle] Failed to fetch summary due to network or parsing error:', error);
     return null;
   }
-  // Add explicit return to satisfy TypeScript compiler for all paths in an async function
-  return null; 
 };
 
 const generateFallbackTitle = (firstMessageText: string): string => {
@@ -106,9 +104,6 @@ const App: React.FC = () => {
   const inactivityTimerRef = useRef<number | null>(null);
   const activeChatIdForTimerRef = useRef<string | null>(null);
   const currentMessagesForTimerRef = useRef<Message[]>([]);
-
-  // Removed: scrollToMessageId state
-  // Removed: chatLoadScrollKey state
 
   // Effect to keep refs updated for the timer callback
   useEffect(() => {
@@ -230,7 +225,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (allChatSessions.length > 0) {
       const MAX_TITLES_IN_SUMMARY = 3; 
-      const allSanitizedTitles = allChatSessions.map(s => s.title.replace(/[^\\w\\s.,!?']/gi, '').trim()).filter(t => t.length > 0); 
+      const allSanitizedTitles = allChatSessions.map(s => s.title.replace(/[^\w\s.,!?']/gi, '').trim()).filter(t => t.length > 0); 
       const uniqueRecentTitles: string[] = [];
       const seenTitles = new Set<string>();
       for (const title of allSanitizedTitles) {
@@ -267,12 +262,13 @@ const App: React.FC = () => {
 
     setCurrentMessages([]); 
     setActiveChatId(null); 
-    // Removed: setChatLoadScrollKey(Date.now());
+    // setChatReady(checkChatAvailability()); // Already checked on initial load, and OpenAI context will be reset by activeChatId change effect
     if (!isDesktopView) setIsSidebarOpen(false);
 
     if (endedSessionId && endedSessionMessages.length > 0) {
       processEndedSessionForMemory(endedSessionId, endedSessionMessages);
     }
+    // resetAiContextWithSystemPrompt(undefined, globalContextSummary); // This will be handled by the useEffect watching activeChatId and globalContextSummary
   }, [activeChatId, globalContextSummary, isDesktopView, processEndedSessionForMemory]);
 
   const handleSelectChat = useCallback(async (chatId: string) => { 
@@ -288,6 +284,7 @@ const App: React.FC = () => {
         if (!isDesktopView) setIsSidebarOpen(false); return;
     }
     
+    // Setting activeChatId first will trigger the useEffect to reset AI context
     setActiveChatId(chatId); 
     setCurrentMessages([]); 
     setIsMessagesLoading(true);
@@ -300,7 +297,11 @@ const App: React.FC = () => {
     try {
       const messages = await getMessagesForSession(chatId);
       setCurrentMessages(messages);
-      // Removed: setChatLoadScrollKey(Date.now()); 
+      // setConversationContextFromAppMessages is part of resetAiContextWithSystemPrompt now,
+      // which is triggered by setActiveChatId changing and the subsequent useEffect.
+      // For selected chats, the history needs to be explicitly loaded into the AI context.
+      // The resetAiContextWithSystemPrompt in the useEffect will use the global summary.
+      // We need to ensure the selected chat's messages are then loaded.
        setConversationContextFromAppMessages(
          messages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})), 
          undefined, 
@@ -310,6 +311,7 @@ const App: React.FC = () => {
     } catch (error) {
       console.error(`Failed to load messages for chat ${chatId}:`, error);
       setCurrentMessages([{ id: crypto.randomUUID(), text: "Error loading messages for this chat. Please try again.", sender: SenderType.AI, timestamp: new Date(), feedback: null }]);
+      // resetAiContextWithSystemPrompt(undefined, globalContextSummary); // Handled by activeChatId change effect
     } finally { setIsMessagesLoading(false); }
   }, [activeChatId, currentMessages.length, globalContextSummary, isDesktopView, processEndedSessionForMemory]);
 
@@ -375,6 +377,9 @@ const App: React.FC = () => {
           ? { ...msg, text: "AI response was empty.", timestamp: new Date() } 
           : msg
         );
+        // After AI response, update the conversation context in openAIService.ts
+        // This is already handled by sendMessageStream internally which updates its local conversationHistory.
+        // However, if strict separation is needed:
          setConversationContextFromAppMessages(
            finalMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
            undefined,
@@ -392,16 +397,16 @@ const App: React.FC = () => {
       return;
     }
     
-    const userMessageId = crypto.randomUUID(); 
-    const userMessageForUi: Message = {
-      id: userMessageId,
-      text,
-      sender: SenderType.USER,
-      timestamp: new Date(),
-    };
-
     if (!activeChatId) { 
+      const tempUserMessageId = crypto.randomUUID();
       const tempSessionId = `PENDING_${crypto.randomUUID()}`;
+
+      const optimisticUserMessage: Message = {
+        id: tempUserMessageId,
+        text,
+        sender: SenderType.USER,
+        timestamp: new Date(),
+      };
       const optimisticSession: ChatSession = {
         id: tempSessionId,
         title: text.substring(0, 30) + (text.length > 30 ? "..." : "") || "New Chat...",
@@ -409,10 +414,9 @@ const App: React.FC = () => {
         firstMessageTextForTitle: text,
       };
 
-      setCurrentMessages([userMessageForUi]);
+      setCurrentMessages([optimisticUserMessage]);
       setAllChatSessions(prevSessions => [optimisticSession, ...prevSessions]);
-      setActiveChatId(tempSessionId); 
-      // Removed: setScrollToMessageId(userMessageId); 
+      setActiveChatId(tempSessionId); // This will trigger AI context reset via useEffect
 
       (async () => {
         try {
@@ -420,6 +424,8 @@ const App: React.FC = () => {
           const newSessionFromDb = await createChatSessionInFirestore(title, text);
           const actualSessionId = newSessionFromDb.id;
           
+          // Critical: Update activeChatId to the actual ID from DB.
+          // This ensures subsequent operations (like getAiResponse) use the correct ID.
           setActiveChatId(actualSessionId); 
           
           setAllChatSessions(prevSessions => 
@@ -428,15 +434,15 @@ const App: React.FC = () => {
           
           const finalUserMessage = await addMessageToFirestore(actualSessionId, { text, sender: SenderType.USER });
           setCurrentMessages(prevMsgs => 
-            prevMsgs.map(m => (m.id === userMessageId ? { ...finalUserMessage, id: userMessageId } : m)) 
+            prevMsgs.map(m => m.id === tempUserMessageId ? finalUserMessage : m)
           ); 
           
           await getAiResponse(finalUserMessage.text, actualSessionId);
         } catch (err) {
           console.error("Error during new chat creation or first message send:", err);
-          setCurrentMessages(prev => prev.filter(m => m.id !== userMessageId));
+          setCurrentMessages(prev => prev.filter(m => m.id !== tempUserMessageId));
           setAllChatSessions(prev => prev.filter(s => s.id !== tempSessionId));
-          if (activeChatId === tempSessionId) setActiveChatId(null); 
+          if (activeChatId === tempSessionId) setActiveChatId(null); // Reset activeChatId if it was the temp one
           setCurrentMessages(prev => [...prev, { 
             id: crypto.randomUUID(), 
             text: "Failed to start new chat. Please try again.", 
@@ -448,13 +454,8 @@ const App: React.FC = () => {
       })();
 
     } else { 
-      setCurrentMessages(prevMessages => [...prevMessages, userMessageForUi]); 
-      // Removed: setScrollToMessageId(userMessageId); 
-      
       const finalUserMessage = await addMessageToFirestore(activeChatId, { text, sender: SenderType.USER });
-      setCurrentMessages(prevMessages => 
-          prevMessages.map(msg => msg.id === userMessageId ? { ...finalUserMessage, id: userMessageId } : msg)
-      );
+      setCurrentMessages(prevMessages => [...prevMessages, finalUserMessage]); 
       await getAiResponse(finalUserMessage.text, activeChatId);
     }
     
@@ -490,6 +491,7 @@ const App: React.FC = () => {
 
     setCurrentMessages(prev => {
       const updatedMessagesAfterRemoval = prev.filter(msg => msg.id !== aiMessageToRetryId);
+      // Rebuild context for AI before retrying
        setConversationContextFromAppMessages(
           updatedMessagesAfterRemoval.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
           undefined,
@@ -504,8 +506,6 @@ const App: React.FC = () => {
 
   const handleSaveUserEdit = useCallback(async (messageId: string, newText: string) => {
     if (!activeChatId || activeChatId.startsWith("PENDING_")) return;
-    
-    // Removed: setScrollToMessageId(messageId); 
 
     setCurrentMessages(prevMessages => {
         const messageIndex = prevMessages.findIndex(msg => msg.id === messageId);
@@ -518,6 +518,7 @@ const App: React.FC = () => {
             updatedMessage
         ];
         
+        // Rebuild context for AI after edit
         setConversationContextFromAppMessages(
             messagesForContextAndDisplay.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
             undefined,
@@ -550,8 +551,7 @@ const App: React.FC = () => {
     setAllChatSessions(prevSessions => prevSessions.filter(session => session.id !== sessionToDeleteId));
     if (activeChatId === sessionToDeleteId) {
       setCurrentMessages([]);
-      setActiveChatId(null); 
-      // Removed: setChatLoadScrollKey(Date.now()); 
+      setActiveChatId(null); // This will trigger AI context reset via useEffect
     }
     
     setIsDeleteConfirmationOpen(false);
@@ -604,8 +604,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Removed: handleScrollToMessageComplete callback
-
   const showWelcome = !activeChatId && currentMessages.length === 0 && chatReady && !isSessionsLoading && !isMessagesLoading;
 
   return (
@@ -637,7 +635,6 @@ const App: React.FC = () => {
               onRateResponse={handleRateResponse}
               onRetryResponse={handleRetryAiResponse}
               onSaveEdit={handleSaveUserEdit}
-              // Removed props: scrollToMessageId, onScrollToMessageComplete, chatLoadScrollKey
             />}
         </main>
         <ChatInputBar onSendMessage={handleSendMessage} isLoading={isLoadingAiResponse} isChatAvailable={chatReady} />
