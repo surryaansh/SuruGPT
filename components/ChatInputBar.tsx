@@ -6,13 +6,18 @@ interface ChatInputBarProps {
   onSendMessage: (message: string) => void;
   isLoading: boolean;
   isChatAvailable: boolean;
+  isCentered?: boolean; // New prop
 }
 
-const ChatInputBar: React.FC<ChatInputBarProps> = ({ onSendMessage, isLoading, isChatAvailable }) => {
+const ChatInputBar: React.FC<ChatInputBarProps> = ({ 
+  onSendMessage, 
+  isLoading, 
+  isChatAvailable, 
+  isCentered = false // Default to false
+}) => {
   const [inputValue, setInputValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Stricter check for chat availability
   const effectiveIsChatAvailable = isChatAvailable === true;
 
   const handleSend = () => {
@@ -45,20 +50,30 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({ onSendMessage, isLoading, i
     }
   }, [inputValue]);
 
-  // Effect to refocus textarea after AI response if input is clear
   useEffect(() => {
     if (!isLoading && inputValue === '' && textareaRef.current && effectiveIsChatAvailable) {
-      textareaRef.current.focus();
+      // Only focus if not centered, or if centered and explicitly allowed (for now, always focus if available)
+      if (!isCentered || (isCentered /* && some_other_condition_if_needed */)) {
+         textareaRef.current.focus();
+      }
     }
-  }, [isLoading, inputValue, effectiveIsChatAvailable]);
+  }, [isLoading, inputValue, effectiveIsChatAvailable, isCentered]);
 
 
   const canSend = inputValue.trim() !== '' && !isLoading && effectiveIsChatAvailable;
 
+  const outerDivClasses = isCentered
+    ? "w-full" // Container for max-w-2xl child, allows App.tsx to center it
+    : "bg-[#2E2B36] py-3 sm:py-4 px-4 sm:px-6 md:px-10"; // Styles for the bottom bar
+
   return (
-    <div className="bg-[#2E2B36] py-3 sm:py-4 px-4 sm:px-6 md:px-10 sticky bottom-0 z-10"> {/* Removed border, updated background */}
+    <div className={outerDivClasses}>
       <div className="max-w-2xl mx-auto"> 
-        <div className="flex items-center bg-[#4A4754] rounded-xl p-1.5 shadow-sm">
+        <div className={`flex items-center bg-[#4A4754] shadow-sm
+          rounded-${isCentered ? '3xl' : 'xl'}
+          px-${isCentered ? '4' : '1.5'}
+          py-${isCentered ? '6' : '1.5'}
+        `}>
           <button 
             className="p-2 text-[#A09CB0] hover:text-[#FF8DC7] disabled:opacity-50 animate-subtleBounceOnHover"
             disabled={isLoading || !effectiveIsChatAvailable}
@@ -68,14 +83,15 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({ onSendMessage, isLoading, i
           </button>
           <textarea
             ref={textareaRef}
-            rows={1}
+            rows={isCentered ? 3 : 1}
             value={inputValue}
             onChange={handleInputChange}
             onKeyDown={handleKeyPress}
             placeholder={effectiveIsChatAvailable ? "Chat with SuruGPT..." : "Chat unavailable (API key missing)"}
-            className="flex-grow bg-transparent text-[#EAE6F0] placeholder-[#A09CB0] focus:outline-none px-3 py-2.5 text-[16px] resize-none overflow-y-auto max-h-32"
+            className={`flex-grow bg-transparent text-[#EAE6F0] placeholder-[#A09CB0] focus:outline-none px-3 py-2.5 text-[16px] resize-none overflow-y-auto 
+              max-h-${isCentered ? '40' : '32'}`} // max-h-40 (10rem), max-h-32 (8rem)
             disabled={isLoading || !effectiveIsChatAvailable}
-            style={{ minHeight: '2.75rem' }}
+            style={{ minHeight: isCentered ? '4.5rem' : '2.75rem' }} // approx 3 lines vs 1 line base
           />
           <button
             onClick={handleSend}
