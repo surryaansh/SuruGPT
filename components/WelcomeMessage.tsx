@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { IconHeart } from '../constants';
+import { IconSuru, IconHeart } from '../constants'; // Import IconSuru
 
 const WelcomeMessage: React.FC = () => {
   const numHearts = 15; // Number of hearts to display
@@ -25,15 +26,11 @@ const WelcomeMessage: React.FC = () => {
       </div>
 
       {/* Original Content - ensure it's above the hearts with relative positioning and z-index. Added flex for centering. */}
-      <div className="relative z-10 flex flex-col items-center">
-        {/* GIF Container - Replaces iframe */}
-        <img
-          src="https://jmp.sh/s/BXICDhihvGfp4Bq47Lkh"
-          alt="Cute animated GIF"
-          className="w-56 h-56 object-contain mb-6 rounded-2xl animate-fadeInSlideUp shadow-lg"
-          style={{ animationDelay: '0.1s' }}
+      <div className="relative z-10 flex flex-col items-center"> {/* Centering icon and text */}
+        <IconSuru 
+            className="w-20 h-20 text-[#FF8DC7] mb-6 animate-fadeInSlideUp" 
+            style={{ animationDelay: '0.1s' }} 
         />
-        
         <h1 
             className="text-2xl sm:text-3xl text-[#EAE6F0] mb-2 animate-fadeInSlideUp" 
             style={{ animationDelay: '0.2s' }}
