@@ -33,7 +33,7 @@ const WelcomeMessage: React.FC = () => {
           style={{ animationDelay: '0.1s' }}
         >
           <iframe 
-            src="https://giphy.com/embed/4RysKNcCH6XQosC3K8" 
+            src="https://giphy.com/embed/xX1PKy7MVU4xUvQ7bL" 
             width="100%" 
             height="100%" 
             style={{ border: '0' }} 
@@ -51,7 +51,8 @@ const WelcomeMessage: React.FC = () => {
             className="text-[10px] text-[#A09CB0] mb-4 animate-fadeInSlideUp"
             style={{ animationDelay: '0.15s' }}
         >
-            <a href="https://giphy.com/stickers/transparent-4RysKNcCH6XQosC3K8" target="_blank" rel="noopener noreferrer" className="hover:text-[#FF8DC7]">
+            <a href="https://giphy.com/stickers/transparent-xX1PKy7MVU4xUvQ7bL" target="_blank" rel="noopener noreferrer" className="hover:text-[#FF8DC7]">
+              via GIPHY
             </a>
         </p>
 
