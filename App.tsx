@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Message, SenderType, ChatSession } from './types';
 import Header from './components/Header';
-import WelcomeMessage from './components/WelcomeMessage';
+// WelcomeMessage import removed
 import ChatMessageList from './components/ChatMessageList';
 import ChatInputBar from './components/ChatInputBar';
 import Sidebar from './components/Sidebar';
@@ -604,10 +604,15 @@ const App: React.FC = () => {
     }
   };
 
-  const showWelcome = !activeChatId && currentMessages.length === 0 && chatReady && !isSessionsLoading && !isMessagesLoading;
+  // Condition for the new chat experience (centered input, no messages)
+  const isNewChatExperience = (!activeChatId || activeChatId.startsWith("PENDING_")) && 
+                             currentMessages.length === 0 && 
+                             chatReady && 
+                             !isSessionsLoading && 
+                             !isMessagesLoading;
 
   return (
-    <div className="flex flex-col h-full bg-[#2E2B36] overflow-hidden"> {/* Unified background */}
+    <div className="flex flex-col h-full bg-[#2E2B36] overflow-hidden">
       <Sidebar 
         isOpen={isSidebarOpen} 
         onClose={handleToggleSidebar} 
@@ -622,12 +627,17 @@ const App: React.FC = () => {
       {isSidebarOpen && !isDesktopView && (
         <div className="fixed inset-0 bg-black/50 z-30 sidebar-overlay" onClick={handleToggleSidebar} aria-hidden="true"></div>
       )}
-      <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#2E2B36] transition-all duration-300 ease-in-out ${(isSidebarOpen && isDesktopView) ? 'md:ml-60' : 'ml-0'}`}> {/* Unified background */}
+      <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#2E2B36] transition-all duration-300 ease-in-out ${(isSidebarOpen && isDesktopView) ? 'md:ml-60' : 'ml-0'}`}>
         <Header onToggleSidebar={handleToggleSidebar} onNewChat={handleNewChat} />
-        <main className="flex-grow flex flex-col overflow-hidden bg-[#2E2B36]"> {/* This already had the target color */}
-          {isMessagesLoading && <div className="flex-grow flex items-center justify-center"><p className="text-[#A09CB0] text-lg animate-pulse">Loading chat...</p></div>}
-          {!isMessagesLoading && showWelcome && <WelcomeMessage />}
-          {!isMessagesLoading && !showWelcome && 
+        <main className={`flex-grow flex flex-col overflow-hidden bg-[#2E2B36] ${
+          isNewChatExperience ? 'items-center justify-center' : ''
+        }`}>
+          {isMessagesLoading && (
+            <div className="flex-grow flex items-center justify-center">
+              <p className="text-[#A09CB0] text-lg animate-pulse">Loading chat...</p>
+            </div>
+          )}
+          {!isMessagesLoading && !isNewChatExperience && (
             <ChatMessageList 
               messages={currentMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)}))} 
               isLoadingAiResponse={isLoadingAiResponse}
@@ -635,9 +645,22 @@ const App: React.FC = () => {
               onRateResponse={handleRateResponse}
               onRetryResponse={handleRetryAiResponse}
               onSaveEdit={handleSaveUserEdit}
-            />}
+            />
+          )}
+          {/* Wrapper for ChatInputBar to control its positioning */}
+          <div className={
+            isNewChatExperience 
+              ? "w-full" // Takes full width, ChatInputBar's internal max-width will apply
+              : "sticky bottom-0 z-10 w-full" // Sticks to bottom
+          }>
+            <ChatInputBar 
+                onSendMessage={handleSendMessage} 
+                isLoading={isLoadingAiResponse} 
+                isChatAvailable={chatReady} 
+            />
+          </div>
         </main>
-        <ChatInputBar onSendMessage={handleSendMessage} isLoading={isLoadingAiResponse} isChatAvailable={chatReady} />
+        {/* ChatInputBar was here, now moved into main with a conditional wrapper */}
       </div>
       <ConfirmationDialog
         isOpen={isDeleteConfirmationOpen}
