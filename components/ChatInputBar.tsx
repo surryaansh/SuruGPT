@@ -95,10 +95,10 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
             className={`flex-grow bg-transparent text-[#EAE6F0] placeholder-[#A09CB0] focus:outline-none text-[16px] resize-none overflow-y-auto 
               mx-3 
               leading-6
-              ${!isCentered ? 'pt-px' : ''} // Apply 1px top padding only in bottom bar state
-              max-h-${isCentered ? '32' : '32'}`} // Adjusted max-h for centered (max-h-32 is 8rem)
+              py-0 /* Ensure no vertical padding on textarea */
+              max-h-${isCentered ? '32' : '32'}`} 
             disabled={isLoading || !effectiveIsChatAvailable}
-            style={{ minHeight: isCentered ? '3.0rem' : '1.5rem' }} // Adjusted minHeight for centered (2 lines) and bottom (1 line)
+            style={{ minHeight: isCentered ? '3.0rem' : '1.5rem' }} 
           />
           <button
             onClick={handleSend}
