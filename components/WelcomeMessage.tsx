@@ -1,21 +1,8 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { IconHeart } from '../constants';
 
 const WelcomeMessage: React.FC = () => {
   const numHearts = 15; // Number of hearts to display
-
-  // useEffect for Tenor script is no longer needed as Pinterest embed is a direct iframe
-  // useEffect(() => {
-  //   const tenorScriptSrc = "https://tenor.com/embed.js";
-  //   let script = document.querySelector(`script[src="${tenorScriptSrc}"]`) as HTMLScriptElement | null;
-  //   if (!script) {
-  //     script = document.createElement('script');
-  //     script.src = tenorScriptSrc;
-  //     script.async = true;
-  //     document.body.appendChild(script);
-  //   }
-  // }, []);
-
 
   return (
     <div className="relative flex-grow flex flex-col items-center justify-center text-center px-4 py-8 overflow-hidden">
@@ -39,13 +26,12 @@ const WelcomeMessage: React.FC = () => {
 
       {/* Original Content - ensure it's above the hearts with relative positioning and z-index. Added flex for centering. */}
       <div className="relative z-10 flex flex-col items-center">
-        {/* Iframe Container - Replaces GIF */}
-        <div
-          className="w-[236px] h-[336px] mb-6 animate-fadeInSlideUp" // Adjusted size for the Pinterest iframe
+        {/* GIF Container - Replaces iframe */}
+        <img
+          src="https://jmp.sh/s/BXICDhihvGfp4Bq47Lkh"
+          alt="Cute animated GIF"
+          className="w-56 h-56 object-contain mb-6 rounded-2xl animate-fadeInSlideUp shadow-lg"
           style={{ animationDelay: '0.1s' }}
-          dangerouslySetInnerHTML={{
-            __html: `<iframe src="https://assets.pinterest.com/ext/embed.html?id=21181060741075358" height="336" width="236" frameborder="0" scrolling="no" ></iframe>`
-          }}
         />
         
         <h1 
