@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { IconSuru, IconHeart } from '../constants'; // Import IconSuru
+import { IconHeart } from '../constants'; 
 
 const WelcomeMessage: React.FC = () => {
   const numHearts = 15; // Number of hearts to display
@@ -25,12 +24,34 @@ const WelcomeMessage: React.FC = () => {
         ))}
       </div>
 
-      {/* Original Content - ensure it's above the hearts with relative positioning and z-index. Added flex for centering. */}
-      <div className="relative z-10 flex flex-col items-center"> {/* Centering icon and text */}
-        <IconSuru 
-            className="w-20 h-20 text-[#FF8DC7] mb-6 animate-fadeInSlideUp" 
-            style={{ animationDelay: '0.1s' }} 
-        />
+      {/* Content - ensure it's above the hearts with relative positioning and z-index. Added flex for centering. */}
+      <div className="relative z-10 flex flex-col items-center">
+        {/* Giphy Embed */}
+        <div 
+          className="mb-6 animate-fadeInSlideUp w-48 h-48 sm:w-64 sm:h-64" // Responsive sizing
+          style={{ animationDelay: '0.1s' }}
+        >
+          <iframe 
+            src="https://giphy.com/embed/FZKImujbCqNQKZTDDp" 
+            width="100%" // Make iframe responsive within its container
+            height="100%" // Make iframe responsive within its container
+            style={{ border: '0' }} // Remove default border
+            frameBorder="0" 
+            className="giphy-embed" 
+            allowFullScreen
+            title="Cute Giphy Embed"
+          ></iframe>
+        </div>
+        {/* Link - styled to be less obtrusive */}
+        <p 
+            className="text-[10px] text-[#A09CB0] mb-4 animate-fadeInSlideUp"
+            style={{ animationDelay: '0.15s' }}
+        >
+            <a href="https://giphy.com/stickers/transparent-FZKImujbCqNQKZTDDp" target="_blank" rel="noopener noreferrer" className="hover:text-[#FF8DC7]">
+                via GIPHY
+            </a>
+        </p>
+
         <h1 
             className="text-2xl sm:text-3xl text-[#EAE6F0] mb-2 animate-fadeInSlideUp" 
             style={{ animationDelay: '0.2s' }}
