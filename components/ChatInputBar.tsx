@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { IconHeart, IconSend } from '../constants'; 
 
@@ -46,14 +45,19 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      // Ensure scrollHeight is calculated *after* value update
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+        }
+      });
     }
   }, [inputValue]);
 
+
   useEffect(() => {
     if (!isLoading && inputValue === '' && textareaRef.current && effectiveIsChatAvailable) {
-      // Only focus if not centered, or if centered and explicitly allowed (for now, always focus if available)
-      if (!isCentered || (isCentered /* && some_other_condition_if_needed */)) {
+      if (!isCentered || (isCentered )) {
          textareaRef.current.focus();
       }
     }
@@ -63,19 +67,19 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
   const canSend = inputValue.trim() !== '' && !isLoading && effectiveIsChatAvailable;
 
   const outerDivClasses = isCentered
-    ? "w-full" // Container for max-w-2xl child, allows App.tsx to center it
-    : "bg-[#2E2B36] py-3 sm:py-4 px-4 sm:px-6 md:px-10"; // Styles for the bottom bar
+    ? "w-full" 
+    : "bg-[#2E2B36] py-3 sm:py-4 px-4 sm:px-6 md:px-10";
 
   return (
     <div className={outerDivClasses}>
       <div className="max-w-2xl mx-auto"> 
         <div className={`flex items-center bg-[#4A4754] shadow-sm
           rounded-${isCentered ? '3xl' : 'xl'}
-          px-${isCentered ? '4' : '1.5'}
-          py-${isCentered ? '6' : '1.5'}
+          px-${isCentered ? '4' : '3'}
+          py-${isCentered ? '4' : '2'}
         `}>
           <button 
-            className="p-2 text-[#A09CB0] hover:text-[#FF8DC7] disabled:opacity-50 animate-subtleBounceOnHover"
+            className="p-2 text-[#A09CB0] hover:text-[#FF8DC7] disabled:opacity-50 animate-subtleBounceOnHover flex-shrink-0"
             disabled={isLoading || !effectiveIsChatAvailable}
             aria-label="More options" 
           >
@@ -83,20 +87,21 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
           </button>
           <textarea
             ref={textareaRef}
-            rows={isCentered ? 3 : 1}
+            rows={isCentered ? 2 : 1}
             value={inputValue}
             onChange={handleInputChange}
             onKeyDown={handleKeyPress}
             placeholder={effectiveIsChatAvailable ? "Chat with SuruGPT..." : "Chat unavailable (API key missing)"}
-            className={`flex-grow bg-transparent text-[#EAE6F0] placeholder-[#A09CB0] focus:outline-none px-3 py-2.5 text-[16px] resize-none overflow-y-auto 
-              max-h-${isCentered ? '40' : '32'}`} // max-h-40 (10rem), max-h-32 (8rem)
+            className={`flex-grow bg-transparent text-[#EAE6F0] placeholder-[#A09CB0] focus:outline-none text-[16px] resize-none overflow-y-auto 
+              mx-3 
+              max-h-${isCentered ? '32' : '32'}`} // Adjusted max-h for centered (max-h-32 is 8rem)
             disabled={isLoading || !effectiveIsChatAvailable}
-            style={{ minHeight: isCentered ? '4.5rem' : '2.75rem' }} // approx 3 lines vs 1 line base
+            style={{ minHeight: isCentered ? '3.0rem' : '1.5rem' }} // Adjusted minHeight for centered (2 lines) and bottom (1 line)
           />
           <button
             onClick={handleSend}
             disabled={!canSend}
-            className={`p-2.5 rounded-lg transition-colors ${ 
+            className={`p-2.5 rounded-lg transition-colors flex-shrink-0 ${ 
               canSend ? 'bg-[#FF8DC7] hover:bg-opacity-80 text-white' : 'bg-transparent text-[#A09CB0]'
             }`}
             aria-label="Send message"
