@@ -1,3 +1,4 @@
+
 {
   "name": "surugpt-chat-openai-vercel",
   "version": "1.0.0",
@@ -5,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "mkdir -p dist && esbuild index.tsx --bundle --outfile=dist/bundle.js --jsx=automatic --loader:.ts=tsx --platform=browser --define:process.env.NODE_ENV='\"production\"' --minify && cp index.html dist/index.html",
-    "dev": "esbuild index.tsx --bundle --outfile=bundle.js --jsx=automatic --loader:.ts=tsx --platform=browser --servedir=. --watch"
+    "dev": "esbuild index.tsx --bundle --outfile=dist/bundle.js --jsx=automatic --loader:.ts=tsx --platform=browser --servedir=. --watch"
   },
   "dependencies": {
     "react": "^19.1.0",
