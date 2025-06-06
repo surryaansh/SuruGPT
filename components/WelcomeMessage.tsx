@@ -1,26 +1,20 @@
-
 import React, { useEffect } from 'react';
-import { IconHeart } from '../constants'; // IconSuru removed
+import { IconHeart } from '../constants';
 
 const WelcomeMessage: React.FC = () => {
   const numHearts = 15; // Number of hearts to display
 
-  useEffect(() => {
-    const tenorScriptSrc = "https://tenor.com/embed.js";
-    // Check if the script is already on the page
-    let script = document.querySelector(`script[src="${tenorScriptSrc}"]`) as HTMLScriptElement | null;
-
-    if (!script) {
-      // If not, create and append it
-      script = document.createElement('script');
-      script.src = tenorScriptSrc;
-      script.async = true;
-      document.body.appendChild(script);
-    }
-    // Tenor's script will find and initialize GIF embeds.
-    // No specific cleanup for the script tag itself in the return function,
-    // as it's generally safe and useful to leave it loaded if other components might use it.
-  }, []);
+  // useEffect for Tenor script is no longer needed as Pinterest embed is a direct iframe
+  // useEffect(() => {
+  //   const tenorScriptSrc = "https://tenor.com/embed.js";
+  //   let script = document.querySelector(`script[src="${tenorScriptSrc}"]`) as HTMLScriptElement | null;
+  //   if (!script) {
+  //     script = document.createElement('script');
+  //     script.src = tenorScriptSrc;
+  //     script.async = true;
+  //     document.body.appendChild(script);
+  //   }
+  // }, []);
 
 
   return (
@@ -45,12 +39,12 @@ const WelcomeMessage: React.FC = () => {
 
       {/* Original Content - ensure it's above the hearts with relative positioning and z-index. Added flex for centering. */}
       <div className="relative z-10 flex flex-col items-center">
-        {/* GIF Container - Replaces IconSuru */}
+        {/* Iframe Container - Replaces GIF */}
         <div
-          className="w-36 h-36 sm:w-48 sm:h-48 mb-6 animate-fadeInSlideUp" // Adjusted size for the GIF container
+          className="w-[236px] h-[336px] mb-6 animate-fadeInSlideUp" // Adjusted size for the Pinterest iframe
           style={{ animationDelay: '0.1s' }}
           dangerouslySetInnerHTML={{
-            __html: `<div class="tenor-gif-embed" data-postid="10623645" data-share-method="host" data-aspect-ratio="1" data-width="100%"><a href="https://tenor.com/view/cats-dance-love-cute-cat-gif-10623645">Cats Dance GIF</a>from <a href="https://tenor.com/search/cats-gifs">Cats GIFs</a></div>`
+            __html: `<iframe src="https://assets.pinterest.com/ext/embed.html?id=21181060741075358" height="336" width="236" frameborder="0" scrolling="no" ></iframe>`
           }}
         />
         
