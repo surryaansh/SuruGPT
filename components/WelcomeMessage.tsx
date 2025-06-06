@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { IconHeart } from '../constants'; // IconSuru removed as it's replaced
+import { IconSuru, IconHeart } from '../constants'; // Import IconSuru
 
 const WelcomeMessage: React.FC = () => {
   const numHearts = 15; // Number of hearts to display
@@ -27,10 +27,8 @@ const WelcomeMessage: React.FC = () => {
 
       {/* Original Content - ensure it's above the hearts with relative positioning and z-index. Added flex for centering. */}
       <div className="relative z-10 flex flex-col items-center"> {/* Centering icon and text */}
-        <img
-            src="/images/custom-suru.gif" 
-            alt="Suru Animation"
-            className="w-20 h-20 mb-6 animate-fadeInSlideUp" 
+        <IconSuru 
+            className="w-20 h-20 text-[#FF8DC7] mb-6 animate-fadeInSlideUp" 
             style={{ animationDelay: '0.1s' }} 
         />
         <h1 
