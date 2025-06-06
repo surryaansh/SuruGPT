@@ -630,7 +630,7 @@ const App: React.FC = () => {
       <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#2E2B36] transition-all duration-300 ease-in-out ${(isSidebarOpen && isDesktopView) ? 'md:ml-60' : 'ml-0'}`}>
         <Header onToggleSidebar={handleToggleSidebar} onNewChat={handleNewChat} />
         <main className={`flex-grow flex flex-col overflow-hidden bg-[#2E2B36] ${
-          isNewChatExperience ? 'items-center justify-center' : ''
+          isNewChatExperience ? 'items-center justify-center' : '' // No change here, App.tsx main already handles this for content area
         }`}>
           {isMessagesLoading && (
             <div className="flex-grow flex items-center justify-center">
@@ -650,17 +650,17 @@ const App: React.FC = () => {
           {/* Wrapper for ChatInputBar to control its positioning */}
           <div className={
             isNewChatExperience 
-              ? "w-full" // Takes full width, ChatInputBar's internal max-width will apply
-              : "sticky bottom-0 z-10 w-full" // Sticks to bottom
+              ? "w-full flex-grow flex items-center justify-center p-4" // Ensures ChatInputBar's content is centered
+              : "sticky bottom-0 z-10 w-full" // This wrapper becomes sticky
           }>
             <ChatInputBar 
                 onSendMessage={handleSendMessage} 
                 isLoading={isLoadingAiResponse} 
-                isChatAvailable={chatReady} 
+                isChatAvailable={chatReady}
+                isCentered={isNewChatExperience} // Pass the prop
             />
           </div>
         </main>
-        {/* ChatInputBar was here, now moved into main with a conditional wrapper */}
       </div>
       <ConfirmationDialog
         isOpen={isDeleteConfirmationOpen}
