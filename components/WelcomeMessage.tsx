@@ -10,12 +10,9 @@ const WelcomeMessage: React.FC = () => {
     const randomIndex = Math.floor(Math.random() * greetings.length);
     setCurrentGreeting(greetings[randomIndex]);
 
-    // Defer setting the Giphy iframe source slightly
-    const timer = setTimeout(() => {
-      setGiphyIframeSrc("https://giphy.com/embed/BnX3LZNpuI2oUJHac0");
-    }, 100); // Small delay (100ms)
+    // Set the Giphy iframe source immediately on mount
+    setGiphyIframeSrc("https://giphy.com/embed/BnX3LZNpuI2oUJHac0");
 
-    return () => clearTimeout(timer);
   }, []); // Empty dependency array ensures this runs only on mount
 
   return (
