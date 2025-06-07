@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { IconLayoutSidebar, IconHeart, IconSearch, IconPencil, IconEllipsisVertical, IconTrash, IconNewChat, IconUser } from '../constants'; // Added IconUser
+import { IconLayoutSidebar, IconHeart, IconSearch, IconPencil, IconEllipsisVertical, IconTrash, IconNewChat, IconLogout } from '../constants'; // IconUser removed, IconLogout added
 import { ChatSession } from '../types';
 
 interface SidebarProps {
@@ -13,9 +12,9 @@ interface SidebarProps {
   onRequestDeleteConfirmation: (sessionId: string, sessionTitle: string) => void;
   onRenameChatSession: (sessionId: string, newTitle: string) => Promise<void>;
   isLoading?: boolean;
-  onLogout: () => void; 
+  onRequestLogoutConfirmation: () => void; // Changed from onLogout
   userName: string; 
-  ownerUID: string; // Added ownerUID prop
+  ownerUID: string; 
 }
 
 interface GroupedChatSessions {
@@ -116,7 +115,7 @@ const ChatSessionItem: React.FC<ChatSessionItemProps> = React.memo(({
 const Sidebar: React.FC<SidebarProps> = ({
   isOpen, onClose, onNewChat, chatSessions, activeChatId, onSelectChat,
   onRequestDeleteConfirmation, onRenameChatSession, isLoading,
-  onLogout, userName, ownerUID // Destructure ownerUID
+  onRequestLogoutConfirmation, userName, ownerUID 
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [displayedSessions, setDisplayedSessions] = useState<ChatSession[]>(chatSessions);
@@ -136,8 +135,6 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (!searchTerm.trim()) setDisplayedSessions(chatSessions);
   }, [chatSessions, searchTerm]);
 
-  // This performSearch function demonstrates how ownerUID could be used if API search is implemented.
-  // The current debouncedSearch uses client-side filtering.
   const performSearch = useCallback(async (term: string, currentUserId: string) => {
     const trimmedTerm = term.trim();
     if (!trimmedTerm) { setDisplayedSessions(chatSessions); setIsSearching(false); return; }
@@ -158,8 +155,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 
   const debouncedSearch = useMemo(() => debounce((term: string) => {
-    // Client-side filtering as currently implemented.
-    // If API search is desired, call: performSearch(term, ownerUID);
     const lowerTerm = term.toLowerCase();
     if (!lowerTerm) {
         setDisplayedSessions(chatSessions);
@@ -169,7 +164,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         );
     }
     setIsSearching(false);
-  }, 300), [chatSessions, ownerUID, performSearch]); // ownerUID and performSearch added if performSearch is to be used
+  }, 300), [chatSessions]); 
 
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,170 +174,191 @@ const Sidebar: React.FC<SidebarProps> = ({
     debouncedSearch(term);
   };
 
-  const closeContextMenu = useCallback(() => {
-    setActiveContextMenuSessionId(null); setContextMenuPosition(null); setCurrentSessionForMenu(null);
-  }, []);
-
   const handleEllipsisClick = (e: React.MouseEvent, session: ChatSession) => {
     e.stopPropagation();
-    const buttonElement = ellipsisRefs.current[session.id];
-    if (activeContextMenuSessionId === session.id) { closeContextMenu(); return; }
-    if (buttonElement) {
-      const buttonRect = buttonElement.getBoundingClientRect();
-      let top = buttonRect.bottom + 2, left = buttonRect.right + 6;
-      if (left + MENU_WIDTH > window.innerWidth) left = buttonRect.left - MENU_WIDTH - 6;
-      if (left < 0) left = 6;
-      const menuHeightEstimate = contextMenuRef.current?.offsetHeight || 80;
-      if (top + menuHeightEstimate > window.innerHeight) top = buttonRect.top - menuHeightEstimate - 2;
-      if (top < 0) top = 2;
-      setContextMenuPosition({ top, left });
+    if (activeContextMenuSessionId === session.id) {
+      setActiveContextMenuSessionId(null);
+      setCurrentSessionForMenu(null);
+    } else {
+      const buttonRect = e.currentTarget.getBoundingClientRect();
+      const sidebarRect = e.currentTarget.closest('.sidebar')?.getBoundingClientRect();
+      if (sidebarRect) {
+        setContextMenuPosition({
+          top: buttonRect.bottom - sidebarRect.top,
+          left: buttonRect.left - sidebarRect.left - MENU_WIDTH + buttonRect.width,
+        });
+      } else {
+         setContextMenuPosition({ top: buttonRect.bottom, left: buttonRect.left - MENU_WIDTH + buttonRect.width });
+      }
       setActiveContextMenuSessionId(session.id);
       setCurrentSessionForMenu(session);
-    } else { closeContextMenu(); }
+    }
   };
+
+  const handleClickOutsideMenu = useCallback((event: MouseEvent) => {
+    if (activeContextMenuSessionId && contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node) &&
+        ellipsisRefs.current[activeContextMenuSessionId] && !ellipsisRefs.current[activeContextMenuSessionId]!.contains(event.target as Node)
+    ) {
+      setActiveContextMenuSessionId(null);
+      setCurrentSessionForMenu(null);
+    }
+  }, [activeContextMenuSessionId]);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
-        if (!Object.values(ellipsisRefs.current).some(btn => btn && btn.contains(event.target as Node))) {
-          closeContextMenu();
-        }
-      }
-    };
-    if (activeContextMenuSessionId) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [activeContextMenuSessionId, closeContextMenu]);
+    document.addEventListener('mousedown', handleClickOutsideMenu);
+    return () => document.removeEventListener('mousedown', handleClickOutsideMenu);
+  }, [handleClickOutsideMenu]);
 
-  const handleRename = (session: ChatSession) => {
-    setEditingSessionId(session.id); setEditingTitle(session.title); closeContextMenu();
+  const handleStartEdit = () => {
+    if (currentSessionForMenu) {
+      setEditingSessionId(currentSessionForMenu.id);
+      setEditingTitle(currentSessionForMenu.title);
+      setActiveContextMenuSessionId(null);
+    }
   };
-
+  
+  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement>) => setEditingTitle(e.target.value);
+  
   const submitRename = async () => {
     if (editingSessionId && editingTitle.trim()) {
-      try { await onRenameChatSession(editingSessionId, editingTitle.trim()); }
-      catch (error) {
-        console.error("Failed to rename:", error);
-        const original = chatSessions.find(s => s.id === editingSessionId);
-        if (original) setEditingTitle(original.title);
-      }
+      await onRenameChatSession(editingSessionId, editingTitle.trim());
     }
     setEditingSessionId(null);
+    setEditingTitle('');
   };
 
-  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement>) => setEditingTitle(e.target.value);
   const handleEditInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') submitRename();
-    if (e.key === 'Escape') {
-      const original = chatSessions.find(s => s.id === editingSessionId);
-      if (original) setEditingTitle(original.title);
-      setEditingSessionId(null);
+    if (e.key === 'Enter') { e.preventDefault(); submitRename(); }
+    else if (e.key === 'Escape') { e.preventDefault(); setEditingSessionId(null); setEditingTitle(''); }
+  };
+  
+  const handleDelete = () => {
+    if (currentSessionForMenu) {
+      onRequestDeleteConfirmation(currentSessionForMenu.id, currentSessionForMenu.title);
+      setActiveContextMenuSessionId(null);
     }
   };
 
-  const groupedSessions = useMemo(() => groupChatSessionsByDate(displayedSessions), [displayedSessions]);
+  const groupedAndFilteredSessions = useMemo(() => {
+    const sessionsToGroup = displayedSessions.filter(session => !session.id.startsWith("PENDING_"));
+    return groupChatSessionsByDate(sessionsToGroup);
+  }, [displayedSessions]);
+
 
   return (
-    <>
-      <div
-        className={`sidebar fixed top-0 left-0 h-full w-52 sm:w-60 bg-[#2D2A32] text-[#EAE6F0] p-4 z-40 transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out`}
-        role="dialog" aria-modal="true" aria-hidden={!isOpen}
-      >
-        <div className="flex flex-col h-full">
-          {/* New Chat Button - moved up, header removed */}
-          <button
-            onClick={onNewChat}
-            className="group w-full flex items-center text-left p-2.5 mb-3.5 rounded-lg hover:bg-[#4A4754] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-2 focus-visible:ring-offset-[#2D2A32]"
-            aria-label="Start a new chat"
-          >
-            <IconNewChat className="w-4 h-4 mr-2.5 text-[#EAE6F0] group-hover:scale-110 group-hover:rotate-[-12deg] transition-transform duration-200" />
-            <span className="text-sm font-normal text-[#EAE6F0]">New chat</span>
-          </button>
-
-          {/* Search Input */}
-          <div className="relative mb-3">
-            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-              <IconSearch className="w-3.5 h-3.5 text-[#A09CB0]" />
-            </div>
-            <input
-              type="text" placeholder="Search chats" value={searchTerm} onChange={handleSearchChange}
-              className="w-full p-2 pl-8 bg-[#4A4754] text-[#EAE6F0] placeholder-[#A09CB0] rounded-md text-xs border border-[#5A5666] focus:outline-none focus:border-[#FF8DC7] focus:ring-1 focus:ring-[#FF8DC7]"
-              aria-label="Search chat history"
-            />
-          </div>
-
-          {/* Chat List Area */}
-          <div className="flex-grow overflow-y-auto px-1 mb-1 sidebar-chat-list-scroll-container"> {/* Reduced bottom margin, added class for styling scrollbar */}
-            {isSearching ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Searching...</p>
-              : isLoading && !searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Loading chats...</p>
-                : displayedSessions.length > 0 ? (
-                  groupedSessions.map((sessionGroup, groupIndex) => (
-                    <div key={sessionGroup.heading} className="mb-2">
-                      <h3 className="text-xs text-[#A09CB0] uppercase font-semibold mb-0.5 mt-2 px-1 animate-fadeInSlideUp" style={{ animationDelay: `${groupIndex * 0.05}s` }}>
-                        {sessionGroup.heading}
-                      </h3>
-                      <ul>
-                        {sessionGroup.chats.map((chat, index) => (
-                          <ChatSessionItem
-                            key={chat.id} chat={chat} isActive={activeChatId === chat.id}
-                            isEditing={editingSessionId === chat.id} editingTitle={editingTitle}
-                            activeContextMenuSessionId={activeContextMenuSessionId}
-                            onSelectChat={() => { onSelectChat(chat.id); closeContextMenu(); }}
-                            handleEllipsisClick={handleEllipsisClick}
-                            handleEditInputChange={handleEditInputChange}
-                            handleEditInputKeyDown={handleEditInputKeyDown}
-                            submitRename={submitRename}
-                            ellipsisRefs={ellipsisRefs}
-                            animationDelay={`${(groupIndex * 0.1) + (index * 0.03)}s`}
-                          />
-                        ))}
-                      </ul>
-                    </div>
-                  ))
-                  ) : searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">No chats match.</p>
-                    : <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">No chat history.</p>
-            }
-          </div>
-
-          {/* User Info and Logout at the bottom */}
-          <div className="mt-auto border-t border-[#393641] pt-3 pb-1">
-            <div className="flex items-center justify-between p-1.5 rounded-lg hover:bg-[#3c3a43] transition-colors duration-150">
-                <div className="flex items-center min-w-0">
-                    <IconUser className="w-5 h-5 text-[#A09CB0] mr-2.5 flex-shrink-0" />
-                    <span className="text-sm text-[#EAE6F0] truncate font-medium">{userName}</span>
-                </div>
-                <button
-                    onClick={onLogout}
-                    className="ml-2 text-xs text-[#A09CB0] hover:text-[#FF8DC7] p-1 rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#2D2A32]"
-                    aria-label="Logout"
-                >
-                    Logout
-                </button>
-            </div>
-          </div>
-
-        </div>
+    <aside className={`sidebar fixed top-0 left-0 h-full w-60 bg-[#2D2A32] text-[#EAE6F0] p-3 flex flex-col z-40 transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+      {/* Sidebar Header */}
+      <div className="flex items-center justify-between mb-3 flex-shrink-0">
+        <button 
+          onClick={onNewChat}
+          className="flex items-center space-x-2.5 p-2 w-full text-left text-sm rounded-lg hover:bg-[#3c3a43] focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] animate-subtleBounceOnHover"
+        >
+          <IconNewChat className="w-5 h-5 text-[#FF8DC7]" />
+          <span>New Chat</span>
+        </button>
+        <button onClick={onClose} className="p-1.5 text-[#A09CB0] hover:text-[#FF8DC7] md:hidden">
+          <IconLayoutSidebar className="w-5 h-5" />
+        </button>
       </div>
 
+      {/* Search Bar */}
+      <div className="relative mb-2 flex-shrink-0">
+        <IconSearch className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[#A09CB0]" />
+        <input
+          type="text"
+          placeholder="Search chats..."
+          value={searchTerm}
+          onChange={handleSearchChange}
+          className="w-full pl-8 pr-2 py-1.5 bg-[#232129] text-[#EAE6F0] placeholder-[#A09CB0] rounded-md text-xs border border-[#393641] focus:border-[#FF8DC7] focus:ring-1 focus:ring-[#FF8DC7] focus:outline-none"
+        />
+      </div>
+
+      {/* Chat History List */}
+      <nav className="flex-grow overflow-y-auto pr-1 -mr-1"> {/* Negative margin to hide scrollbar track, padding for content */}
+        {isLoading && (
+            <div className="flex justify-center items-center h-full">
+                <div className="w-3 h-3 bg-[#FF8DC7] rounded-full animate-pulse" style={{animationDelay: '0s'}}></div>
+                <div className="w-3 h-3 bg-[#FF8DC7] rounded-full animate-pulse mx-1" style={{animationDelay: '0.2s'}}></div>
+                <div className="w-3 h-3 bg-[#FF8DC7] rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
+            </div>
+        )}
+        {!isLoading && searchTerm && displayedSessions.length === 0 && !isSearching && (
+          <p className="text-xs text-center text-[#A09CB0] py-4">No chats found for "{searchTerm}".</p>
+        )}
+        {!isLoading && !searchTerm && displayedSessions.length === 0 && (
+          <p className="text-xs text-center text-[#A09CB0] py-4">No chat history yet.</p>
+        )}
+
+        {groupedAndFilteredSessions.map((group, groupIndex) => (
+          group.chats.length > 0 && (
+            <div key={group.heading} className="mb-2 last:mb-0">
+              <h3 className="text-[11px] font-semibold text-[#A09CB0] px-2 py-1 uppercase tracking-wider">{group.heading}</h3>
+              <ul>
+                {group.chats.map((chat, chatIndex) => (
+                  <ChatSessionItem
+                    key={chat.id}
+                    chat={chat}
+                    isActive={activeChatId === chat.id}
+                    isEditing={editingSessionId === chat.id}
+                    editingTitle={editingTitle}
+                    activeContextMenuSessionId={activeContextMenuSessionId}
+                    onSelectChat={onSelectChat}
+                    handleEllipsisClick={handleEllipsisClick}
+                    handleEditInputChange={handleEditInputChange}
+                    handleEditInputKeyDown={handleEditInputKeyDown}
+                    submitRename={submitRename}
+                    ellipsisRefs={ellipsisRefs}
+                    animationDelay={`${(groupIndex * 5 + chatIndex) * 30}ms`} 
+                  />
+                ))}
+              </ul>
+            </div>
+          )
+        ))}
+      </nav>
+
       {/* Context Menu */}
-      {activeContextMenuSessionId && contextMenuPosition && currentSessionForMenu && (
+      {activeContextMenuSessionId && currentSessionForMenu && contextMenuPosition && (
         <div
           ref={contextMenuRef}
-          className="context-menu fixed bg-[#201F23] rounded-lg shadow-xl py-1 z-50 animate-fadeIn animate-scaleIn"
-          style={{ top: `${contextMenuPosition.top}px`, left: `${contextMenuPosition.left}px`, width: `${MENU_WIDTH}px` }}
-          role="menu"
+          className="absolute bg-[#393641] rounded-lg shadow-xl py-1.5 z-50 animate-scaleIn"
+          style={{ top: contextMenuPosition.top, left: contextMenuPosition.left, width: `${MENU_WIDTH}px` }}
+          role="menu" aria-orientation="vertical" aria-labelledby={`ellipsis-button-${currentSessionForMenu.id}`}
         >
-          <button onClick={() => handleRename(currentSessionForMenu)}
-            className="context-menu-item w-full text-left px-2.5 py-1.5 text-xs text-[#EAE6F0] hover:bg-[#393641] flex items-center focus:bg-[#393641] focus:outline-none rounded-t-md" role="menuitem">
-            <IconPencil className="w-3.5 h-3.5 mr-2" /> Rename
+          <button
+            onClick={handleStartEdit}
+            className="flex items-center w-full px-3 py-1.5 text-xs text-[#EAE6F0] hover:bg-[#4A4754] focus:bg-[#4A4754] focus:outline-none"
+            role="menuitem"
+          >
+            <IconPencil className="w-3.5 h-3.5 mr-2.5" /> Rename
           </button>
-          <div className="border-t border-[#393641] my-0.5 mx-1"></div>
-          <button onClick={() => { onRequestDeleteConfirmation(currentSessionForMenu.id, currentSessionForMenu.title); closeContextMenu(); }}
-            className="context-menu-item w-full text-left px-2.5 py-1.5 text-xs text-[#FF8DC7] hover:bg-[#393641] flex items-center focus:bg-[#393641] focus:outline-none rounded-b-md" role="menuitem">
-            <IconTrash className="w-3.5 h-3.5 mr-2" /> Delete
+          <button
+            onClick={handleDelete}
+            className="flex items-center w-full px-3 py-1.5 text-xs text-[#FF6B6B] hover:bg-[#4A4754] focus:bg-[#4A4754] focus:outline-none"
+            role="menuitem"
+          >
+            <IconTrash className="w-3.5 h-3.5 mr-2.5" /> Delete
           </button>
         </div>
       )}
-    </>
+
+      {/* Sidebar Footer */}
+      <div className="mt-auto flex-shrink-0 border-t border-[#393641] pt-3">
+        <div className="flex items-center justify-between p-2">
+          <div className="flex items-center space-x-2">
+            <IconHeart className="w-4 h-4 text-[#FFD1DC]" /> 
+            <span className="text-xs font-medium text-[#EAE6F0]">{userName}</span>
+          </div>
+          <button
+            onClick={onRequestLogoutConfirmation} 
+            className="p-1.5 text-[#A09CB0] hover:text-[#FF6B6B] rounded-md focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF6B6B] focus-visible:ring-offset-1 focus-visible:ring-offset-[#2D2A32]"
+            aria-label="Log out"
+          >
+            <IconLogout className="w-4 h-4" /> 
+          </button>
+        </div>
+      </div>
+    </aside>
   );
 };
 
