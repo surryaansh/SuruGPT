@@ -680,6 +680,7 @@ const App: React.FC = () => {
               
               {/* Content container (WelcomeMessage + ChatInputBar), must be above hearts */}
               <div className="relative w-full max-w-2xl z-10">
+                {/* Updated positioning for WelcomeMessage container */}
                 <div className="absolute bottom-[calc(100%+1.5rem)] left-1/2 -translate-x-1/2 w-full">
                   <WelcomeMessage />
                 </div>
