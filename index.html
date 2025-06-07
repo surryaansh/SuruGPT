@@ -243,6 +243,15 @@
       animation: fadeInUpSlightly 0.5s ease-out forwards;
     }
 
+    /* Animation for app fade-out on logout */
+    @keyframes fadeOutDownSlightly {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(10px); }
+    }
+    .animate-fadeOutDownSlightly {
+      animation: fadeOutDownSlightly 0.5s ease-in forwards;
+    }
+
     /* General fade-in for content sections (e.g., New Chat Experience) */
     @keyframes fadeInContent {
       from { opacity: 0; }
@@ -268,9 +277,11 @@
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
 <body class="antialiased">
   <div id="root"></div>
   <script type="module" src="/bundle.js"></script>
+<script type="module" src="/index.tsx"></script>
 </body>
 </html>

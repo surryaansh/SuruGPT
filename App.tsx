@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { firebaseConfig } from './services/firebaseConfig'; // Ensure this has your actual config
@@ -27,7 +26,7 @@ import {
   deleteChatSessionFromFirestore,
   updateMessageFeedbackInFirestore,
 } from './services/firebaseService';
-import { IconHeart } from './constants'; // Changed from IconKawaiiSuru
+import { IconHeart, IconLogout, IconTrash } from './constants'; // Changed from IconKawaiiSuru, Added IconLogout, IconTrash
 
 
 // Initialize Firebase App and Auth
@@ -122,6 +121,9 @@ const App: React.FC = () => {
 
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
   const [sessionToConfirmDelete, setSessionToConfirmDelete] = useState<{ id: string, title: string } | null>(null);
+  
+  const [isLogoutConfirmationOpen, setIsLogoutConfirmationOpen] = useState(false);
+
 
   const inactivityTimerRef = useRef<number | null>(null);
   const activeChatIdForTimerRef = useRef<string | null>(null);
@@ -138,13 +140,14 @@ const App: React.FC = () => {
   const previousActiveSessionIdToProcessOnNewChatRef = useRef<string | null>(null);
 
   const [appFadeInAnimation, setAppFadeInAnimation] = useState('');
+  const [appFadeOutAnimation, setAppFadeOutAnimation] = useState('');
   const prevCurrentUserRef = useRef<User | null>(null);
 
 
   useEffect(() => {
     if (!isLoadingAuth && currentUser && !prevCurrentUserRef.current) {
-      // User just logged in and was previously not logged in (or loading)
       setAppFadeInAnimation('animate-fadeInUpSlightly');
+      setAppFadeOutAnimation(''); // Clear any lingering fade-out
     }
     prevCurrentUserRef.current = currentUser;
   }, [currentUser, isLoadingAuth]);
@@ -193,7 +196,8 @@ const App: React.FC = () => {
         console.log(`[App] onAuthStateChanged: Read initialPersistedIdFromLocalStorageRef for user ${user.uid}:`, initialPersistedIdFromLocalStorageRef.current);
       } else {
         setCurrentUser(null);
-        setAppFadeInAnimation(''); // Reset animation if user logs out or changes
+        setAppFadeInAnimation(''); 
+        setAppFadeOutAnimation('');
         initialPersistedIdFromLocalStorageRef.current = null;
         if (user) {
           console.warn("[App] Non-owner user attempted login:", user.email);
@@ -204,7 +208,7 @@ const App: React.FC = () => {
       setIsLoadingAuth(false);
       initialLoadAndRestoreAttemptCompleteRef.current = false;
       isInitialLoadLogicRunning.current = false; 
-      previousActiveSessionIdToProcessOnNewChatRef.current = null; // Clear on auth change
+      previousActiveSessionIdToProcessOnNewChatRef.current = null; 
     });
     return () => unsubscribe();
   }, []);
@@ -255,42 +259,56 @@ const App: React.FC = () => {
     }
   }, []); 
 
+  const handleRequestLogoutConfirmation = () => {
+    setIsLogoutConfirmationOpen(true);
+  };
+
+  const handleCancelLogout = () => {
+    setIsLogoutConfirmationOpen(false);
+  };
 
   const handleLogout = async () => {
-    if (inactivityTimerRef.current) {
-      clearTimeout(inactivityTimerRef.current);
-      inactivityTimerRef.current = null;
-    }
-    const endedSessionId = activeChatIdForTimerRef.current;
-    const endedSessionMessages = endedSessionId ? [...currentMessagesForTimerRef.current] : [];
+    setIsLogoutConfirmationOpen(false);
+    setAppFadeOutAnimation('animate-fadeOutDownSlightly');
 
-    const loggingOutUid = currentUser?.uid;
-    console.log(`[App] handleLogout: Initiated for user ${loggingOutUid}. Ended session ID: ${endedSessionId}`);
+    setTimeout(async () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+        inactivityTimerRef.current = null;
+      }
+      const endedSessionId = activeChatIdForTimerRef.current;
+      const endedSessionMessages = endedSessionId ? [...currentMessagesForTimerRef.current] : [];
 
+      const loggingOutUid = currentUser?.uid;
+      console.log(`[App] handleLogout: Initiated for user ${loggingOutUid}. Ended session ID: ${endedSessionId}`);
 
-    if (currentUser && endedSessionId && endedSessionMessages.length > 0 && !endedSessionId.startsWith("PENDING_")) {
-      await processEndedSessionForMemory(currentUser.uid, endedSessionId, endedSessionMessages);
-    }
-    
-    previousActiveSessionIdToProcessOnNewChatRef.current = null;
-    console.log("[App][handleLogout] Cleared previousActiveSessionIdToProcessOnNewChatRef.");
+      if (currentUser && endedSessionId && endedSessionMessages.length > 0 && !endedSessionId.startsWith("PENDING_")) {
+        await processEndedSessionForMemory(currentUser.uid, endedSessionId, endedSessionMessages);
+      }
+      
+      previousActiveSessionIdToProcessOnNewChatRef.current = null;
+      console.log("[App][handleLogout] Cleared previousActiveSessionIdToProcessOnNewChatRef.");
 
-    await signOut(auth);
+      await signOut(auth);
 
-    if (loggingOutUid) {
-      localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${loggingOutUid}`);
-      sessionStorage.removeItem(`${SESSION_STORAGE_RELOAD_STATE_KEY}_${loggingOutUid}`);
-      console.log(`[App] handleLogout: Cleared localStorage (activeChatId) & sessionStorage (reloadState) for user ${loggingOutUid}.`);
-    }
+      if (loggingOutUid) {
+        localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${loggingOutUid}`);
+        sessionStorage.removeItem(`${SESSION_STORAGE_RELOAD_STATE_KEY}_${loggingOutUid}`);
+        console.log(`[App] handleLogout: Cleared localStorage (activeChatId) & sessionStorage (reloadState) for user ${loggingOutUid}.`);
+      }
 
-    setActiveChatId(null);
-    setCurrentMessages([]);
-    setAllChatSessions([]);
-    setGlobalContextSummary('');
-    initialLoadAndRestoreAttemptCompleteRef.current = false;
-    isInitialLoadLogicRunning.current = false; 
-    initialPersistedIdFromLocalStorageRef.current = null;
-    console.log("[App] User logout process completed.");
+      setActiveChatId(null);
+      setCurrentMessages([]);
+      setAllChatSessions([]);
+      setGlobalContextSummary('');
+      initialLoadAndRestoreAttemptCompleteRef.current = false;
+      isInitialLoadLogicRunning.current = false; 
+      initialPersistedIdFromLocalStorageRef.current = null;
+      
+      setAppFadeInAnimation(''); 
+      setAppFadeOutAnimation(''); 
+      console.log("[App] User logout process completed.");
+    }, 500); // Animation duration
   };
 
 
@@ -774,7 +792,7 @@ const App: React.FC = () => {
     if (activeChatId === sessionToDeleteId) {
       setCurrentMessages([]);
       setActiveChatId(null);
-      previousActiveSessionIdToProcessOnNewChatRef.current = null; // Clear if the deleted session was the one pending processing
+      previousActiveSessionIdToProcessOnNewChatRef.current = null; 
     }
     setIsDeleteConfirmationOpen(false);
     setSessionToConfirmDelete(null);
@@ -825,20 +843,20 @@ const App: React.FC = () => {
 
     if (currentUser && isNewChatExperience && container) {
       warmUpApis();
-      const numHearts = 20; // Increased number of hearts
+      const numHearts = 20; 
 
       for (let i = 0; i < numHearts; i++) {
-        const heartElement = document.createElement('span'); // Changed to span
+        const heartElement = document.createElement('span'); 
         heartElement.className = 'heart-float';
-        heartElement.textContent = '❤︎'; // Use text character
+        heartElement.textContent = '❤︎'; 
         heartElement.style.color = '#FF8DC7';
-        heartElement.style.left = `${Math.random() * 100}%`; // Adjusted to 100%
+        heartElement.style.left = `${Math.random() * 100}%`; 
         
-        heartElement.style.fontSize = `${Math.random() * 12 + 12}px`; // Randomized font size (12px to 24px)
-        heartElement.style.filter = `blur(${Math.random() * 1.5}px)`; // Randomized blur (0px to 1.5px)
+        heartElement.style.fontSize = `${Math.random() * 12 + 12}px`; 
+        heartElement.style.filter = `blur(${Math.random() * 1.5}px)`; 
 
-        heartElement.style.animationDuration = `${Math.random() * 5 + 5}s`; // Randomized duration (5s to 10s)
-        heartElement.style.animationDelay = `${Math.random() * 5}s`; // Randomized delay (0s to 5s)
+        heartElement.style.animationDuration = `${Math.random() * 5 + 5}s`; 
+        heartElement.style.animationDelay = `${Math.random() * 5}s`; 
 
         container.appendChild(heartElement);
         activeHearts.push(heartElement);
@@ -895,7 +913,7 @@ const App: React.FC = () => {
             title="Login Animation"
             loading="lazy"
           />
-          <div className="absolute inset-0 z-[1]" aria-hidden="true"></div> {/* Transparent overlay */}
+          <div className="absolute inset-0 z-[1]" aria-hidden="true"></div> 
         </div>
         <h1 className="text-3xl font-semibold mb-3">Welcome back, {DISPLAY_NAME}!</h1>
         <p className="text-md text-[#A09CB0] mb-8">Please enter your password to continue.</p>
@@ -933,7 +951,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className={`flex flex-col h-full bg-[#2E2B36] overflow-hidden ${appFadeInAnimation}`}>
+    <div className={`flex flex-col h-full bg-[#2E2B36] overflow-hidden ${appFadeInAnimation} ${appFadeOutAnimation}`}>
       {currentUser && (
         <>
           <Sidebar
@@ -946,7 +964,7 @@ const App: React.FC = () => {
             onRequestDeleteConfirmation={handleRequestDeleteConfirmation}
             onRenameChatSession={handleRenameChatSession}
             isLoading={isSessionsLoading && !initialLoadAndRestoreAttemptCompleteRef.current}
-            onLogout={handleLogout}
+            onRequestLogoutConfirmation={handleRequestLogoutConfirmation}
             userName={DISPLAY_NAME}
             ownerUID={currentUser.uid}
           />
@@ -1002,6 +1020,17 @@ const App: React.FC = () => {
             onConfirm={handleConfirmDelete}
             title="Confirm Deletion"
             message={sessionToConfirmDelete ? <>Are you sure you want to delete the chat "<strong>{sessionToConfirmDelete.title}</strong>"?<br />This action cannot be undone.</> : "Are you sure?"}
+            confirmButtonText={<><IconTrash className="w-4 h-4 mr-2" />Confirm Delete</>}
+            confirmButtonColorClass="bg-[#FF6B6B] hover:bg-[#E05252]"
+          />
+          <ConfirmationDialog
+            isOpen={isLogoutConfirmationOpen}
+            onClose={handleCancelLogout}
+            onConfirm={handleLogout}
+            title="Confirm Logout"
+            message={isLogoutConfirmationOpen ? <>Are you sure you want to log out, <strong>{DISPLAY_NAME}</strong>?</> : ""}
+            confirmButtonText={<><IconLogout className="w-4 h-4 mr-2" />Log Out</>}
+            confirmButtonColorClass="bg-[#FF8DC7] hover:bg-opacity-80"
           />
         </>
       )}
