@@ -92,7 +92,7 @@ const generateChatTitle = async (firstMessageText: string, userId: string | null
   return fallback;
 };
 
-const INACTIVITY_TIMEOUT_DURATION_MS = 2 * 60 * 1000; // 2 minutes
+const INACTIVITY_TIMEOUT_DURATION_MS = 1 * 60 * 1000; // 1 minute
 const LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY = 'surugpt_activeChatId_owner';
 const SESSION_STORAGE_RELOAD_STATE_KEY = 'surugpt_reloadState'; // Key for richer reload state object
 
@@ -131,7 +131,7 @@ const App: React.FC = () => {
   const initialPersistedIdFromLocalStorageRef = useRef<string | null>(null);
   const initialLoadAndRestoreAttemptCompleteRef = useRef<boolean>(false);
   const initialViewSetupDone = useRef(false);
-  const isInitialLoadLogicRunning = useRef(false); 
+  const isInitialLoadLogicRunning = useRef<boolean>(false); 
 
   const activeChatIdRef = useRef(activeChatId);
   const isLoadingAiResponseRef = useRef(isLoadingAiResponse);
@@ -415,7 +415,7 @@ const App: React.FC = () => {
             const storedReloadState = sessionStorage.getItem(reloadStateKey);
             if (storedReloadState) reloadState = JSON.parse(storedReloadState);
         } catch (e) { console.error(`[App] Initial Load (User: ${currentUser.uid}): Error parsing reloadState`, e); }
-        sessionStorage.removeItem(reloadStateKey);
+        sessionStorage.removeItem(reloadStateKey); // Remove after reading
 
         try {
             const sessions = await getChatSessions(currentUser.uid);
@@ -424,35 +424,41 @@ const App: React.FC = () => {
 
             const persistedChatIdForUiRestoreFromReload = reloadState?.isReloading ? reloadState.activeChatIdForReload : null;
             const idFromLastBrowserClose = initialPersistedIdFromLocalStorageRef.current;
-            console.log(`[App] Initial Load (User: ${currentUser.uid}): idFromLastBrowserClose = ${idFromLastBrowserClose}`);
+            console.log(`[App] Initial Load (User: ${currentUser.uid}): idFromLastBrowserClose = ${idFromLastBrowserClose}, persistedChatIdForUiRestoreFromReload = ${persistedChatIdForUiRestoreFromReload}`);
 
 
             if (persistedChatIdForUiRestoreFromReload && sessions.some(s => s.id === persistedChatIdForUiRestoreFromReload)) {
-                console.log(`[App] Initial Load (User: ${currentUser.uid}): Page reload detected for session ${persistedChatIdForUiRestoreFromReload}.`);
+                console.log(`[App] Initial Load (User: ${currentUser.uid}): Page reload detected for session ${persistedChatIdForUiRestoreFromReload}. Restoring UI and processing session.`);
                 const messagesForReloadedSession = await getMessagesForSession(currentUser.uid, persistedChatIdForUiRestoreFromReload);
                 if (messagesForReloadedSession.length > 0) {
-                    console.log(`[App] Initial Load (User: ${currentUser.uid}): Processing reloaded session ${persistedChatIdForUiRestoreFromReload} for memory.`);
+                    console.log(`[App] Initial Load (User: ${currentUser.uid}): Processing reloaded session ${persistedChatIdForUiRestoreFromReload} for memory (due to page reload).`);
                     await processEndedSessionForMemory(currentUser.uid, persistedChatIdForUiRestoreFromReload, messagesForReloadedSession);
                 }
                 previousActiveSessionIdToProcessOnNewChatRef.current = null; 
-                console.log(`[App] Initial Load (User: ${currentUser.uid}): Cleared previousActiveSessionIdToProcessOnNewChatRef due to reload.`);
+                console.log(`[App] Initial Load (User: ${currentUser.uid}): Cleared previousActiveSessionIdToProcessOnNewChatRef due to reload path.`);
                 await handleSelectChat(persistedChatIdForUiRestoreFromReload);
             } else {
-                console.log(`[App] Initial Load (User: ${currentUser.uid}): Fresh app open or invalid reload state.`);
+                console.log(`[App] Initial Load (User: ${currentUser.uid}): Fresh app open or invalid/stale reload state. Setting to new chat experience.`);
                 setActiveChatId(null); 
                 setCurrentMessages([]);
-                localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`);
-                console.log(`[App] Initial Load (User: ${currentUser.uid}): App starting in new chat state.`);
+                if (currentUser) { // Ensure currentUser is available before removing from localStorage
+                    localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`);
+                    console.log(`[App] Initial Load (User: ${currentUser.uid}): Cleared activeChatId from localStorage for new chat experience.`);
+                }
+                
 
-                if (idFromLastBrowserClose && sessions.some(s => s.id === idFromLastBrowserClose)) {
-                    console.log(`[App] Initial Load (User: ${currentUser.uid}): Session ${idFromLastBrowserClose} (from last browser close) identified. Will be processed for memory upon sending the first message in this new chat experience.`);
-                    previousActiveSessionIdToProcessOnNewChatRef.current = idFromLastBrowserClose;
-                } else {
-                    if (idFromLastBrowserClose) {
-                        console.log(`[App] Initial Load (User: ${currentUser.uid}): Session ${idFromLastBrowserClose} (from last browser close) was not found in current sessions list or was null. Not queueing for memory processing.`);
+                if (idFromLastBrowserClose) {
+                    const sessionExists = sessions.some(s => s.id === idFromLastBrowserClose);
+                    console.log(`[App] Initial Load (User: ${currentUser.uid}): Checking idFromLastBrowserClose '${idFromLastBrowserClose}'. Does it exist in fetched sessions? ${sessionExists}`);
+                    if (sessionExists) {
+                        console.log(`[App] Initial Load (User: ${currentUser.uid}): Session ${idFromLastBrowserClose} (from last browser close) identified and exists. Will be processed for memory upon sending the first message in this new chat experience.`);
+                        previousActiveSessionIdToProcessOnNewChatRef.current = idFromLastBrowserClose;
                     } else {
-                        console.log(`[App] Initial Load (User: ${currentUser.uid}): No 'idFromLastBrowserClose' found. Not queueing any session for memory processing.`);
+                        console.log(`[App] Initial Load (User: ${currentUser.uid}): Session ${idFromLastBrowserClose} (from last browser close) was NOT FOUND in current sessions list. Not queueing for memory processing.`);
+                        previousActiveSessionIdToProcessOnNewChatRef.current = null; 
                     }
+                } else {
+                    console.log(`[App] Initial Load (User: ${currentUser.uid}): No 'idFromLastBrowserClose' found. Not queueing any session for memory processing.`);
                     previousActiveSessionIdToProcessOnNewChatRef.current = null; 
                 }
                 resetAiContextWithSystemPrompt(undefined, globalContextSummary);
@@ -467,7 +473,7 @@ const App: React.FC = () => {
             setChatReady(checkChatAvailability());
             initialLoadAndRestoreAttemptCompleteRef.current = true;
             isInitialLoadLogicRunning.current = false;
-            console.log(`[App] Initial Load (User: ${currentUser.uid}): Completed.`);
+            console.log(`[App] Initial Load (User: ${currentUser.uid}): Completed. previousActiveSessionIdToProcessOnNewChatRef is now: ${previousActiveSessionIdToProcessOnNewChatRef.current}`);
         }
     };
 
@@ -620,6 +626,8 @@ const App: React.FC = () => {
 
   const handleSendMessage = useCallback(async (text: string) => {
     if (!currentUser) return;
+    console.log(`[App][handleSendMessage] Called. Current activeChatId: ${activeChatId}. previousActiveSessionIdToProcessOnNewChatRef: ${previousActiveSessionIdToProcessOnNewChatRef.current}`);
+
     if (!chatReady) {
       setCurrentMessages(prev => [...prev, { id: crypto.randomUUID(), text: "Chat service unavailable.", sender: SenderType.AI, timestamp: new Date(), feedback: null }]);
       return;
@@ -862,7 +870,20 @@ const App: React.FC = () => {
   if (mainContentCurrentState === 'LOGIN_SCREEN') {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-[#2E2B36] text-[#EAE6F0] p-4">
-        <IconKawaiiSuru className="w-20 h-20 mb-5 text-[#FF8DC7]" />
+        <div className="relative w-36 h-36 mb-5">
+          <iframe
+            src="https://giphy.com/embed/4RysKNcCH6XQosC3K8"
+            width="100%"
+            height="100%"
+            style={{ border: '0' }}
+            frameBorder="0"
+            className="giphy-embed"
+            allowFullScreen
+            title="Login Animation"
+            loading="lazy"
+          />
+          <div className="absolute inset-0 z-[1]" aria-hidden="true"></div> {/* Transparent overlay */}
+        </div>
         <h1 className="text-3xl font-semibold mb-3">Welcome back, {DISPLAY_NAME}!</h1>
         <p className="text-md text-[#A09CB0] mb-8">Please enter your password to continue.</p>
         <form onSubmit={handleLogin} className="w-full max-w-sm space-y-6">
