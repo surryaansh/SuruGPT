@@ -252,8 +252,22 @@ const App: React.FC = () => {
     }
   }, [globalContextSummary, activeChatId]);
 
+  const warmUpApis = useCallback(() => {
+    const endpoints = ['/api/chat', '/api/summarize'];
+    console.log("[App] Attempting to warm up APIs:", endpoints.join(', '));
+    endpoints.forEach(endpoint => {
+      fetch(`${window.location.origin}${endpoint}`, { method: 'GET', cache: 'no-store' })
+        .then(res => {
+          if (res.ok) console.log(`[App] API ${endpoint} warm-up successful.`);
+          else console.warn(`[App] API ${endpoint} warm-up ping returned non-OK status:`, res.status);
+        })
+        .catch(err => console.warn(`[App] API ${endpoint} warm-up ping request failed:`, err));
+    });
+  }, []);
+
 
   const handleNewChat = useCallback(async () => { 
+    warmUpApis();
     if (inactivityTimerRef.current) {
       clearTimeout(inactivityTimerRef.current);
       inactivityTimerRef.current = null;
@@ -264,14 +278,12 @@ const App: React.FC = () => {
 
     setCurrentMessages([]); 
     setActiveChatId(null); 
-    // setChatReady(checkChatAvailability()); // Already checked on initial load, and OpenAI context will be reset by activeChatId change effect
     if (!isDesktopView) setIsSidebarOpen(false);
 
     if (endedSessionId && endedSessionMessages.length > 0) {
       processEndedSessionForMemory(endedSessionId, endedSessionMessages);
     }
-    // resetAiContextWithSystemPrompt(undefined, globalContextSummary); // This will be handled by the useEffect watching activeChatId and globalContextSummary
-  }, [activeChatId, globalContextSummary, isDesktopView, processEndedSessionForMemory]);
+  }, [activeChatId, globalContextSummary, isDesktopView, processEndedSessionForMemory, warmUpApis]);
 
   const handleSelectChat = useCallback(async (chatId: string) => { 
     if (inactivityTimerRef.current) {
@@ -286,7 +298,6 @@ const App: React.FC = () => {
         if (!isDesktopView) setIsSidebarOpen(false); return;
     }
     
-    // Setting activeChatId first will trigger the useEffect to reset AI context
     setActiveChatId(chatId); 
     setCurrentMessages([]); 
     setIsMessagesLoading(true);
@@ -299,11 +310,6 @@ const App: React.FC = () => {
     try {
       const messages = await getMessagesForSession(chatId);
       setCurrentMessages(messages);
-      // setConversationContextFromAppMessages is part of resetAiContextWithSystemPrompt now,
-      // which is triggered by setActiveChatId changing and the subsequent useEffect.
-      // For selected chats, the history needs to be explicitly loaded into the AI context.
-      // The resetAiContextWithSystemPrompt in the useEffect will use the global summary.
-      // We need to ensure the selected chat's messages are then loaded.
        setConversationContextFromAppMessages(
          messages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})), 
          undefined, 
@@ -313,7 +319,6 @@ const App: React.FC = () => {
     } catch (error) {
       console.error(`Failed to load messages for chat ${chatId}:`, error);
       setCurrentMessages([{ id: crypto.randomUUID(), text: "Error loading messages for this chat. Please try again.", sender: SenderType.AI, timestamp: new Date(), feedback: null }]);
-      // resetAiContextWithSystemPrompt(undefined, globalContextSummary); // Handled by activeChatId change effect
     } finally { setIsMessagesLoading(false); }
   }, [activeChatId, currentMessages.length, globalContextSummary, isDesktopView, processEndedSessionForMemory]);
 
@@ -379,9 +384,6 @@ const App: React.FC = () => {
           ? { ...msg, text: "AI response was empty.", timestamp: new Date() } 
           : msg
         );
-        // After AI response, update the conversation context in openAIService.ts
-        // This is already handled by sendMessageStream internally which updates its local conversationHistory.
-        // However, if strict separation is needed:
          setConversationContextFromAppMessages(
            finalMessages.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
            undefined,
@@ -418,7 +420,7 @@ const App: React.FC = () => {
 
       setCurrentMessages([optimisticUserMessage]);
       setAllChatSessions(prevSessions => [optimisticSession, ...prevSessions]);
-      setActiveChatId(tempSessionId); // This will trigger AI context reset via useEffect
+      setActiveChatId(tempSessionId); 
 
       (async () => {
         try {
@@ -426,8 +428,6 @@ const App: React.FC = () => {
           const newSessionFromDb = await createChatSessionInFirestore(title, text);
           const actualSessionId = newSessionFromDb.id;
           
-          // Critical: Update activeChatId to the actual ID from DB.
-          // This ensures subsequent operations (like getAiResponse) use the correct ID.
           setActiveChatId(actualSessionId); 
           
           setAllChatSessions(prevSessions => 
@@ -444,7 +444,7 @@ const App: React.FC = () => {
           console.error("Error during new chat creation or first message send:", err);
           setCurrentMessages(prev => prev.filter(m => m.id !== tempUserMessageId));
           setAllChatSessions(prev => prev.filter(s => s.id !== tempSessionId));
-          if (activeChatId === tempSessionId) setActiveChatId(null); // Reset activeChatId if it was the temp one
+          if (activeChatId === tempSessionId) setActiveChatId(null); 
           setCurrentMessages(prev => [...prev, { 
             id: crypto.randomUUID(), 
             text: "Failed to start new chat. Please try again.", 
@@ -493,7 +493,6 @@ const App: React.FC = () => {
 
     setCurrentMessages(prev => {
       const updatedMessagesAfterRemoval = prev.filter(msg => msg.id !== aiMessageToRetryId);
-      // Rebuild context for AI before retrying
        setConversationContextFromAppMessages(
           updatedMessagesAfterRemoval.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
           undefined,
@@ -520,7 +519,6 @@ const App: React.FC = () => {
             updatedMessage
         ];
         
-        // Rebuild context for AI after edit
         setConversationContextFromAppMessages(
             messagesForContextAndDisplay.map(m => ({...m, timestamp: new Date(m.timestamp as Date)})),
             undefined,
@@ -553,7 +551,7 @@ const App: React.FC = () => {
     setAllChatSessions(prevSessions => prevSessions.filter(session => session.id !== sessionToDeleteId));
     if (activeChatId === sessionToDeleteId) {
       setCurrentMessages([]);
-      setActiveChatId(null); // This will trigger AI context reset via useEffect
+      setActiveChatId(null); 
     }
     
     setIsDeleteConfirmationOpen(false);
@@ -613,13 +611,15 @@ const App: React.FC = () => {
                              !isSessionsLoading && 
                              !isMessagesLoading;
 
-  // Floating Hearts Effect for New Chat Experience
+  // Floating Hearts Effect for New Chat Experience & API Warm-up
   useEffect(() => {
     const container = heartsContainerRef.current;
     let hearts: HTMLElement[] = [];
 
     if (isNewChatExperience && container) {
-      const numHearts = 20; // Number of hearts
+      warmUpApis(); // Warm up APIs when new chat experience is shown
+
+      const numHearts = 20; 
 
       for (let i = 0; i < numHearts; i++) {
         const heart = document.createElement('span');
@@ -627,9 +627,9 @@ const App: React.FC = () => {
         heart.textContent = '❤︎'; 
         heart.style.color = '#FF8DC7'; 
         heart.style.left = `${Math.random() * 100}%`;
-        heart.style.animationDuration = `${Math.random() * 5 + 5}s`; // 5s to 10s
+        heart.style.animationDuration = `${Math.random() * 5 + 5}s`; 
         heart.style.animationDelay = `${Math.random() * 5}s`;
-        heart.style.fontSize = `${Math.random() * 12 + 12}px`; // 12px to 24px
+        heart.style.fontSize = `${Math.random() * 12 + 12}px`; 
         heart.style.filter = `blur(${Math.random() * 1.5}px)`;
         container.appendChild(heart);
         hearts.push(heart);
@@ -639,7 +639,7 @@ const App: React.FC = () => {
       hearts.forEach(heart => heart.remove());
       hearts = [];
     };
-  }, [isNewChatExperience]);
+  }, [isNewChatExperience, warmUpApis]);
 
 
   return (
@@ -667,20 +667,15 @@ const App: React.FC = () => {
             </div>
           )}
           {!isMessagesLoading && isNewChatExperience ? (
-            // Outer container for centering, made relative for hearts.
             <div className="flex-grow flex flex-col justify-center items-center p-4 relative">
-              {/* Hearts Background Layer */}
               <div 
                 ref={heartsContainerRef} 
                 className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none z-0" 
                 aria-hidden="true"
               >
-                {/* Hearts are dynamically added here by useEffect */}
               </div>
               
-              {/* Content container (WelcomeMessage + ChatInputBar), must be above hearts */}
               <div className="relative w-full max-w-2xl z-10">
-                {/* Updated positioning for WelcomeMessage container */}
                 <div className="absolute bottom-[calc(100%+1.5rem)] left-1/2 -translate-x-1/2 w-full">
                   <WelcomeMessage />
                 </div>
