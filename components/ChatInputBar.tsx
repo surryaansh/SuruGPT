@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { IconHeart, IconSend } from '../constants'; 
 
@@ -57,7 +58,7 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
 
   useEffect(() => {
     if (!isLoading && inputValue === '' && textareaRef.current && effectiveIsChatAvailable) {
-      if (!isCentered || (isCentered )) {
+      if (!isCentered || isCentered) { // Simplified condition, effectively always true if other conditions met
          textareaRef.current.focus();
       }
     }
@@ -95,10 +96,10 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
             className={`flex-grow bg-transparent text-[#EAE6F0] placeholder-[#A09CB0] focus:outline-none text-[16px] resize-none overflow-y-auto 
               mx-3 
               leading-6
-              py-0 /* Ensure no vertical padding on textarea */
-              max-h-${isCentered ? '32' : '32'}`} 
+              max-h-${isCentered ? '32' : '32'} 
+              py-${isCentered ? '[0.75rem]' : '0'} 
+              min-h-[${isCentered ? '3rem' : '1.5rem'}]`}
             disabled={isLoading || !effectiveIsChatAvailable}
-            style={{ minHeight: isCentered ? '3.0rem' : '1.5rem' }} 
           />
           <button
             onClick={handleSend}
