@@ -15,8 +15,8 @@ if (API_KEY) {
 
 const DEFAULT_USER_ID = "default_user"; // For fetching summaries
 const DEFAULT_OPENAI_SYSTEM_PROMPT_BACKEND = "You are SuruGPT, a helpful and friendly AI assistant. Keep your responses concise and delightful, like a sprinkle of magic! ✨";
-const MAX_SEMANTIC_SUMMARIES_TO_INJECT = 1; // CHANGED FROM 3 to 1
-const MAX_CHARS_FOR_SEMANTIC_CONTEXT = 2500; // Max characters for the combined relevant summaries text
+const MAX_SEMANTIC_SUMMARIES_TO_INJECT = 1; 
+const MAX_CHARS_FOR_SEMANTIC_CONTEXT = 2500; 
 
 // Helper function to calculate cosine similarity
 function cosineSimilarity(vecA: number[], vecB: number[]): number {
@@ -38,8 +38,14 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+    if (req.method === 'GET') {
+        // Handle warm-up ping
+        console.log("/api/chat: GET request received (warm-up ping).");
+        return res.status(200).json({ message: "API is warm." });
+    }
+
     if (req.method !== 'POST') {
-        res.setHeader('Allow', 'POST');
+        res.setHeader('Allow', 'POST, GET');
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
@@ -73,10 +79,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     const messagesForOpenAI: OpenAI.Chat.ChatCompletionMessageParam[] = JSON.parse(JSON.stringify(messagesFromClient));
     const lastUserMessage = messagesForOpenAI.filter(m => m.role === 'user').pop();
-    let relevantMemoryContext = "";
-
+    
     // --- Semantic Memory Retrieval ---
-    if (lastUserMessage && lastUserMessage.content && typeof lastUserMessage.content === 'string') {
+    let relevantMemoryContext = "";
+    const isFirstUserTurn = messagesFromClient.length === 2 &&
+                            messagesFromClient[0].role === 'system' &&
+                            messagesFromClient[1].role === 'user';
+
+    if (isFirstUserTurn) {
+        console.log("/api/chat: First user turn detected. Skipping semantic memory retrieval for speed optimization.");
+    } else if (lastUserMessage && lastUserMessage.content && typeof lastUserMessage.content === 'string') {
         try {
             console.log("/api/chat: Generating embedding for current user query:", lastUserMessage.content);
             const queryEmbeddingResponse = await openai.embeddings.create({
@@ -96,12 +108,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                             ...summary,
                             similarity: cosineSimilarity(queryEmbedding, summary.embeddingVector),
                         }))
-                        .sort((a, b) => b.similarity - a.similarity); // Sort by descending similarity
+                        .sort((a, b) => b.similarity - a.similarity); 
 
                     const topSummaries = similarities.slice(0, MAX_SEMANTIC_SUMMARIES_TO_INJECT);
                     console.log(`/api/chat: Top ${topSummaries.length} relevant summary/summaries selected (MAX_SEMANTIC_SUMMARIES_TO_INJECT is ${MAX_SEMANTIC_SUMMARIES_TO_INJECT}).`);
                     
-                    let combinedSummaryText = topSummaries.map(s => s.summaryText).join(" "); // For N=1, this is just the single summary text
+                    let combinedSummaryText = topSummaries.map(s => s.summaryText).join(" "); 
                     if (combinedSummaryText.length > MAX_CHARS_FOR_SEMANTIC_CONTEXT) {
                         combinedSummaryText = combinedSummaryText.substring(0, MAX_CHARS_FOR_SEMANTIC_CONTEXT) + "...";
                         console.log("/api/chat: Combined relevant summary text truncated.");
@@ -116,28 +128,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
         } catch (error) {
             console.error("/api/chat: Error during semantic memory retrieval:", error);
-            // Continue without semantic memory if there's an error
         }
     }
     // --- End of Semantic Memory Retrieval ---
 
+    // Ensure system prompt is correctly structured with or without semantic context
     if (messagesForOpenAI.length > 0 && messagesForOpenAI[0].role === 'system') {
-        messagesForOpenAI[0].content += relevantMemoryContext; // Append relevant memory to existing system prompt
-        console.log("/api/chat: Appended relevant memory context to existing system prompt.");
+        // Append relevant memory to existing system prompt if it's not empty
+        if (relevantMemoryContext) {
+            messagesForOpenAI[0].content += relevantMemoryContext;
+            console.log("/api/chat: Appended relevant memory context to existing system prompt.");
+        } else {
+            console.log("/api/chat: No relevant memory context to append, or it was skipped for the first turn.");
+        }
     } else {
+        // Prepend a new system message if none was provided by the client (should not happen with current client logic)
+        // or if the first message was not a system prompt.
+        const systemMessageContent = DEFAULT_OPENAI_SYSTEM_PROMPT_BACKEND + (relevantMemoryContext || "");
         const systemMessage: OpenAI.Chat.ChatCompletionSystemMessageParam = {
             role: 'system',
-            content: DEFAULT_OPENAI_SYSTEM_PROMPT_BACKEND + relevantMemoryContext
+            content: systemMessageContent
         };
         messagesForOpenAI.unshift(systemMessage);
-        console.warn("/api/chat: System message was not the first message from client, prepended default backend system prompt with relevant memory.");
+        console.warn("/api/chat: System message was not the first message from client or was missing, prepended default backend system prompt (with/without memory).");
     }
 
 
     try {
-        console.log("/api/chat: Sending to OpenAI with messages (final system prompt content: '", messagesForOpenAI[0].content, "')");
+        console.log("/api/chat: Sending to OpenAI with messages. Final system prompt content: '", messagesForOpenAI[0].content, "' Number of messages:", messagesForOpenAI.length);
         const stream = await openai.chat.completions.create({
-            model: 'gpt-4o-mini', // Main chat model
+            model: 'gpt-4o-mini', 
             messages: messagesForOpenAI,
             stream: true,
         });
