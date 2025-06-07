@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 const WelcomeMessage: React.FC = () => {
@@ -25,7 +26,7 @@ const WelcomeMessage: React.FC = () => {
       </div>
 
       {/* Greeting Text - relative, z-10 for layering */}
-      <p className="relative z-10 text-lg sm:text-xl font-medium text-[#EAE6F0] my-2">
+      <p className="relative z-10 text-lg sm:text-xl font-normal text-[#EAE6F0] my-2">
         What can I help you with my cutu?
       </p>
     </div>
