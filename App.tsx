@@ -179,21 +179,35 @@ const App: React.FC = () => {
     }
     const endedSessionId = activeChatIdForTimerRef.current;
     const endedSessionMessages = endedSessionId ? [...currentMessagesForTimerRef.current] : [];
+
+    // Store UID before clearing currentUser, to correctly clear localStorage
+    const loggingOutUid = currentUser?.uid;
+
     if (currentUser && endedSessionId && endedSessionMessages.length > 0) {
       await processEndedSessionForMemory(currentUser.uid, endedSessionId, endedSessionMessages);
     }
 
-    await signOut(auth);
-    setCurrentUser(null);
+    await signOut(auth); // This will trigger onAuthStateChanged
+
+    // Clear persisted active chat ID for the user who is logging OUT
+    if (loggingOutUid) {
+      localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${loggingOutUid}`);
+      console.log(`[App] Removed activeChatId from localStorage for user ${loggingOutUid} (logging out).`);
+    }
+
+    // Reset states after signOut and localStorage clear,
+    // onAuthStateChanged will eventually set currentUser to null.
+    // Some of these might be redundant if onAuthStateChanged also clears them,
+    // but explicit clearing here can be safer.
     setActiveChatId(null);
     setCurrentMessages([]);
     setAllChatSessions([]);
     setGlobalContextSummary('');
-    setIsLoadingAuth(false);
+    // setIsLoadingAuth(false); // onAuthStateChanged handles this
     initialLoadAndRestoreAttemptCompleteRef.current = false;
     isAttemptingRestoreOnLoadRef.current = false;
-    localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser?.uid}`); // Clear specific user's persisted chat
-    console.log("[App] User logged out.");
+    // Note: setCurrentUser(null) is effectively handled by onAuthStateChanged
+    console.log("[App] User logout process initiated.");
   };
 
 
@@ -202,8 +216,10 @@ const App: React.FC = () => {
       localStorage.setItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`, activeChatId);
       console.log(`[App] Persisted activeChatId to localStorage for user ${currentUser.uid}: ${activeChatId}`);
     } else if (currentUser && activeChatId === null) {
+      // This case is handled by handleLogout for explicit logout,
+      // or if activeChatId is set to null during app operation while user is logged in.
       localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`);
-      console.log(`[App] Removed activeChatId from localStorage for user ${currentUser.uid} (set to null).`);
+      console.log(`[App] Removed activeChatId from localStorage for user ${currentUser.uid} (activeChatId became null).`);
     }
   }, [activeChatId, currentUser]);
 
@@ -327,6 +343,8 @@ const App: React.FC = () => {
         console.log(`[App] Initial Load for user ${currentUser.uid}: Attempting to use persistedChatId from ref: ${persistedId}`);
         const sessions = await getChatSessions(currentUser.uid);
         setAllChatSessions(sessions);
+        console.log(`[App] Initial Load for user ${currentUser.uid}: Fetched ${sessions.length} sessions.`);
+
 
         if (persistedId && sessions.some(s => s.id === persistedId)) {
           console.log(`[App] Initial Load: Valid persistedActiveChatId ${persistedId} found. Attempting to select it.`);
@@ -337,13 +355,15 @@ const App: React.FC = () => {
             console.log(`[App] Initial Load: persistedActiveChatId ${persistedId} not found/invalid. Clearing from localStorage.`);
             localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`);
           }
-          isAttemptingRestoreOnLoadRef.current = false;
+           setActiveChatId(null); // Explicitly set to null if no valid persisted ID
+           isAttemptingRestoreOnLoadRef.current = false;
         }
         // ... (rest of the logic for processing last known session if not restored)
       } catch (error) {
         console.error("Failed to load chat sessions on initial load:", error);
         if (currentUser) localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`);
         isAttemptingRestoreOnLoadRef.current = false;
+         setActiveChatId(null);
       } finally {
         setIsSessionsLoading(false);
         setChatReady(checkChatAvailability());
