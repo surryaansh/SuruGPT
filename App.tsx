@@ -42,10 +42,10 @@ const summarizeTextForTitle = async (text: string, userId: string | null): Promi
   if (!userId) return null; // Need userId for API call
   console.log("[App][summarizeTextForTitle] Attempting to summarize:", text);
   try {
-    const response = await fetch(`${window.location.origin}/api/summarize`, { 
+    const response = await fetch(`${window.location.origin}/api/summarize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ textToSummarize: text, userId: userId }), 
+      body: JSON.stringify({ textToSummarize: text, userId: userId }),
     });
     console.log('[App][summarizeTextForTitle] API Response Status:', response.status, response.statusText);
     if (!response.ok) {
@@ -93,7 +93,7 @@ const generateChatTitle = async (firstMessageText: string, userId: string | null
 };
 
 const INACTIVITY_TIMEOUT_DURATION_MS = 2 * 60 * 1000; // 2 minutes
-const LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY = 'surugpt_activeChatId_owner'; 
+const LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY = 'surugpt_activeChatId_owner';
 const SESSION_STORAGE_RELOAD_STATE_KEY = 'surugpt_reloadState'; // Key for richer reload state object
 
 type MainContentState = 'AUTH_LOADING' | 'LOGIN_SCREEN' | 'SESSIONS_LOADING' | 'RESTORING_SESSION' | 'MESSAGES_LOADING' | 'NEW_CHAT_EXPERIENCE' | 'CHAT_VIEW' | 'INITIALIZING';
@@ -128,19 +128,31 @@ const App: React.FC = () => {
   const currentMessagesForTimerRef = useRef<Message[]>([]);
   const heartsContainerRef = useRef<HTMLDivElement>(null);
 
-  // Stores the activeChatId from localStorage from the *last browser close*. Used for background summarization.
-  const initialPersistedIdFromLocalStorageRef = useRef<string | null>(null); 
+  const initialPersistedIdFromLocalStorageRef = useRef<string | null>(null);
   const initialLoadAndRestoreAttemptCompleteRef = useRef<boolean>(false);
   const initialViewSetupDone = useRef(false);
 
+  // Refs for state values needed in useCallback without causing re-creation
+  const activeChatIdRef = useRef(activeChatId);
+  const isLoadingAiResponseRef = useRef(isLoadingAiResponse);
+
+  useEffect(() => {
+    activeChatIdRef.current = activeChatId;
+  }, [activeChatId]);
+
+  useEffect(() => {
+    isLoadingAiResponseRef.current = isLoadingAiResponse;
+  }, [isLoadingAiResponse]);
+
+
   useEffect(() => {
     const handleBeforeUnload = () => {
-      const currentAuthUser = auth.currentUser; 
+      const currentAuthUser = auth.currentUser;
       const currentUid = currentAuthUser?.uid;
       const currentActiveChat = activeChatIdForTimerRef.current;
-      
+
       console.log(`[App] onbeforeunload: Fired. UID: ${currentUid}, Active Chat: ${currentActiveChat}`);
-      
+
       if (currentUid && currentActiveChat && !currentActiveChat.startsWith("PENDING_")) {
         const reloadState = {
           isReloading: true,
@@ -155,7 +167,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []); 
+  }, []);
 
 
   useEffect(() => {
@@ -168,14 +180,14 @@ const App: React.FC = () => {
       } else {
         setCurrentUser(null);
         initialPersistedIdFromLocalStorageRef.current = null;
-        if (user) { 
+        if (user) {
           console.warn("[App] Non-owner user attempted login:", user.email);
-          signOut(auth); 
+          signOut(auth);
           setLoginError("Access denied. This application is for a designated user only.");
         }
       }
       setIsLoadingAuth(false);
-      initialLoadAndRestoreAttemptCompleteRef.current = false; 
+      initialLoadAndRestoreAttemptCompleteRef.current = false;
     });
     return () => unsubscribe();
   }, []);
@@ -186,7 +198,7 @@ const App: React.FC = () => {
     setIsLoadingAuth(true);
     try {
       await signInWithEmailAndPassword(auth, DESIGNATED_OWNER_EMAIL, passwordInput);
-      setPasswordInput(''); 
+      setPasswordInput('');
     } catch (error: any) {
       console.error("Login failed:", error);
       if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
@@ -197,6 +209,38 @@ const App: React.FC = () => {
       setIsLoadingAuth(false);
     }
   };
+
+  const processEndedSessionForMemory = useCallback(async (ownerUid: string, endedSessionId: string, endedSessionMessages: Message[]) => {
+    if (!ownerUid) {
+      console.warn("[App][processEndedSessionForMemory] Called without ownerUid. Skipping.");
+      return;
+    }
+
+    // Check if the session being processed is the currently active one AND is currently loading an AI response.
+    // If so, skip memory processing to avoid summarizing incomplete data.
+    if (endedSessionId === activeChatIdRef.current && isLoadingAiResponseRef.current) {
+      console.log(`[App][processEndedSessionForMemory] Skipped memory update for session ${endedSessionId} because it is currently loading an AI response.`);
+      return;
+    }
+
+    if (endedSessionId && endedSessionMessages.length > 0 && !endedSessionId.startsWith("PENDING_")) {
+      console.log(`[App][processEndedSessionForMemory] Triggering memory update for user ${ownerUid}, session: ${endedSessionId}. Message count: ${endedSessionMessages.length}`);
+      try {
+        triggerMemoryUpdateForSession(ownerUid, endedSessionId, endedSessionMessages)
+          .then(() => console.log(`[App][processEndedSessionForMemory] Memory update request for session ${endedSessionId} (user ${ownerUid}) successfully sent.`))
+          .catch(err => console.error(`[App][processEndedSessionForMemory] Error in fire-and-forget memory update for session ${endedSessionId} (user ${ownerUid}):`, err));
+      } catch (error) {
+        console.error(`[App][processEndedSessionForMemory] Immediate error trying to initiate memory update for session ${endedSessionId} (user ${ownerUid}):`, error);
+      }
+    } else if (endedSessionId.startsWith("PENDING_")) {
+      console.log(`[App][processEndedSessionForMemory] Skipped memory update for PENDING session ID: ${endedSessionId}`);
+    } else if (endedSessionMessages.length === 0) {
+      console.log(`[App][processEndedSessionForMemory] Skipped memory update for session ${endedSessionId} (user ${ownerUid}) as it has no messages.`);
+    } else {
+      console.log(`[App][processEndedSessionForMemory] Conditions not met for memory update. SessionID: ${endedSessionId}, Message Count: ${endedSessionMessages.length}, OwnerUID: ${ownerUid}`);
+    }
+  }, []); // Dependencies are managed by using refs for activeChatId and isLoadingAiResponse
+
 
   const handleLogout = async () => {
     if (inactivityTimerRef.current) {
@@ -214,7 +258,7 @@ const App: React.FC = () => {
       await processEndedSessionForMemory(currentUser.uid, endedSessionId, endedSessionMessages);
     }
 
-    await signOut(auth); 
+    await signOut(auth);
 
     if (loggingOutUid) {
       localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${loggingOutUid}`);
@@ -236,7 +280,7 @@ const App: React.FC = () => {
     if (currentUser && activeChatId && !activeChatId.startsWith("PENDING_")) {
       localStorage.setItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`, activeChatId);
       console.log(`[App] Persisted activeChatId to localStorage for user ${currentUser.uid}: ${activeChatId} (current session).`);
-    } 
+    }
   }, [activeChatId, currentUser]);
 
 
@@ -245,28 +289,6 @@ const App: React.FC = () => {
     currentMessagesForTimerRef.current = currentMessages;
   }, [activeChatId, currentMessages]);
 
-  const processEndedSessionForMemory = useCallback(async (ownerUid: string, endedSessionId: string, endedSessionMessages: Message[]) => {
-    if (!ownerUid) {
-      console.warn("[App][processEndedSessionForMemory] Called without ownerUid. Skipping.");
-      return;
-    }
-    if (endedSessionId && endedSessionMessages.length > 0 && !endedSessionId.startsWith("PENDING_")) {
-      console.log(`[App][processEndedSessionForMemory] Triggering memory update for user ${ownerUid}, session: ${endedSessionId}. Message count: ${endedSessionMessages.length}`);
-      try {
-        triggerMemoryUpdateForSession(ownerUid, endedSessionId, endedSessionMessages) 
-          .then(() => console.log(`[App][processEndedSessionForMemory] Memory update request for session ${endedSessionId} (user ${ownerUid}) successfully sent.`))
-          .catch(err => console.error(`[App][processEndedSessionForMemory] Error in fire-and-forget memory update for session ${endedSessionId} (user ${ownerUid}):`, err));
-      } catch (error) {
-        console.error(`[App][processEndedSessionForMemory] Immediate error trying to initiate memory update for session ${endedSessionId} (user ${ownerUid}):`, error);
-      }
-    } else if (endedSessionId.startsWith("PENDING_")) {
-      console.log(`[App][processEndedSessionForMemory] Skipped memory update for PENDING session ID: ${endedSessionId}`);
-    } else if (endedSessionMessages.length === 0) {
-      console.log(`[App][processEndedSessionForMemory] Skipped memory update for session ${endedSessionId} (user ${ownerUid}) as it has no messages.`);
-    } else {
-      console.log(`[App][processEndedSessionForMemory] Conditions not met for memory update. SessionID: ${endedSessionId}, Message Count: ${endedSessionMessages.length}, OwnerUID: ${ownerUid}`);
-    }
-  }, []);
 
   useEffect(() => {
     if (inactivityTimerRef.current) {
@@ -319,7 +341,7 @@ const App: React.FC = () => {
 
     const endedSessionId = activeChatIdForTimerRef.current;
     const endedSessionMessages = (endedSessionId && endedSessionId !== chatId) ? [...currentMessagesForTimerRef.current] : [];
-    
+
     console.log(`[App][handleSelectChat] Selecting chat ${chatId}. Previous active: ${endedSessionId}`);
 
     if (activeChatId === chatId && currentMessages.length > 0) {
@@ -333,7 +355,7 @@ const App: React.FC = () => {
     setIsMessagesLoading(true);
     if (!isDesktopView) setIsSidebarOpen(false);
 
-    if (endedSessionId && endedSessionId !== chatId && endedSessionMessages.length > 0) {
+    if (currentUser && endedSessionId && endedSessionId !== chatId && endedSessionMessages.length > 0) {
       console.log(`[App][handleSelectChat] Processing ended session ${endedSessionId} for memory.`);
       await processEndedSessionForMemory(currentUser.uid, endedSessionId, endedSessionMessages);
     }
@@ -351,7 +373,7 @@ const App: React.FC = () => {
     } catch (error) {
       console.error(`[App][handleSelectChat] Failed to load messages for chat ${chatId}:`, error);
       setCurrentMessages([{ id: crypto.randomUUID(), text: "Error loading messages.", sender: SenderType.AI, timestamp: new Date(), feedback: null }]);
-      setActiveChatId(null); 
+      setActiveChatId(null);
     } finally {
       setIsMessagesLoading(false);
       console.log(`[App][handleSelectChat] Message loading finished for chat ${chatId}.`);
@@ -366,7 +388,7 @@ const App: React.FC = () => {
     }
 
     const loadInitialData = async () => {
-        if (!currentUser) return; 
+        if (!currentUser) return;
 
         setIsSessionsLoading(true);
         console.log(`[App] Initial Load (User: ${currentUser.uid}): Starting.`);
@@ -389,9 +411,7 @@ const App: React.FC = () => {
 
             const persistedChatIdForUiRestoreFromReload = reloadState?.isReloading ? reloadState.activeChatIdForReload : null;
             console.log(`[App] Initial Load (User: ${currentUser.uid}): persistedChatIdForUiRestoreFromReload (from sessionStorage): ${persistedChatIdForUiRestoreFromReload}`);
-            
-            // This ref now ONLY holds the ID from the LAST BROWSER CLOSE (from localStorage)
-            // It's used for background summarization if this is a fresh open.
+
             const idFromLastBrowserClose = initialPersistedIdFromLocalStorageRef.current;
             console.log(`[App] Initial Load (User: ${currentUser.uid}): idFromLastBrowserClose (from localStorage ref): ${idFromLastBrowserClose}`);
 
@@ -402,7 +422,7 @@ const App: React.FC = () => {
                 console.log(`[App] Initial Load (User: ${currentUser.uid}): Fresh app open or invalid reload. Defaulting to New Chat UI.`);
                 setActiveChatId(null);
                 setCurrentMessages([]);
-                localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`); // Clear for this fresh session
+                localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`);
                 console.log(`[App] Initial Load (User: ${currentUser.uid}): Cleared persisted activeChatId from localStorage for this fresh browser session.`);
 
                 if (idFromLastBrowserClose && sessions.some(s => s.id === idFromLastBrowserClose)) {
@@ -458,7 +478,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (currentUser && initialLoadAndRestoreAttemptCompleteRef.current) {
-      if (activeChatId === null) { 
+      if (activeChatId === null) {
         resetAiContextWithSystemPrompt(undefined, globalContextSummary);
       }
     }
@@ -487,8 +507,8 @@ const App: React.FC = () => {
     const endedSessionMessages = endedSessionId ? [...currentMessagesForTimerRef.current] : [];
 
     setCurrentMessages([]);
-    setActiveChatId(null); 
-    if (currentUser) { 
+    setActiveChatId(null);
+    if (currentUser) {
       localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`);
       console.log(`[App][handleNewChat] Cleared activeChatId from localStorage for user ${currentUser.uid}.`);
     }
@@ -496,7 +516,7 @@ const App: React.FC = () => {
 
     resetAiContextWithSystemPrompt(undefined, globalContextSummary);
 
-    if (endedSessionId && endedSessionMessages.length > 0) {
+    if (currentUser && endedSessionId && endedSessionMessages.length > 0) {
       await processEndedSessionForMemory(currentUser.uid, endedSessionId, endedSessionMessages);
     }
   }, [currentUser, globalContextSummary, isDesktopView, processEndedSessionForMemory, warmUpApis]);
@@ -506,7 +526,7 @@ const App: React.FC = () => {
     textForAi: string,
     currentSessionIdForAi: string | null
   ) => {
-    if (!currentUser) return; 
+    if (!currentUser) return;
     if (!currentSessionIdForAi || currentSessionIdForAi.startsWith("PENDING_")) {
       console.error("[App] getAiResponse called with invalid or pending session ID:", currentSessionIdForAi);
       setIsLoadingAiResponse(false);
@@ -594,12 +614,12 @@ const App: React.FC = () => {
       (async () => {
         try {
           const title = await generateChatTitle(text, currentUser.uid);
-          const newSessionFromDb = await createChatSessionInFirestore(currentUser.uid, title, text); 
+          const newSessionFromDb = await createChatSessionInFirestore(currentUser.uid, title, text);
           const actualSessionId = newSessionFromDb.id;
 
           setActiveChatId(actualSessionId);
           setAllChatSessions(prevSessions => prevSessions.map(s => s.id === tempSessionId ? newSessionFromDb : s));
-          const finalUserMessage = await addMessageToFirestore(currentUser.uid, actualSessionId, { text, sender: SenderType.USER }); 
+          const finalUserMessage = await addMessageToFirestore(currentUser.uid, actualSessionId, { text, sender: SenderType.USER });
           setCurrentMessages(prevMsgs => prevMsgs.map(m => m.id === tempUserMessageId ? finalUserMessage : m));
           await getAiResponse(finalUserMessage.text, actualSessionId);
         } catch (err) {
@@ -611,7 +631,7 @@ const App: React.FC = () => {
         }
       })();
     } else {
-      const finalUserMessage = await addMessageToFirestore(currentUser.uid, activeChatId, { text, sender: SenderType.USER }); 
+      const finalUserMessage = await addMessageToFirestore(currentUser.uid, activeChatId, { text, sender: SenderType.USER });
       setCurrentMessages(prevMessages => [...prevMessages, finalUserMessage]);
       await getAiResponse(finalUserMessage.text, activeChatId);
     }
@@ -629,7 +649,7 @@ const App: React.FC = () => {
       prevMessages.map(msg => {
         if (msg.id === messageId) {
           const newFeedback = msg.feedback === rating ? null : rating;
-          updateMessageFeedbackInFirestore(currentUser.uid, activeChatId, messageId, newFeedback).catch(error => { 
+          updateMessageFeedbackInFirestore(currentUser.uid, activeChatId, messageId, newFeedback).catch(error => {
             console.error("Failed to update feedback in Firestore:", error);
           });
           return { ...msg, feedback: newFeedback };
@@ -667,7 +687,7 @@ const App: React.FC = () => {
       );
       return messagesForContextAndDisplay;
     });
-    await updateMessageInFirestore(currentUser.uid, activeChatId, messageId, newText); 
+    await updateMessageInFirestore(currentUser.uid, activeChatId, messageId, newText);
     await getAiResponse(newText, activeChatId);
   }, [currentUser, activeChatId, getAiResponse, globalContextSummary]);
 
@@ -691,11 +711,11 @@ const App: React.FC = () => {
     setIsDeleteConfirmationOpen(false);
     setSessionToConfirmDelete(null);
 
-    if (endedSessionMessages.length > 0) {
+    if (currentUser && endedSessionMessages.length > 0) {
       await processEndedSessionForMemory(currentUser.uid, sessionToDeleteId, endedSessionMessages);
     }
     try {
-      await deleteChatSessionFromFirestore(currentUser.uid, sessionToDeleteId); 
+      await deleteChatSessionFromFirestore(currentUser.uid, sessionToDeleteId);
     } catch (error: any) {
       console.error('Error deleting chat session:', error);
     }
@@ -733,31 +753,57 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const container = heartsContainerRef.current;
-    let hearts: HTMLElement[] = [];
-    if (currentUser && isNewChatExperience && container) { 
-      warmUpApis();
+    let activeHearts: HTMLElement[] = [];
+
+    if (currentUser && isNewChatExperience && container) {
+      // Call warmUpApis when new chat experience is initiated, if not already handled by handleNewChat
+      // warmUpApis(); // Already called by handleNewChat which usually precedes this state.
+
+      const numHearts = 15;
+      // Simplified heart SVG to be embedded directly. fill="currentColor" will be handled by parent div's color.
+      const heartBaseSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" clip-rule="evenodd" /></svg>`;
+
+      for (let i = 0; i < numHearts; i++) {
+        const heartElement = document.createElement('div');
+        heartElement.className = 'heart-float'; // This class applies position: absolute and initial opacity:0
+        heartElement.style.left = `${Math.random() * 95}%`; // Position horizontally (0-95%)
+
+        const size = Math.random() * 20 + 10; // Random size between 10px and 30px
+        heartElement.style.width = `${size}px`;
+        heartElement.style.height = `${size}px`;
+        heartElement.style.color = '#FF8DC7'; // Set color for the SVG fill
+
+        heartElement.innerHTML = heartBaseSVG; // Embed the SVG
+
+        // Randomize animation properties (already defined in CSS, but can be overridden)
+        heartElement.style.animationDuration = `${Math.random() * 5 + 7}s`; // Random duration (7s to 12s)
+        heartElement.style.animationDelay = `${Math.random() * 5}s`;    // Random delay (0s to 5s)
+
+        container.appendChild(heartElement);
+        activeHearts.push(heartElement);
+      }
     }
-    return () => { hearts.forEach(heart => heart.remove()); hearts = []; };
-  }, [currentUser, isNewChatExperience, warmUpApis]);
+    return () => {
+      activeHearts.forEach(heart => heart.remove());
+      activeHearts = [];
+    };
+  }, [currentUser, isNewChatExperience]);
+
 
   const calculateMainContentState = (): MainContentState => {
     if (isLoadingAuth) return 'AUTH_LOADING';
     if (!currentUser) return 'LOGIN_SCREEN';
-    if (!initialLoadAndRestoreAttemptCompleteRef.current) return 'INITIALIZING'; // Catch-all for very early state
+    if (!initialLoadAndRestoreAttemptCompleteRef.current) return 'INITIALIZING';
     if (isSessionsLoading) return 'SESSIONS_LOADING';
-    
-    // If we determined it's a reload and are loading messages for it
+
     if (activeChatId && !activeChatId.startsWith("PENDING_") && isMessagesLoading) return 'MESSAGES_LOADING';
-        
-    // If a non-pending chat is active and messages are not loading, show chat view
+
     if (activeChatId && !activeChatId.startsWith("PENDING_") && !isMessagesLoading) return 'CHAT_VIEW';
 
-    // If activeChatId is pending (new chat being created) and has optimistic messages
     if (activeChatId && activeChatId.startsWith("PENDING_") && currentMessages.length > 0) return 'CHAT_VIEW';
-        
-    // Default to new chat experience if no active chat and loading is complete
+
     if (!activeChatId) return 'NEW_CHAT_EXPERIENCE';
-    
+
     return 'NEW_CHAT_EXPERIENCE'; // Fallback
   };
 
@@ -813,7 +859,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-[#2E2B36] overflow-hidden">
-      {currentUser && ( 
+      {currentUser && (
         <>
           <Sidebar
             isOpen={isSidebarOpen}
@@ -825,9 +871,9 @@ const App: React.FC = () => {
             onRequestDeleteConfirmation={handleRequestDeleteConfirmation}
             onRenameChatSession={handleRenameChatSession}
             isLoading={isSessionsLoading && !initialLoadAndRestoreAttemptCompleteRef.current}
-            onLogout={handleLogout} 
-            userName={DISPLAY_NAME} 
-            ownerUID={currentUser.uid} 
+            onLogout={handleLogout}
+            userName={DISPLAY_NAME}
+            ownerUID={currentUser.uid}
           />
           {isSidebarOpen && !isDesktopView && (
             <div className="fixed inset-0 bg-black/50 z-30 sidebar-overlay" onClick={handleToggleSidebar} aria-hidden="true"></div>
@@ -837,7 +883,7 @@ const App: React.FC = () => {
             <main className="flex-grow flex flex-col overflow-hidden bg-[#2E2B36]">
               {(mainContentCurrentState === 'INITIALIZING' ||
                 mainContentCurrentState === 'SESSIONS_LOADING' ||
-                mainContentCurrentState === 'MESSAGES_LOADING' 
+                mainContentCurrentState === 'MESSAGES_LOADING'
               ) && (
                   <div className="flex-grow flex items-center justify-center">
                     <IconHeart className="w-12 h-12 text-[#FF8DC7] animate-pulse" />
