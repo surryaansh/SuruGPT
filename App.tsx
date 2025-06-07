@@ -874,8 +874,8 @@ const App: React.FC = () => {
   if (mainContentCurrentState === 'AUTH_LOADING') {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-[#2E2B36] text-[#EAE6F0]">
-        <IconHeart className="w-16 h-16 mb-6 text-[#FFD1DC] animate-pulse" />
-        <p className="text-xl">Initializing SuruGPT...</p>
+        <IconHeart className="w-10 h-10 mb-4 text-[#FFD1DC] animate-pulse" style={{ filter: 'blur(0.5px)' }} />
+        <p className="text-lg">Initializing SuruGPT...</p>
       </div>
     );
   }
@@ -965,7 +965,7 @@ const App: React.FC = () => {
                 (isMessagesLoading && mainContentCurrentState === 'MESSAGES_LOADING') 
               ) && (
                   <div className="flex-grow flex items-center justify-center">
-                    <IconHeart className="w-12 h-12 text-[#FF8DC7] animate-pulse" />
+                    {/* Icon removed as per user request */}
                   </div>
                 )}
               {mainContentCurrentState === 'NEW_CHAT_EXPERIENCE' && (
