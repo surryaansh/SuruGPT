@@ -323,49 +323,72 @@ const App: React.FC = () => {
     }
   }, [currentUser, globalContextSummary, isDesktopView, processEndedSessionForMemory, activeChatId, currentMessages.length]);
 
- useEffect(() => {
-    if (!currentUser || initialLoadAndRestoreAttemptCompleteRef.current) return;
+  useEffect(() => {
+    if (!currentUser || initialLoadAndRestoreAttemptCompleteRef.current) {
+        return;
+    }
 
-    const loadInitialData = async () => {
-      if (!currentUser) return;
-      setIsSessionsLoading(true);
-      let restoredChatIdSuccessfully = false;
-      try {
-        // initialPersistedIdOnLoadRef.current is set by onAuthStateChanged
-        const persistedIdToTry = initialPersistedIdOnLoadRef.current; 
-        isAttemptingRestoreOnLoadRef.current = !!persistedIdToTry;
+    const loadInitialDataAndProcessPreviousSession = async () => {
+        if (!currentUser) return; 
 
-        console.log(`[App] Initial Load for user ${currentUser.uid}: Attempting to use persistedChatId from ref: ${persistedIdToTry}`);
-        const sessions = await getChatSessions(currentUser.uid);
-        setAllChatSessions(sessions);
-        console.log(`[App] Initial Load for user ${currentUser.uid}: Fetched ${sessions.length} sessions.`);
+        setIsSessionsLoading(true);
+        let restoredChatIdForUISuccessfully = false;
 
+        try {
+            const sessions = await getChatSessions(currentUser.uid);
+            setAllChatSessions(sessions);
+            console.log(`[App] Initial Load (User: ${currentUser.uid}): Fetched ${sessions.length} sessions.`);
 
-        if (persistedIdToTry && sessions.some(s => s.id === persistedIdToTry)) {
-          console.log(`[App] Initial Load: Valid persistedActiveChatId ${persistedIdToTry} found. Attempting to select it.`);
-          await handleSelectChat(persistedIdToTry);
-          restoredChatIdSuccessfully = true;
-        } else {
-          if (persistedIdToTry) {
-            console.log(`[App] Initial Load: persistedActiveChatId ${persistedIdToTry} not found/invalid. Clearing from localStorage.`);
-            localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`);
-          }
-           setActiveChatId(null); 
-           isAttemptingRestoreOnLoadRef.current = false;
+            const sessionToProcessOnReopenId = lastActiveSessionFromPreviousInstanceRef.current;
+            if (sessionToProcessOnReopenId && sessions.some(s => s.id === sessionToProcessOnReopenId)) {
+                console.log(`[App] Initial Load (User: ${currentUser.uid}): Attempting to process session ${sessionToProcessOnReopenId} for memory (from previous instance).`);
+                const messagesForReopenSession = await getMessagesForSession(currentUser.uid, sessionToProcessOnReopenId);
+                if (messagesForReopenSession.length > 0) {
+                    await processEndedSessionForMemory(currentUser.uid, sessionToProcessOnReopenId, messagesForReopenSession);
+                } else {
+                    console.log(`[App] Initial Load (User: ${currentUser.uid}): Session ${sessionToProcessOnReopenId} had no messages; skipping memory processing for it.`);
+                }
+            } else if (sessionToProcessOnReopenId) {
+                console.log(`[App] Initial Load (User: ${currentUser.uid}): Session ${sessionToProcessOnReopenId} (from previous instance) not found or invalid.`);
+            }
+            lastActiveSessionFromPreviousInstanceRef.current = null;
+
+            const persistedIdForUI = initialPersistedIdOnLoadRef.current;
+            isAttemptingRestoreOnLoadRef.current = !!persistedIdForUI;
+
+            if (persistedIdForUI && sessions.some(s => s.id === persistedIdForUI)) {
+                console.log(`[App] Initial Load (User: ${currentUser.uid}): Valid persistedActiveChatId ${persistedIdForUI} found for UI. Attempting to select it.`);
+                await handleSelectChat(persistedIdForUI);
+                restoredChatIdForUISuccessfully = true;
+            } else {
+                if (persistedIdForUI) {
+                    console.log(`[App] Initial Load (User: ${currentUser.uid}): persistedActiveChatId ${persistedIdForUI} for UI not found/invalid. Clearing from localStorage.`);
+                    localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`);
+                }
+                setActiveChatId(null);
+                setCurrentMessages([]);
+                isAttemptingRestoreOnLoadRef.current = false;
+            }
+
+        } catch (error) {
+            console.error("[App] Failed during initial data load or previous session memory processing:", error);
+            if (currentUser) {
+                localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`);
+            }
+            isAttemptingRestoreOnLoadRef.current = false;
+            setActiveChatId(null);
+            setCurrentMessages([]);
+        } finally {
+            setIsSessionsLoading(false);
+            setChatReady(checkChatAvailability());
+            initialLoadAndRestoreAttemptCompleteRef.current = true;
         }
-      } catch (error) {
-        console.error("Failed to load chat sessions on initial load:", error);
-        if (currentUser) localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`);
-        isAttemptingRestoreOnLoadRef.current = false;
-         setActiveChatId(null);
-      } finally {
-        setIsSessionsLoading(false);
-        setChatReady(checkChatAvailability());
-        initialLoadAndRestoreAttemptCompleteRef.current = true;
-      }
     };
-    loadInitialData();
-  }, [currentUser, handleSelectChat]); 
+
+    loadInitialDataAndProcessPreviousSession();
+
+}, [currentUser, handleSelectChat, processEndedSessionForMemory]);
+
 
   useEffect(() => {
     if (allChatSessions.length > 0) {
@@ -410,17 +433,8 @@ const App: React.FC = () => {
   const handleNewChat = useCallback(async () => {
     if (!currentUser) return;
 
-    if (lastActiveSessionFromPreviousInstanceRef.current) {
-        const sessionToProcessOnReopen = lastActiveSessionFromPreviousInstanceRef.current;
-        // Check if this session was indeed the one restored and its messages are available
-        if (sessionToProcessOnReopen === activeChatIdForTimerRef.current && currentMessagesForTimerRef.current.length > 0) {
-            console.log(`[App][handleNewChat] Attempting to process last active session from previous instance: ${sessionToProcessOnReopen}`);
-            await processEndedSessionForMemory(currentUser.uid, sessionToProcessOnReopen, [...currentMessagesForTimerRef.current]);
-        } else {
-             console.log(`[App][handleNewChat] Last active session from previous instance (${sessionToProcessOnReopen}) not currently loaded or has no messages. Skipping its memory processing.`);
-        }
-        lastActiveSessionFromPreviousInstanceRef.current = null; // Process only once per app instance
-    }
+    // Removed the block for lastActiveSessionFromPreviousInstanceRef processing here
+    // as it's now handled in the initial load useEffect.
 
     warmUpApis();
     isAttemptingRestoreOnLoadRef.current = false;
