@@ -131,6 +131,7 @@ const App: React.FC = () => {
   const initialPersistedIdFromLocalStorageRef = useRef<string | null>(null);
   const initialLoadAndRestoreAttemptCompleteRef = useRef<boolean>(false);
   const initialViewSetupDone = useRef(false);
+  const isInitialLoadLogicRunning = useRef(false); // Ref to prevent re-entrant initial load logic
 
   // Refs for state values needed in useCallback without causing re-creation
   const activeChatIdRef = useRef(activeChatId);
@@ -149,9 +150,9 @@ const App: React.FC = () => {
     const handleBeforeUnload = () => {
       const currentAuthUser = auth.currentUser;
       const currentUid = currentAuthUser?.uid;
-      const currentActiveChat = activeChatIdForTimerRef.current;
+      const currentActiveChat = activeChatIdRef.current; // Use the up-to-date ref
 
-      console.log(`[App] onbeforeunload: Fired. UID: ${currentUid}, Active Chat: ${currentActiveChat}`);
+      console.log(`[App] onbeforeunload: Fired. UID: ${currentUid}, Active Chat (from ref): ${currentActiveChat}`);
 
       if (currentUid && currentActiveChat && !currentActiveChat.startsWith("PENDING_")) {
         const reloadState = {
@@ -162,12 +163,12 @@ const App: React.FC = () => {
         sessionStorage.setItem(`${SESSION_STORAGE_RELOAD_STATE_KEY}_${currentUid}`, JSON.stringify(reloadState));
         console.log(`[App] onbeforeunload: Set reloadState in sessionStorage for user ${currentUid}:`, reloadState);
       } else {
-        console.log(`[App] onbeforeunload: Conditions not met to set reloadState. currentUid: ${currentUid}, currentActiveChat: ${currentActiveChat}`);
+        console.log(`[App] onbeforeunload: Conditions not met to set reloadState. currentUid: ${currentUid}, currentActiveChat (from ref): ${currentActiveChat}`);
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []);
+  }, []); // No dependencies needed as activeChatIdRef.current is always up-to-date
 
 
   useEffect(() => {
@@ -188,6 +189,7 @@ const App: React.FC = () => {
       }
       setIsLoadingAuth(false);
       initialLoadAndRestoreAttemptCompleteRef.current = false;
+      isInitialLoadLogicRunning.current = false; // Reset this on auth change
     });
     return () => unsubscribe();
   }, []);
@@ -216,8 +218,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // Check if the session being processed is the currently active one AND is currently loading an AI response.
-    // If so, skip memory processing to avoid summarizing incomplete data.
     if (endedSessionId === activeChatIdRef.current && isLoadingAiResponseRef.current) {
       console.log(`[App][processEndedSessionForMemory] Skipped memory update for session ${endedSessionId} because it is currently loading an AI response.`);
       return;
@@ -226,11 +226,10 @@ const App: React.FC = () => {
     if (endedSessionId && endedSessionMessages.length > 0 && !endedSessionId.startsWith("PENDING_")) {
       console.log(`[App][processEndedSessionForMemory] Triggering memory update for user ${ownerUid}, session: ${endedSessionId}. Message count: ${endedSessionMessages.length}`);
       try {
-        triggerMemoryUpdateForSession(ownerUid, endedSessionId, endedSessionMessages)
-          .then(() => console.log(`[App][processEndedSessionForMemory] Memory update request for session ${endedSessionId} (user ${ownerUid}) successfully sent.`))
-          .catch(err => console.error(`[App][processEndedSessionForMemory] Error in fire-and-forget memory update for session ${endedSessionId} (user ${ownerUid}):`, err));
+        await triggerMemoryUpdateForSession(ownerUid, endedSessionId, endedSessionMessages);
+        console.log(`[App][processEndedSessionForMemory] Memory update request for session ${endedSessionId} (user ${ownerUid}) successfully sent/completed.`);
       } catch (error) {
-        console.error(`[App][processEndedSessionForMemory] Immediate error trying to initiate memory update for session ${endedSessionId} (user ${ownerUid}):`, error);
+        console.error(`[App][processEndedSessionForMemory] Error during memory update for session ${endedSessionId} (user ${ownerUid}):`, error);
       }
     } else if (endedSessionId.startsWith("PENDING_")) {
       console.log(`[App][processEndedSessionForMemory] Skipped memory update for PENDING session ID: ${endedSessionId}`);
@@ -239,7 +238,7 @@ const App: React.FC = () => {
     } else {
       console.log(`[App][processEndedSessionForMemory] Conditions not met for memory update. SessionID: ${endedSessionId}, Message Count: ${endedSessionMessages.length}, OwnerUID: ${ownerUid}`);
     }
-  }, []); // Dependencies are managed by using refs for activeChatId and isLoadingAiResponse
+  }, []); 
 
 
   const handleLogout = async () => {
@@ -271,6 +270,7 @@ const App: React.FC = () => {
     setAllChatSessions([]);
     setGlobalContextSummary('');
     initialLoadAndRestoreAttemptCompleteRef.current = false;
+    isInitialLoadLogicRunning.current = false; // Reset this on logout
     initialPersistedIdFromLocalStorageRef.current = null;
     console.log("[App] User logout process completed.");
   };
@@ -295,13 +295,13 @@ const App: React.FC = () => {
       clearTimeout(inactivityTimerRef.current);
       inactivityTimerRef.current = null;
     }
-    if (currentUser && activeChatId && currentMessages.length > 0) {
+    if (currentUser && activeChatId && currentMessages.length > 0 && !activeChatId.startsWith("PENDING_")) { // Added PENDING_ check
       const sessionStillActiveId = activeChatId;
       console.log(`[App] Setting inactivity timer for session: ${sessionStillActiveId} (user: ${currentUser.uid})`);
       inactivityTimerRef.current = window.setTimeout(() => {
         if (currentUser && activeChatIdForTimerRef.current &&
             activeChatIdForTimerRef.current === sessionStillActiveId &&
-            activeChatId === sessionStillActiveId && // Double check against current state
+            activeChatId === sessionStillActiveId && 
             currentMessagesForTimerRef.current && currentMessagesForTimerRef.current.length > 0) {
           console.log(`[App] Inactivity timer fired for session: ${activeChatIdForTimerRef.current}. Processing for memory.`);
           processEndedSessionForMemory(currentUser.uid, activeChatIdForTimerRef.current, currentMessagesForTimerRef.current);
@@ -340,7 +340,9 @@ const App: React.FC = () => {
     if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
 
     const endedSessionId = activeChatIdForTimerRef.current;
-    const endedSessionMessages = (endedSessionId && endedSessionId !== chatId) ? [...currentMessagesForTimerRef.current] : [];
+    const endedSessionMessages = (endedSessionId && endedSessionId !== chatId && !endedSessionId.startsWith("PENDING_")) 
+      ? [...currentMessagesForTimerRef.current] 
+      : [];
 
     console.log(`[App][handleSelectChat] Selecting chat ${chatId}. Previous active: ${endedSessionId}`);
 
@@ -350,7 +352,7 @@ const App: React.FC = () => {
       return;
     }
 
-    setActiveChatId(chatId);
+    setActiveChatId(chatId); // Set activeChatId before async operations
     setCurrentMessages([]);
     setIsMessagesLoading(true);
     if (!isDesktopView) setIsSidebarOpen(false);
@@ -373,7 +375,8 @@ const App: React.FC = () => {
     } catch (error) {
       console.error(`[App][handleSelectChat] Failed to load messages for chat ${chatId}:`, error);
       setCurrentMessages([{ id: crypto.randomUUID(), text: "Error loading messages.", sender: SenderType.AI, timestamp: new Date(), feedback: null }]);
-      setActiveChatId(null);
+      // Consider reverting activeChatId or setting a specific error state for the chat
+      // setActiveChatId(endedSessionId); // Or null, or a dedicated error session ID
     } finally {
       setIsMessagesLoading(false);
       console.log(`[App][handleSelectChat] Message loading finished for chat ${chatId}.`);
@@ -387,22 +390,25 @@ const App: React.FC = () => {
         return;
     }
 
+    if (isInitialLoadLogicRunning.current) {
+        console.log("[App] Initial Load useEffect: Skipped, logic already running.");
+        return;
+    }
+
     const loadInitialData = async () => {
         if (!currentUser) return;
 
-        setIsSessionsLoading(true);
+        isInitialLoadLogicRunning.current = true;
         console.log(`[App] Initial Load (User: ${currentUser.uid}): Starting.`);
+        setIsSessionsLoading(true);
 
         let reloadState = null;
         const reloadStateKey = `${SESSION_STORAGE_RELOAD_STATE_KEY}_${currentUser.uid}`;
         try {
             const storedReloadState = sessionStorage.getItem(reloadStateKey);
             if (storedReloadState) reloadState = JSON.parse(storedReloadState);
-            console.log(`[App] Initial Load (User: ${currentUser.uid}): Read reloadState from sessionStorage:`, reloadState);
-        } catch (e) {
-            console.error(`[App] Initial Load (User: ${currentUser.uid}): Error parsing reloadState from sessionStorage`, e);
-        }
-        sessionStorage.removeItem(reloadStateKey); // Clear it after reading
+        } catch (e) { console.error(`[App] Initial Load (User: ${currentUser.uid}): Error parsing reloadState`, e); }
+        sessionStorage.removeItem(reloadStateKey);
 
         try {
             const sessions = await getChatSessions(currentUser.uid);
@@ -410,45 +416,41 @@ const App: React.FC = () => {
             console.log(`[App] Initial Load (User: ${currentUser.uid}): Fetched ${sessions.length} sessions.`);
 
             const persistedChatIdForUiRestoreFromReload = reloadState?.isReloading ? reloadState.activeChatIdForReload : null;
-            console.log(`[App] Initial Load (User: ${currentUser.uid}): persistedChatIdForUiRestoreFromReload (from sessionStorage): ${persistedChatIdForUiRestoreFromReload}`);
-
             const idFromLastBrowserClose = initialPersistedIdFromLocalStorageRef.current;
-            console.log(`[App] Initial Load (User: ${currentUser.uid}): idFromLastBrowserClose (from localStorage ref): ${idFromLastBrowserClose}`);
 
             if (persistedChatIdForUiRestoreFromReload && sessions.some(s => s.id === persistedChatIdForUiRestoreFromReload)) {
-                console.log(`[App] Initial Load (User: ${currentUser.uid}): Page reload detected for valid session ${persistedChatIdForUiRestoreFromReload}. Attempting UI restore.`);
+                console.log(`[App] Initial Load (User: ${currentUser.uid}): Page reload detected for session ${persistedChatIdForUiRestoreFromReload}.`);
+                const messagesForReloadedSession = await getMessagesForSession(currentUser.uid, persistedChatIdForUiRestoreFromReload);
+                if (messagesForReloadedSession.length > 0) {
+                    console.log(`[App] Initial Load (User: ${currentUser.uid}): Processing reloaded session ${persistedChatIdForUiRestoreFromReload} for memory.`);
+                    await processEndedSessionForMemory(currentUser.uid, persistedChatIdForUiRestoreFromReload, messagesForReloadedSession);
+                }
                 await handleSelectChat(persistedChatIdForUiRestoreFromReload);
             } else {
-                console.log(`[App] Initial Load (User: ${currentUser.uid}): Fresh app open or invalid reload. Defaulting to New Chat UI.`);
-                setActiveChatId(null);
+                console.log(`[App] Initial Load (User: ${currentUser.uid}): Fresh app open or invalid reload state.`);
+                setActiveChatId(null); // Ensure new chat state
                 setCurrentMessages([]);
                 localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`);
-                console.log(`[App] Initial Load (User: ${currentUser.uid}): Cleared persisted activeChatId from localStorage for this fresh browser session.`);
+                console.log(`[App] Initial Load (User: ${currentUser.uid}): Cleared persisted activeChatId for fresh session.`);
 
                 if (idFromLastBrowserClose && sessions.some(s => s.id === idFromLastBrowserClose)) {
-                    console.log(`[App] Initial Load (User: ${currentUser.uid}): Background processing session ${idFromLastBrowserClose} (from last browser close) for memory.`);
+                    console.log(`[App] Initial Load (User: ${currentUser.uid}): Processing session ${idFromLastBrowserClose} (from last browser close) for memory.`);
                     const messagesForOldSession = await getMessagesForSession(currentUser.uid, idFromLastBrowserClose);
                     if (messagesForOldSession.length > 0) {
-                        processEndedSessionForMemory(currentUser.uid, idFromLastBrowserClose, messagesForOldSession);
-                    } else {
-                        console.log(`[App] Initial Load (User: ${currentUser.uid}): No messages found for background session ${idFromLastBrowserClose}. Skipping memory processing.`);
+                        await processEndedSessionForMemory(currentUser.uid, idFromLastBrowserClose, messagesForOldSession);
                     }
-                } else {
-                     console.log(`[App] Initial Load (User: ${currentUser.uid}): No valid session ID (${idFromLastBrowserClose}) from previous browser close found for background memory processing.`);
                 }
                 resetAiContextWithSystemPrompt(undefined, globalContextSummary);
             }
         } catch (error) {
             console.error("[App] Failed during initial data load:", error);
-            setActiveChatId(null);
-            setCurrentMessages([]);
-            if (currentUser) {
-              localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`);
-            }
+            setActiveChatId(null); setCurrentMessages([]);
+            if (currentUser) localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`);
         } finally {
             setIsSessionsLoading(false);
             setChatReady(checkChatAvailability());
             initialLoadAndRestoreAttemptCompleteRef.current = true;
+            isInitialLoadLogicRunning.current = false;
             console.log(`[App] Initial Load (User: ${currentUser.uid}): Completed.`);
         }
     };
@@ -504,7 +506,9 @@ const App: React.FC = () => {
     if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
 
     const endedSessionId = activeChatIdForTimerRef.current;
-    const endedSessionMessages = endedSessionId ? [...currentMessagesForTimerRef.current] : [];
+    const endedSessionMessages = (endedSessionId && !endedSessionId.startsWith("PENDING_")) 
+        ? [...currentMessagesForTimerRef.current] 
+        : [];
 
     setCurrentMessages([]);
     setActiveChatId(null);
@@ -701,7 +705,9 @@ const App: React.FC = () => {
     if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
 
     const sessionToDeleteId = sessionToConfirmDelete.id;
-    const endedSessionMessages = (activeChatIdForTimerRef.current === sessionToDeleteId) ? [...currentMessagesForTimerRef.current] : [];
+    const endedSessionMessages = (activeChatIdForTimerRef.current === sessionToDeleteId && !sessionToDeleteId.startsWith("PENDING_")) 
+        ? [...currentMessagesForTimerRef.current] 
+        : [];
 
     setAllChatSessions(prevSessions => prevSessions.filter(session => session.id !== sessionToDeleteId));
     if (activeChatId === sessionToDeleteId) {
@@ -711,7 +717,7 @@ const App: React.FC = () => {
     setIsDeleteConfirmationOpen(false);
     setSessionToConfirmDelete(null);
 
-    if (currentUser && endedSessionMessages.length > 0) {
+    if (currentUser && endedSessionMessages.length > 0) { // Check endedSessionId was not PENDING
       await processEndedSessionForMemory(currentUser.uid, sessionToDeleteId, endedSessionMessages);
     }
     try {
@@ -756,28 +762,23 @@ const App: React.FC = () => {
     let activeHearts: HTMLElement[] = [];
 
     if (currentUser && isNewChatExperience && container) {
-      // Call warmUpApis when new chat experience is initiated, if not already handled by handleNewChat
-      // warmUpApis(); // Already called by handleNewChat which usually precedes this state.
-
       const numHearts = 15;
-      // Simplified heart SVG to be embedded directly. fill="currentColor" will be handled by parent div's color.
       const heartBaseSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" clip-rule="evenodd" /></svg>`;
 
       for (let i = 0; i < numHearts; i++) {
         const heartElement = document.createElement('div');
-        heartElement.className = 'heart-float'; // This class applies position: absolute and initial opacity:0
-        heartElement.style.left = `${Math.random() * 95}%`; // Position horizontally (0-95%)
+        heartElement.className = 'heart-float'; 
+        heartElement.style.left = `${Math.random() * 95}%`; 
 
-        const size = Math.random() * 20 + 10; // Random size between 10px and 30px
+        const size = Math.random() * 20 + 10; 
         heartElement.style.width = `${size}px`;
         heartElement.style.height = `${size}px`;
-        heartElement.style.color = '#FF8DC7'; // Set color for the SVG fill
+        heartElement.style.color = '#FF8DC7'; 
 
-        heartElement.innerHTML = heartBaseSVG; // Embed the SVG
+        heartElement.innerHTML = heartBaseSVG; 
 
-        // Randomize animation properties (already defined in CSS, but can be overridden)
-        heartElement.style.animationDuration = `${Math.random() * 5 + 7}s`; // Random duration (7s to 12s)
-        heartElement.style.animationDelay = `${Math.random() * 5}s`;    // Random delay (0s to 5s)
+        heartElement.style.animationDuration = `${Math.random() * 5 + 7}s`; 
+        heartElement.style.animationDelay = `${Math.random() * 5}s`;    
 
         container.appendChild(heartElement);
         activeHearts.push(heartElement);
@@ -793,18 +794,21 @@ const App: React.FC = () => {
   const calculateMainContentState = (): MainContentState => {
     if (isLoadingAuth) return 'AUTH_LOADING';
     if (!currentUser) return 'LOGIN_SCREEN';
-    if (!initialLoadAndRestoreAttemptCompleteRef.current) return 'INITIALIZING';
-    if (isSessionsLoading) return 'SESSIONS_LOADING';
+    if (!initialLoadAndRestoreAttemptCompleteRef.current) return 'INITIALIZING'; // Changed from SESSIONS_LOADING
+    if (isSessionsLoading && !initialLoadAndRestoreAttemptCompleteRef.current) return 'SESSIONS_LOADING'; // Keep if explicit session loading is slow
 
     if (activeChatId && !activeChatId.startsWith("PENDING_") && isMessagesLoading) return 'MESSAGES_LOADING';
 
     if (activeChatId && !activeChatId.startsWith("PENDING_") && !isMessagesLoading) return 'CHAT_VIEW';
 
-    if (activeChatId && activeChatId.startsWith("PENDING_") && currentMessages.length > 0) return 'CHAT_VIEW';
+    // If activeChatId is PENDING, it means we're in the process of creating a new chat.
+    // Show CHAT_VIEW to display the optimistic user message and AI loading state.
+    if (activeChatId && activeChatId.startsWith("PENDING_")) return 'CHAT_VIEW';
 
-    if (!activeChatId) return 'NEW_CHAT_EXPERIENCE';
 
-    return 'NEW_CHAT_EXPERIENCE'; // Fallback
+    if (!activeChatId && !isSessionsLoading && !isMessagesLoading) return 'NEW_CHAT_EXPERIENCE';
+
+    return 'NEW_CHAT_EXPERIENCE'; // Fallback, should ideally be NEW_CHAT_EXPERIENCE after loading
   };
 
   const mainContentCurrentState = calculateMainContentState();
@@ -882,8 +886,8 @@ const App: React.FC = () => {
             <Header onToggleSidebar={handleToggleSidebar} onNewChat={handleNewChat} />
             <main className="flex-grow flex flex-col overflow-hidden bg-[#2E2B36]">
               {(mainContentCurrentState === 'INITIALIZING' ||
-                mainContentCurrentState === 'SESSIONS_LOADING' ||
-                mainContentCurrentState === 'MESSAGES_LOADING'
+                (isSessionsLoading && !initialLoadAndRestoreAttemptCompleteRef.current && mainContentCurrentState === 'SESSIONS_LOADING') || // More specific SESSIONS_LOADING
+                (isMessagesLoading && mainContentCurrentState === 'MESSAGES_LOADING') // More specific MESSAGES_LOADING
               ) && (
                   <div className="flex-grow flex items-center justify-center">
                     <IconHeart className="w-12 h-12 text-[#FF8DC7] animate-pulse" />
