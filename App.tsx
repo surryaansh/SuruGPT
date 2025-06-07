@@ -690,23 +690,31 @@ const App: React.FC = () => {
     if (isAttemptingRestoreOnLoadRef.current && initialLoadAndRestoreAttemptCompleteRef.current && (!activeChatId || activeChatId.startsWith("PENDING_"))) {
         return 'RESTORING_SESSION';
     }
-    if (isMessagesLoading) {
+    // Only show general "MESSAGES_LOADING" (blank screen) for existing chats, not for first message of new chat.
+    if (isMessagesLoading && activeChatId && !activeChatId.startsWith("PENDING_")) { 
         return 'MESSAGES_LOADING';
     }
-    if (isNewChatExperience) {
-        return 'NEW_CHAT_EXPERIENCE';
+
+    // If activeChatId is PENDING_ (new chat started) AND we have messages (optimistic user message), show CHAT_VIEW.
+    if (activeChatId && activeChatId.startsWith("PENDING_") && currentMessages.length > 0) {
+        return 'CHAT_VIEW';
     }
+    
+    // If activeChatId is established (not PENDING_), show CHAT_VIEW.
     if (activeChatId && !activeChatId.startsWith("PENDING_")) {
         return 'CHAT_VIEW';
     }
-    // Fallback if none of the above, typically means initial state before refs are fully set
-    // or an unexpected combination. Defaulting to a loading or initializing state.
-    if (!initialLoadAndRestoreAttemptCompleteRef.current) return 'INITIALIZING';
 
-    // If all loading is done, no active chat, not attempting restore -> new chat
-    if (!activeChatId && !isAttemptingRestoreOnLoadRef.current) return 'NEW_CHAT_EXPERIENCE';
+    // If truly a new chat experience (no active chat, no messages, loading done).
+    if (isNewChatExperience) { 
+        return 'NEW_CHAT_EXPERIENCE';
+    }
     
-    return 'INITIALIZING'; // Default/fallback state
+    // Fallback conditions.
+    if (!initialLoadAndRestoreAttemptCompleteRef.current) return 'INITIALIZING';
+    if (!activeChatId && !isAttemptingRestoreOnLoadRef.current && initialLoadAndRestoreAttemptCompleteRef.current) return 'NEW_CHAT_EXPERIENCE';
+    
+    return 'INITIALIZING'; 
   };
 
   const mainContentCurrentState = calculateMainContentState();
@@ -733,7 +741,8 @@ const App: React.FC = () => {
           {(mainContentCurrentState === 'INITIALIZING' ||
             mainContentCurrentState === 'SESSIONS_LOADING' ||
             mainContentCurrentState === 'RESTORING_SESSION' ||
-            mainContentCurrentState === 'MESSAGES_LOADING') && (
+            (mainContentCurrentState === 'MESSAGES_LOADING' && activeChatId && !activeChatId.startsWith("PENDING_")) // Only blank screen for existing chat loads
+            ) && (
             <div className="flex-grow">
               {/* This area will be blank during these loading states */}
             </div>
