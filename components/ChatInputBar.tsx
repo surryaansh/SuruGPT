@@ -88,7 +88,7 @@ const ChatInputBar: React.FC<ChatInputBarProps> = ({
           </button>
           <textarea
             ref={textareaRef}
-            rows={isCentered ? 2 : 1}
+            rows={1} // Changed: Always 1 row initially, min-height and padding control visual height
             value={inputValue}
             onChange={handleInputChange}
             onKeyDown={handleKeyPress}
