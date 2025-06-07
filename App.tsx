@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Message, SenderType, ChatSession } from './types';
 import Header from './components/Header';
-import WelcomeMessage from './components/WelcomeMessage'; // Restored import
+import WelcomeMessage from './components/WelcomeMessage'; 
 import ChatMessageList from './components/ChatMessageList';
 import ChatInputBar from './components/ChatInputBar';
 import Sidebar from './components/Sidebar';
@@ -636,14 +636,20 @@ const App: React.FC = () => {
             </div>
           )}
           {!isMessagesLoading && isNewChatExperience ? (
+            // This container ensures its direct child ('relative' div) is centered.
             <div className="flex-grow flex flex-col justify-center items-center p-4">
-              <WelcomeMessage />
-              <div className="w-full max-w-2xl">
-                <ChatInputBar 
-                    onSendMessage={handleSendMessage} 
-                    isLoading={isLoadingAiResponse} 
-                    isChatAvailable={chatReady}
-                    isCentered={true}
+              {/* This 'relative' container will be centered. Its height is primarily based on ChatInputBar. */}
+              <div className="relative w-full max-w-2xl">
+                {/* WelcomeMessage (Giphy) positioned above the ChatInputBar */}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2">
+                  <WelcomeMessage />
+                </div>
+                {/* ChatInputBar itself. Its presence in the 'relative' container defines the centered block. */}
+                <ChatInputBar
+                  onSendMessage={handleSendMessage}
+                  isLoading={isLoadingAiResponse}
+                  isChatAvailable={chatReady}
+                  isCentered={true} // Prop for ChatInputBar's internal styling
                 />
               </div>
             </div>
