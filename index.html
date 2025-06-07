@@ -234,20 +234,22 @@
     }
     /* Add more if needed for more buttons */
 
-    /* Animation for main app fade-in-up after login */
-    @keyframes fadeInUpMainApplication {
-      from {
-        opacity: 0;
-        transform: translateY(20px); /* Start slightly lower */
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+    /* Animation for app fade-in after login */
+    @keyframes fadeInUpSlightly {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fadeInUpSlightly {
+      animation: fadeInUpSlightly 0.5s ease-out forwards;
     }
 
-    .animate-fadeInUp-main-app {
-      animation: fadeInUpMainApplication 0.5s ease-out forwards;
+    /* General fade-in for content sections (e.g., New Chat Experience) */
+    @keyframes fadeInContent {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .animate-fadeInContent {
+      animation: fadeInContent 0.4s ease-out forwards;
     }
 
   </style>
