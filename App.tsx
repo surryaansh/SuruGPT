@@ -105,6 +105,8 @@ const App: React.FC = () => {
   const activeChatIdForTimerRef = useRef<string | null>(null);
   const currentMessagesForTimerRef = useRef<Message[]>([]);
 
+  const heartsContainerRef = useRef<HTMLDivElement>(null);
+
   // Effect to keep refs updated for the timer callback
   useEffect(() => {
     activeChatIdForTimerRef.current = activeChatId;
@@ -611,6 +613,35 @@ const App: React.FC = () => {
                              !isSessionsLoading && 
                              !isMessagesLoading;
 
+  // Floating Hearts Effect for New Chat Experience
+  useEffect(() => {
+    const container = heartsContainerRef.current;
+    let hearts: HTMLElement[] = [];
+
+    if (isNewChatExperience && container) {
+      const numHearts = 20; // Number of hearts
+
+      for (let i = 0; i < numHearts; i++) {
+        const heart = document.createElement('span');
+        heart.classList.add('heart-float');
+        heart.textContent = '♥'; 
+        heart.style.color = '#FF8DC7'; 
+        heart.style.left = `${Math.random() * 100}%`;
+        heart.style.animationDuration = `${Math.random() * 5 + 5}s`; // 5s to 10s
+        heart.style.animationDelay = `${Math.random() * 5}s`;
+        heart.style.fontSize = `${Math.random() * 12 + 12}px`; // 12px to 24px
+        heart.style.filter = `blur(${Math.random() * 1.5}px)`;
+        container.appendChild(heart);
+        hearts.push(heart);
+      }
+    }
+    return () => {
+      hearts.forEach(heart => heart.remove());
+      hearts = [];
+    };
+  }, [isNewChatExperience]);
+
+
   return (
     <div className="flex flex-col h-full bg-[#2E2B36] overflow-hidden">
       <Sidebar 
@@ -636,21 +667,27 @@ const App: React.FC = () => {
             </div>
           )}
           {!isMessagesLoading && isNewChatExperience ? (
-            // This container ensures its direct child ('relative' div) is centered.
-            <div className="flex-grow flex flex-col justify-center items-center p-4">
-              {/* This 'relative' container will be centered. Its height is primarily based on ChatInputBar. */}
-              <div className="relative w-full max-w-2xl">
-                {/* WelcomeMessage (Giphy, Greeting, Hearts BG) positioned above the ChatInputBar */}
-                {/* The w-full here ensures WelcomeMessage has the space to center its own content. */}
+            // Outer container for centering, made relative for hearts.
+            <div className="flex-grow flex flex-col justify-center items-center p-4 relative">
+              {/* Hearts Background Layer */}
+              <div 
+                ref={heartsContainerRef} 
+                className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none z-0" 
+                aria-hidden="true"
+              >
+                {/* Hearts are dynamically added here by useEffect */}
+              </div>
+              
+              {/* Content container (WelcomeMessage + ChatInputBar), must be above hearts */}
+              <div className="relative w-full max-w-2xl z-10">
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-full">
                   <WelcomeMessage />
                 </div>
-                {/* ChatInputBar itself. Its presence in the 'relative' container defines the centered block. */}
                 <ChatInputBar
                   onSendMessage={handleSendMessage}
                   isLoading={isLoadingAiResponse}
                   isChatAvailable={chatReady}
-                  isCentered={true} // Prop for ChatInputBar's internal styling
+                  isCentered={true} 
                 />
               </div>
             </div>
