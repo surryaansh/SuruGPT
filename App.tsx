@@ -78,6 +78,7 @@ const generateChatTitle = async (firstMessageText: string): Promise<string> => {
 };
 
 const INACTIVITY_TIMEOUT_DURATION_MS = 2 * 60 * 1000; // 2 minutes
+const LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY = 'surugpt_activeChatId';
 
 const App: React.FC = () => {
   const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
@@ -106,6 +107,18 @@ const App: React.FC = () => {
   const currentMessagesForTimerRef = useRef<Message[]>([]);
 
   const heartsContainerRef = useRef<HTMLDivElement>(null);
+
+  // Effect to persist activeChatId to localStorage
+  useEffect(() => {
+    if (activeChatId && !activeChatId.startsWith("PENDING_")) {
+      localStorage.setItem(LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY, activeChatId);
+      console.log(`[App] Persisted activeChatId to localStorage: ${activeChatId}`);
+    } else if (activeChatId === null) {
+      localStorage.removeItem(LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY);
+      console.log("[App] Removed activeChatId from localStorage (set to null).");
+    }
+  }, [activeChatId]);
+
 
   // Effect to keep refs updated for the timer callback
   useEffect(() => {
@@ -185,114 +198,14 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', handleResizeAndUpdateInitialView);
   }, []); 
 
-  // Effect for initial data loading (sessions, check chat readiness)
-  useEffect(() => {
-    if (initialLoadComplete.current) return; // Ensure it runs only once
-
-    const loadInitialData = async () => {
-      setIsSessionsLoading(true);
-      try {
-        const sessions = await getChatSessions();
-        setAllChatSessions(sessions); // This will trigger the globalContextSummary update via its own useEffect
-
-        // ---- START OF NEW LOGIC to process potentially unprocessed last session ----
-        if (sessions.length > 0) {
-          const lastKnownSessionFromDB = sessions[0]; // Most recent session by 'createdAt' from DB
-          console.log(`[App] On app load, identified last known session from DB: ${lastKnownSessionFromDB.id} - "${lastKnownSessionFromDB.title}".`);
-          console.log(`[App] Attempting to process this session for memory if it wasn't processed before (e.g., due to tab close).`);
-          try {
-            const messagesOfLastSession = await getMessagesForSession(lastKnownSessionFromDB.id);
-            // Note: processEndedSessionForMemory itself checks if messagesOfLastSession.length > 0
-            await processEndedSessionForMemory(lastKnownSessionFromDB.id, messagesOfLastSession);
-          } catch (error) {
-            console.error(`[App] Error loading messages or processing DB's last session ${lastKnownSessionFromDB.id} on app load:`, error);
-          }
-        } else {
-          console.log("[App] No existing chat sessions found in DB on fresh load.");
-        }
-        // ---- END OF NEW LOGIC ----
-
-      } catch (error) {
-        console.error("Failed to load chat sessions on initial load:", error);
-      } finally {
-        setIsSessionsLoading(false);
-        setChatReady(checkChatAvailability());
-        initialLoadComplete.current = true; 
-      }
-    };
-
-    loadInitialData();
-  }, [processEndedSessionForMemory]); // processEndedSessionForMemory is a stable useCallback
-
-  useEffect(() => {
-    if (allChatSessions.length > 0) {
-      const MAX_TITLES_IN_SUMMARY = 3; 
-      const allSanitizedTitles = allChatSessions.map(s => s.title.replace(/[^\w\s.,!?']/gi, '').trim()).filter(t => t.length > 0); 
-      const uniqueRecentTitles: string[] = [];
-      const seenTitles = new Set<string>();
-      for (const title of allSanitizedTitles) {
-        if (!seenTitles.has(title)) {
-          seenTitles.add(title); uniqueRecentTitles.push(title);
-          if (uniqueRecentTitles.length >= MAX_TITLES_IN_SUMMARY) break; 
-        }
-      }
-      if (uniqueRecentTitles.length > 0) {
-        setGlobalContextSummary(`Key topics from recent chat sessions include: ${uniqueRecentTitles.join('; ')}.`);
-      } else { setGlobalContextSummary(''); }
-    } else { setGlobalContextSummary(''); }
-  }, [allChatSessions]);
-
-  useEffect(() => {
-    // This effect runs when globalContextSummary is established or changes,
-    // or when a new chat is started (activeChatId becomes null) or a chat is selected.
-    // It ensures the AI context is reset/initialized appropriately.
-    if (initialLoadComplete.current) { // Only run after initial session/summary load
-        resetAiContextWithSystemPrompt(undefined, globalContextSummary);
-        console.log("[App] AI context reset. ActiveChatId:", activeChatId, "GlobalSummary:", globalContextSummary || "None");
-    }
-  }, [globalContextSummary, activeChatId]);
-
-  const warmUpApis = useCallback(() => {
-    const endpoints = ['/api/chat', '/api/summarize'];
-    console.log("[App] Attempting to warm up APIs:", endpoints.join(', '));
-    endpoints.forEach(endpoint => {
-      fetch(`${window.location.origin}${endpoint}`, { method: 'GET', cache: 'no-store' })
-        .then(res => {
-          if (res.ok) console.log(`[App] API ${endpoint} warm-up successful.`);
-          else console.warn(`[App] API ${endpoint} warm-up ping returned non-OK status:`, res.status);
-        })
-        .catch(err => console.warn(`[App] API ${endpoint} warm-up ping request failed:`, err));
-    });
-  }, []);
-
-
-  const handleNewChat = useCallback(async () => { 
-    warmUpApis();
-    if (inactivityTimerRef.current) {
-      clearTimeout(inactivityTimerRef.current);
-      inactivityTimerRef.current = null;
-      console.log("[App] Inactivity timer cleared by handleNewChat.");
-    }
-    const endedSessionId = activeChatId;
-    const endedSessionMessages = activeChatId ? [...currentMessagesForTimerRef.current] : [];
-
-    setCurrentMessages([]); 
-    setActiveChatId(null); 
-    if (!isDesktopView) setIsSidebarOpen(false);
-
-    if (endedSessionId && endedSessionMessages.length > 0) {
-      processEndedSessionForMemory(endedSessionId, endedSessionMessages);
-    }
-  }, [activeChatId, globalContextSummary, isDesktopView, processEndedSessionForMemory, warmUpApis]);
-
   const handleSelectChat = useCallback(async (chatId: string) => { 
     if (inactivityTimerRef.current) {
       clearTimeout(inactivityTimerRef.current);
       inactivityTimerRef.current = null;
       console.log("[App] Inactivity timer cleared by handleSelectChat.");
     }
-    const endedSessionId = activeChatId;
-    const endedSessionMessages = activeChatId ? [...currentMessagesForTimerRef.current] : []; 
+    const endedSessionId = activeChatId; // This will be the current activeChatId before changing it
+    const endedSessionMessages = (endedSessionId && endedSessionId !== chatId) ? [...currentMessagesForTimerRef.current] : []; 
 
     if (endedSessionId === chatId && currentMessages.length > 0) {
         if (!isDesktopView) setIsSidebarOpen(false); return;
@@ -319,8 +232,142 @@ const App: React.FC = () => {
     } catch (error) {
       console.error(`Failed to load messages for chat ${chatId}:`, error);
       setCurrentMessages([{ id: crypto.randomUUID(), text: "Error loading messages for this chat. Please try again.", sender: SenderType.AI, timestamp: new Date(), feedback: null }]);
+      // If loading fails, we might want to unset activeChatId or clear it from localStorage
+      // For now, it shows an error message within the chat.
+      // localStorage.removeItem(LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY);
+      // setActiveChatId(null);
     } finally { setIsMessagesLoading(false); }
   }, [activeChatId, currentMessages.length, globalContextSummary, isDesktopView, processEndedSessionForMemory]);
+
+
+  // Effect for initial data loading (sessions, check chat readiness, restore active chat)
+  useEffect(() => {
+    if (initialLoadComplete.current) return; // Ensure it runs only once
+
+    const loadInitialData = async () => {
+      setIsSessionsLoading(true);
+      let restoredChatIdSuccessfully = false;
+      try {
+        const persistedActiveChatId = localStorage.getItem(LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY);
+        console.log(`[App] Attempting to restore activeChatId from localStorage: ${persistedActiveChatId}`);
+
+        const sessions = await getChatSessions();
+        setAllChatSessions(sessions); // This will trigger the globalContextSummary update via its own useEffect
+
+        if (persistedActiveChatId && sessions.some(s => s.id === persistedActiveChatId)) {
+          console.log(`[App] Valid persistedActiveChatId ${persistedActiveChatId} found in fetched sessions. Attempting to select it.`);
+          // handleSelectChat will set activeChatId, load messages, and set AI context
+          await handleSelectChat(persistedActiveChatId); 
+          restoredChatIdSuccessfully = true; // Mark that a chat was restored
+        } else {
+          if (persistedActiveChatId) {
+            console.log(`[App] persistedActiveChatId ${persistedActiveChatId} not found in current sessions. Clearing from localStorage.`);
+            localStorage.removeItem(LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY);
+          }
+          console.log("[App] No valid persisted activeChatId, or none found. Will default to new chat experience if applicable.");
+        }
+
+        // ---- Process potentially unprocessed last session from DB (if no chat was restored) ----
+        // This logic is mostly for cases where the app closed abruptly before the inactivity timer could fire.
+        // If a chat was just restored, its memory processing will happen via inactivity timer or when switching chats.
+        if (!restoredChatIdSuccessfully && sessions.length > 0) {
+          const lastKnownSessionFromDB = sessions[0]; // Most recent session by 'createdAt' from DB
+          console.log(`[App] On app load (no chat restored), identified last known session from DB: ${lastKnownSessionFromDB.id} - "${lastKnownSessionFromDB.title}".`);
+          console.log(`[App] Attempting to process this session for memory if it wasn't processed before (e.g., due to tab close).`);
+          try {
+            const messagesOfLastSession = await getMessagesForSession(lastKnownSessionFromDB.id);
+            await processEndedSessionForMemory(lastKnownSessionFromDB.id, messagesOfLastSession);
+          } catch (error) {
+            console.error(`[App] Error loading messages or processing DB's last session ${lastKnownSessionFromDB.id} on app load:`, error);
+          }
+        } else if (!restoredChatIdSuccessfully) {
+          console.log("[App] No existing chat sessions found in DB on fresh load (and no chat restored).");
+        }
+        // ---- End of processing last session ----
+
+      } catch (error) {
+        console.error("Failed to load chat sessions on initial load:", error);
+        localStorage.removeItem(LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY); // Clear potentially invalid ID on error
+      } finally {
+        setIsSessionsLoading(false);
+        setChatReady(checkChatAvailability());
+        initialLoadComplete.current = true; 
+      }
+    };
+
+    loadInitialData();
+  }, [processEndedSessionForMemory, handleSelectChat]); // handleSelectChat is a stable useCallback
+
+  useEffect(() => {
+    if (allChatSessions.length > 0) {
+      const MAX_TITLES_IN_SUMMARY = 3; 
+      const allSanitizedTitles = allChatSessions.map(s => s.title.replace(/[^\w\s.,!?']/gi, '').trim()).filter(t => t.length > 0); 
+      const uniqueRecentTitles: string[] = [];
+      const seenTitles = new Set<string>();
+      for (const title of allSanitizedTitles) {
+        if (!seenTitles.has(title)) {
+          seenTitles.add(title); uniqueRecentTitles.push(title);
+          if (uniqueRecentTitles.length >= MAX_TITLES_IN_SUMMARY) break; 
+        }
+      }
+      if (uniqueRecentTitles.length > 0) {
+        setGlobalContextSummary(`Key topics from recent chat sessions include: ${uniqueRecentTitles.join('; ')}.`);
+      } else { setGlobalContextSummary(''); }
+    } else { setGlobalContextSummary(''); }
+  }, [allChatSessions]);
+
+  useEffect(() => {
+    // This effect runs when globalContextSummary is established or changes,
+    // or when a new chat is started (activeChatId becomes null) or a chat is selected.
+    // It ensures the AI context is reset/initialized appropriately.
+    // Only reset AI context if initialLoadComplete is true and activeChatId is null (new chat)
+    // OR if a chat has been fully selected (activeChatId is set and messages are loaded - handled by handleSelectChat)
+    if (initialLoadComplete.current) { 
+      if (activeChatId === null) { // For new chats after initial load
+        resetAiContextWithSystemPrompt(undefined, globalContextSummary);
+        console.log("[App] AI context reset for new chat. GlobalSummary:", globalContextSummary || "None");
+      }
+      // For existing chats, AI context is set within handleSelectChat after messages are loaded.
+    }
+  }, [globalContextSummary, activeChatId]); // Removed activeChatId from here, context for existing chats is set in handleSelectChat
+
+  const warmUpApis = useCallback(() => {
+    const endpoints = ['/api/chat', '/api/summarize'];
+    console.log("[App] Attempting to warm up APIs:", endpoints.join(', '));
+    endpoints.forEach(endpoint => {
+      fetch(`${window.location.origin}${endpoint}`, { method: 'GET', cache: 'no-store' })
+        .then(res => {
+          if (res.ok) console.log(`[App] API ${endpoint} warm-up successful.`);
+          else console.warn(`[App] API ${endpoint} warm-up ping returned non-OK status:`, res.status);
+        })
+        .catch(err => console.warn(`[App] API ${endpoint} warm-up ping request failed:`, err));
+    });
+  }, []);
+
+
+  const handleNewChat = useCallback(async () => { 
+    warmUpApis();
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+      inactivityTimerRef.current = null;
+      console.log("[App] Inactivity timer cleared by handleNewChat.");
+    }
+    const endedSessionId = activeChatId;
+    const endedSessionMessages = activeChatId ? [...currentMessagesForTimerRef.current] : [];
+
+    setCurrentMessages([]); 
+    setActiveChatId(null); // This will trigger the useEffect to remove activeChatId from localStorage
+    if (!isDesktopView) setIsSidebarOpen(false);
+
+    // Reset AI context for the new chat
+    resetAiContextWithSystemPrompt(undefined, globalContextSummary);
+    console.log("[App] AI context reset for new chat initiated by user. GlobalSummary:", globalContextSummary || "None");
+
+    if (endedSessionId && endedSessionMessages.length > 0) {
+      processEndedSessionForMemory(endedSessionId, endedSessionMessages);
+    }
+  }, [activeChatId, globalContextSummary, isDesktopView, processEndedSessionForMemory, warmUpApis]);
+
 
   const getAiResponse = useCallback(async (
     textForAi: string,
@@ -428,7 +475,7 @@ const App: React.FC = () => {
           const newSessionFromDb = await createChatSessionInFirestore(title, text);
           const actualSessionId = newSessionFromDb.id;
           
-          setActiveChatId(actualSessionId); 
+          setActiveChatId(actualSessionId); // This will trigger localStorage persistence
           
           setAllChatSessions(prevSessions => 
             prevSessions.map(s => s.id === tempSessionId ? newSessionFromDb : s)
@@ -444,7 +491,7 @@ const App: React.FC = () => {
           console.error("Error during new chat creation or first message send:", err);
           setCurrentMessages(prev => prev.filter(m => m.id !== tempUserMessageId));
           setAllChatSessions(prev => prev.filter(s => s.id !== tempSessionId));
-          if (activeChatId === tempSessionId) setActiveChatId(null); 
+          if (activeChatId === tempSessionId) setActiveChatId(null); // Clear from localStorage if pending session failed
           setCurrentMessages(prev => [...prev, { 
             id: crypto.randomUUID(), 
             text: "Failed to start new chat. Please try again.", 
@@ -551,7 +598,7 @@ const App: React.FC = () => {
     setAllChatSessions(prevSessions => prevSessions.filter(session => session.id !== sessionToDeleteId));
     if (activeChatId === sessionToDeleteId) {
       setCurrentMessages([]);
-      setActiveChatId(null); 
+      setActiveChatId(null); // This will trigger localStorage removal
     }
     
     setIsDeleteConfirmationOpen(false);
