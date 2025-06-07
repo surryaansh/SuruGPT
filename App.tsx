@@ -624,7 +624,7 @@ const App: React.FC = () => {
       for (let i = 0; i < numHearts; i++) {
         const heart = document.createElement('span');
         heart.classList.add('heart-float');
-        heart.textContent = '♥'; 
+        heart.textContent = '❤︎'; 
         heart.style.color = '#FF8DC7'; 
         heart.style.left = `${Math.random() * 100}%`;
         heart.style.animationDuration = `${Math.random() * 5 + 5}s`; // 5s to 10s
