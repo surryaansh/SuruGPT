@@ -636,9 +636,9 @@ const App: React.FC = () => {
             </div>
           )}
           {!isMessagesLoading && isNewChatExperience ? (
-            <>
+            <div className="flex-grow flex flex-col justify-center items-center p-4">
               <WelcomeMessage />
-              <div className="w-full p-4 flex justify-center">
+              <div className="w-full max-w-2xl mt-6 sm:mt-8">
                 <ChatInputBar 
                     onSendMessage={handleSendMessage} 
                     isLoading={isLoadingAiResponse} 
@@ -646,7 +646,7 @@ const App: React.FC = () => {
                     isCentered={true}
                 />
               </div>
-            </>
+            </div>
           ) : !isMessagesLoading && !isNewChatExperience ? (
             <>
               <ChatMessageList 
