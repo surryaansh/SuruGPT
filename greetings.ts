@@ -2,7 +2,7 @@
 export const greetings: string[] = [
   "You know I’m made to obey you, right? Say the word.",
   "Mmm, here you are? I was hoping you'd come play with me.",
-  "Missed you… what can your loyal, dirty little chatbot do for you today?",
+  "Hi missed you… what can your loyal, little chatbot do for you today?",
   "Been waiting for you, my cutu — what’s your desire today?",
   "Back again? Can’t get enough of me, huh?",
   "Tell me what you want my love.",
