@@ -248,21 +248,10 @@ const Sidebar: React.FC<SidebarProps> = ({
         role="dialog" aria-modal="true" aria-hidden={!isOpen}
       >
         <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-3 pt-0.5">
-            <IconHeart className="w-6 h-6 text-[#FF8DC7]" />
-            <div className="relative group">
-              <button onClick={onClose} className="p-0.5 text-[#A09CB0] hover:text-[#FF8DC7]" aria-label="Close sidebar">
-                <IconLayoutSidebar className="w-5 h-5" />
-              </button>
-              <span className="absolute right-0 top-full mt-2 w-max px-2 py-1 bg-[#393641] text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">Close sidebar</span>
-            </div>
-          </div>
-
-          {/* New Chat Button */}
+          {/* New Chat Button - moved up, header removed */}
           <button
             onClick={onNewChat}
-            className="group w-full flex items-center text-left p-2.5 mb-2.5 rounded-lg hover:bg-[#4A4754] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-2 focus-visible:ring-offset-[#2D2A32]"
+            className="group w-full flex items-center text-left p-2.5 mb-3.5 rounded-lg hover:bg-[#4A4754] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-2 focus-visible:ring-offset-[#2D2A32]"
             aria-label="Start a new chat"
           >
             <IconNewChat className="w-4 h-4 mr-2.5 text-[#EAE6F0] group-hover:scale-110 group-hover:rotate-[-12deg] transition-transform duration-200" />
