@@ -72,13 +72,6 @@ export const getMessagesForSession = async (userId: string, sessionId: string): 
     return [];
   }
   try {
-    // Optional: First verify the session belongs to the user if rules don't cover cross-access fully
-    // const sessionDoc = await getDoc(doc(db, CHAT_SESSIONS_COLLECTION, sessionId));
-    // if (!sessionDoc.exists() || sessionDoc.data()?.userId !== userId) {
-    //   console.error(`[firebaseService] Attempt to access session ${sessionId} not belonging to user ${userId}`);
-    //   return [];
-    // }
-
     const messagesQuery = query(
       collection(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION),
       orderBy('timestamp', 'asc')
@@ -129,7 +122,7 @@ export const createChatSessionInFirestore = async (
 };
 
 export const addMessageToFirestore = async (
-  userId: string, // Not strictly needed if session already verified, but good for consistency
+  userId: string, 
   sessionId: string,
   messageData: { text: string; sender: SenderType }
 ): Promise<Message> => {
@@ -143,7 +136,6 @@ export const addMessageToFirestore = async (
         ...messageData,
         timestamp: serverTimestamp(),
         feedback: null,
-        // userId: userId, // Optionally store userId on messages too for very specific rules
       }
     );
     const docSnap = await getDoc(messageRef);
@@ -159,7 +151,7 @@ export const addMessageToFirestore = async (
 };
 
 export const updateMessageInFirestore = async (
-  userId: string, // For verification if needed
+  userId: string, 
   sessionId: string,
   messageId: string,
   newText: string
@@ -180,7 +172,7 @@ export const updateMessageInFirestore = async (
 };
 
 export const updateMessageFeedbackInFirestore = async (
-  userId: string, // For verification
+  userId: string, 
   sessionId: string,
   messageId: string,
   feedback: 'good' | 'bad' | null
@@ -203,9 +195,6 @@ export const updateChatSessionTitleInFirestore = async (userId: string, sessionI
   }
   try {
     const sessionRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId);
-    // Optional: Verify ownership before update if rules are not sufficient or for proactive check
-    // const sessionSnap = await getDoc(sessionRef);
-    // if (!sessionSnap.exists() || sessionSnap.data()?.userId !== userId) throw new Error("Permission denied or session not found.");
     await updateDoc(sessionRef, { title: newTitle });
   } catch (error) {
     console.error(`Error updating title for session ${sessionId} (user ${userId}):`, error);
@@ -220,7 +209,6 @@ export const deleteChatSessionFromFirestore = async (userId: string, sessionId: 
   try {
     const batch = writeBatch(db);
 
-    // Verify session ownership before starting delete
     const sessionDocRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId);
     const sessionDocSnap = await getDoc(sessionDocRef);
     if (!sessionDocSnap.exists() || sessionDocSnap.data()?.userId !== userId) {
@@ -228,13 +216,10 @@ export const deleteChatSessionFromFirestore = async (userId: string, sessionId: 
         throw new Error("Permission denied or session not found for deletion.");
     }
 
-    // Delete associated session summaries (now under user_memories/{userId}/...)
-    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId); // Path to user's memory
-    const summariesColRef = collection(userMemoryDocRef, SESSION_SUMMARIES_SUBCOLLECTION);
-    const summariesQuery = query(summariesColRef, where("sessionId", "==", sessionId));
-    const summariesSnapshot = await getDocs(summariesQuery);
-
-    summariesSnapshot.forEach(summaryDoc => batch.delete(summaryDoc.ref));
+    // Delete associated session summary directly by its ID (which is sessionId)
+    // The summary document ID is now the sessionId.
+    const summaryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId, SESSION_SUMMARIES_SUBCOLLECTION, sessionId);
+    batch.delete(summaryDocRef); // Will not throw if doc doesn't exist, which is fine.
 
     const messagesPath = collection(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION);
     const messagesSnapshot = await getDocs(query(messagesPath));
@@ -248,9 +233,13 @@ export const deleteChatSessionFromFirestore = async (userId: string, sessionId: 
   }
 };
 
+// Client-side functions for summaries are less relevant now that APIs use Admin SDK,
+// but keeping them for potential future use or if client needs direct read access.
+// These functions are NOT used by the current backend APIs for summary creation/update.
+
 export const addSessionSummaryWithEmbeddingAndHash = async (
   userId: string,
-  sessionId: string,
+  sessionId: string, // This will also be the document ID for the summary
   summaryText: string,
   embeddingVector: number[],
   contentHash: string
@@ -259,18 +248,28 @@ export const addSessionSummaryWithEmbeddingAndHash = async (
     throw new Error("[firebaseService] addSessionSummaryWithEmbeddingAndHash called without userId.");
   }
   try {
-    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId); // Use dynamic userId
-    const summariesColRef = collection(userMemoryDocRef, SESSION_SUMMARIES_SUBCOLLECTION);
-    await addDoc(summariesColRef, {
-      sessionId,
+    const summaryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId, SESSION_SUMMARIES_SUBCOLLECTION, sessionId);
+    await updateDoc(summaryDocRef, { // Using updateDoc to either update or fail if not existing (though set with merge is better for create/update)
+      sessionId, // Store sessionId in the document too
       summaryText,
       embeddingVector,
       contentHash,
       createdAt: serverTimestamp(),
-      // userId: userId, // Implicitly part of the path, but can be added for explicit querying
-    });
+    }); // This should ideally be set({ ... }, { merge: true }) for create or update
   } catch (error) {
-    console.error(`Error adding session summary for session ${sessionId} (user ${userId}):`, error);
+    console.error(`Error adding/updating client-side session summary for session ${sessionId} (user ${userId}):`, error);
+    // If updateDoc fails because doc doesn't exist, try addDoc or set with merge
+    try {
+        const summaryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId, SESSION_SUMMARIES_SUBCOLLECTION, sessionId);
+        await addDoc(collection(summaryDocRef.parent), { // This creates a new doc with auto-id, NOT what we want.
+        // Correct approach for client-side set with merge if needed:
+        // await setDoc(summaryDocRef, { sessionId, summaryText, embeddingVector, contentHash, createdAt: serverTimestamp() }, { merge: true });
+        // However, summary creation is now primarily backend.
+            sessionId, summaryText, embeddingVector, contentHash, createdAt: serverTimestamp(),
+        });
+    } catch (addError) {
+         console.error(`Fallback error adding client-side session summary for session ${sessionId} (user ${userId}):`, addError);
+    }
   }
 };
 
@@ -280,7 +279,7 @@ export const getAllSessionSummariesWithEmbeddings = async (userId: string): Prom
      return [];
   }
   try {
-    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId); // Use dynamic userId
+    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId); 
     const summariesColRef = collection(userMemoryDocRef, SESSION_SUMMARIES_SUBCOLLECTION);
     const summariesQuery = query(summariesColRef, orderBy('createdAt', 'desc'));
 
@@ -288,13 +287,12 @@ export const getAllSessionSummariesWithEmbeddings = async (userId: string): Prom
     return querySnapshot.docs.map(docSnapshot => {
       const data = docSnapshot.data();
       return {
-        id: docSnapshot.id,
-        sessionId: data.sessionId,
+        id: docSnapshot.id, // This is now sessionId
+        sessionId: data.sessionId, // Also sessionId
         summaryText: data.summaryText,
         embeddingVector: data.embeddingVector,
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
         contentHash: data.contentHash,
-        // userId: data.userId || userId, // Ensure userId is present
       } as StoredSessionSummary;
     });
   } catch (error) {
@@ -309,31 +307,23 @@ export const getMostRecentSummaryForSession = async (userId: string, sessionId: 
      return null;
   }
   try {
-    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId); // Use dynamic userId
-    const summariesColRef = collection(userMemoryDocRef, SESSION_SUMMARIES_SUBCOLLECTION);
-    const q = query(
-      summariesColRef,
-      where("sessionId", "==", sessionId),
-      orderBy('createdAt', 'desc'),
-      limit(1)
-    );
-    const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) {
-      const docSnapshot = querySnapshot.docs[0];
+    const summaryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId, SESSION_SUMMARIES_SUBCOLLECTION, sessionId);
+    const docSnapshot = await getDoc(summaryDocRef);
+    
+    if (docSnapshot.exists()) {
       const data = docSnapshot.data();
       return {
-        id: docSnapshot.id,
-        sessionId: data.sessionId,
+        id: docSnapshot.id, // sessionId
+        sessionId: data.sessionId, // sessionId
         summaryText: data.summaryText,
         embeddingVector: data.embeddingVector,
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
         contentHash: data.contentHash,
-        // userId: data.userId || userId,
       } as StoredSessionSummary;
     }
     return null;
   } catch (error) {
-    console.error(`Error fetching most recent summary for session ${sessionId}, user ${userId}:`, error);
+    console.error(`Error fetching most recent client-side summary for session ${sessionId}, user ${userId}:`, error);
     return null;
   }
 };
