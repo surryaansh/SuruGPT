@@ -14,7 +14,8 @@ import {
   updateDoc,
   writeBatch,
   where,
-  limit
+  setDoc // Added setDoc
+  // Removed unused 'limit' import
 } from 'firebase/firestore';
 
 import { firebaseConfig } from './firebaseConfig.js';
@@ -249,26 +250,31 @@ export const addSessionSummaryWithEmbeddingAndHash = async (
   }
   try {
     const summaryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId, SESSION_SUMMARIES_SUBCOLLECTION, sessionId);
-    await updateDoc(summaryDocRef, { // Using updateDoc to either update or fail if not existing (though set with merge is better for create/update)
-      sessionId, // Store sessionId in the document too
+    // Attempt to update first. If it fails (e.g., doc doesn't exist), catch block will handle creation.
+    await updateDoc(summaryDocRef, { 
+      sessionId, 
       summaryText,
       embeddingVector,
       contentHash,
       createdAt: serverTimestamp(),
-    }); // This should ideally be set({ ... }, { merge: true }) for create or update
+    }); 
   } catch (error) {
-    console.error(`Error adding/updating client-side session summary for session ${sessionId} (user ${userId}):`, error);
-    // If updateDoc fails because doc doesn't exist, try addDoc or set with merge
+    console.error(`Error updating client-side session summary for session ${sessionId} (user ${userId}). Attempting to create:`, error);
+    // If updateDoc fails because doc doesn't exist, try to set (create) the document.
     try {
         const summaryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId, SESSION_SUMMARIES_SUBCOLLECTION, sessionId);
-        await addDoc(collection(summaryDocRef.parent), { // This creates a new doc with auto-id, NOT what we want.
-        // Correct approach for client-side set with merge if needed:
-        // await setDoc(summaryDocRef, { sessionId, summaryText, embeddingVector, contentHash, createdAt: serverTimestamp() }, { merge: true });
-        // However, summary creation is now primarily backend.
-            sessionId, summaryText, embeddingVector, contentHash, createdAt: serverTimestamp(),
+        // Use setDoc to create the document with the specific sessionId as its ID.
+        await setDoc(summaryDocRef, { 
+            sessionId, 
+            summaryText, 
+            embeddingVector, 
+            contentHash, 
+            createdAt: serverTimestamp() 
         });
+        console.log(`Successfully created client-side session summary for session ${sessionId} (user ${userId}) after update failed.`);
     } catch (addError) {
-         console.error(`Fallback error adding client-side session summary for session ${sessionId} (user ${userId}):`, addError);
+         console.error(`Fallback error setting client-side session summary for session ${sessionId} (user ${userId}):`, addError);
+         throw addError; // Re-throw the error if setting also fails
     }
   }
 };
