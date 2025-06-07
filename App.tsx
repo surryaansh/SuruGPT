@@ -220,9 +220,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // This check is primarily for the inactivity timer.
-    // If we're explicitly processing a session due to navigation or new chat start,
-    // activeChatIdRef.current might be different or null.
     if (endedSessionId === activeChatIdRef.current && isLoadingAiResponseRef.current) {
       console.log(`[App][processEndedSessionForMemory] Skipped memory update for session ${endedSessionId} because it is currently the active chat and loading an AI response.`);
       return;
@@ -806,24 +803,21 @@ const App: React.FC = () => {
     let activeHearts: HTMLElement[] = [];
 
     if (currentUser && isNewChatExperience && container) {
-      const numHearts = 15;
-      const heartBaseSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" clip-rule="evenodd" /></svg>`;
+      warmUpApis();
+      const numHearts = 20; // Increased number of hearts
 
       for (let i = 0; i < numHearts; i++) {
-        const heartElement = document.createElement('div');
-        heartElement.className = 'heart-float'; 
-        heartElement.style.left = `${Math.random() * 95}%`; 
+        const heartElement = document.createElement('span'); // Changed to span
+        heartElement.className = 'heart-float';
+        heartElement.textContent = '❤︎'; // Use text character
+        heartElement.style.color = '#FF8DC7';
+        heartElement.style.left = `${Math.random() * 100}%`; // Adjusted to 100%
+        
+        heartElement.style.fontSize = `${Math.random() * 12 + 12}px`; // Randomized font size (12px to 24px)
+        heartElement.style.filter = `blur(${Math.random() * 1.5}px)`; // Randomized blur (0px to 1.5px)
 
-        const size = Math.random() * 10 + 5; // Reduced size range (5px to 15px)
-        heartElement.style.width = `${size}px`;
-        heartElement.style.height = `${size}px`;
-        heartElement.style.color = '#FF8DC7'; 
-        heartElement.style.filter = 'blur(1px)'; // Added blur effect
-
-        heartElement.innerHTML = heartBaseSVG; 
-
-        heartElement.style.animationDuration = `${Math.random() * 5 + 7}s`; 
-        heartElement.style.animationDelay = `${Math.random() * 5}s`;    
+        heartElement.style.animationDuration = `${Math.random() * 5 + 5}s`; // Randomized duration (5s to 10s)
+        heartElement.style.animationDelay = `${Math.random() * 5}s`; // Randomized delay (0s to 5s)
 
         container.appendChild(heartElement);
         activeHearts.push(heartElement);
@@ -833,7 +827,7 @@ const App: React.FC = () => {
       activeHearts.forEach(heart => heart.remove());
       activeHearts = [];
     };
-  }, [currentUser, isNewChatExperience]);
+  }, [currentUser, isNewChatExperience, warmUpApis]);
 
 
   const calculateMainContentState = (): MainContentState => {
@@ -926,7 +920,11 @@ const App: React.FC = () => {
             <div className="fixed inset-0 bg-black/50 z-30 sidebar-overlay" onClick={handleToggleSidebar} aria-hidden="true"></div>
           )}
           <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#2E2B36] transition-all duration-300 ease-in-out ${(isSidebarOpen && isDesktopView) ? 'md:ml-60' : 'ml-0'}`}>
-            <Header onToggleSidebar={handleToggleSidebar} onNewChat={handleNewChat} />
+            <Header
+              onToggleSidebar={handleToggleSidebar}
+              onNewChat={handleNewChat}
+              isSidebarOpen={isSidebarOpen}
+            />
             <main className="flex-grow flex flex-col overflow-hidden bg-[#2E2B36]">
               {(mainContentCurrentState === 'INITIALIZING' ||
                 (isSessionsLoading && !initialLoadAndRestoreAttemptCompleteRef.current && mainContentCurrentState === 'SESSIONS_LOADING') || 
