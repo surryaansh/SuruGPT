@@ -13,8 +13,9 @@ interface SidebarProps {
   onRequestDeleteConfirmation: (sessionId: string, sessionTitle: string) => void;
   onRenameChatSession: (sessionId: string, newTitle: string) => Promise<void>;
   isLoading?: boolean;
-  onLogout: () => void; // New prop for logout
-  userName: string; // New prop for display name
+  onLogout: () => void; 
+  userName: string; 
+  ownerUID: string; // Added ownerUID prop
 }
 
 interface GroupedChatSessions {
@@ -115,7 +116,7 @@ const ChatSessionItem: React.FC<ChatSessionItemProps> = React.memo(({
 const Sidebar: React.FC<SidebarProps> = ({
   isOpen, onClose, onNewChat, chatSessions, activeChatId, onSelectChat,
   onRequestDeleteConfirmation, onRenameChatSession, isLoading,
-  onLogout, userName // Destructure new props
+  onLogout, userName, ownerUID // Destructure ownerUID
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [displayedSessions, setDisplayedSessions] = useState<ChatSession[]>(chatSessions);
@@ -135,38 +136,30 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (!searchTerm.trim()) setDisplayedSessions(chatSessions);
   }, [chatSessions, searchTerm]);
 
-  const performSearch = useCallback(async (term: string, currentUserId: string | null) => { // Accept userId
+  // This performSearch function demonstrates how ownerUID could be used if API search is implemented.
+  // The current debouncedSearch uses client-side filtering.
+  const performSearch = useCallback(async (term: string, currentUserId: string) => {
     const trimmedTerm = term.trim();
     if (!trimmedTerm) { setDisplayedSessions(chatSessions); setIsSearching(false); return; }
-    if (!currentUserId) { console.warn("Search attempted without user ID"); return; } // Guard for userId
+    if (!currentUserId) { console.warn("Search attempted without user ID"); setIsSearching(false); return; }
 
     setIsSearching(true);
     try {
       const response = await fetch(`${window.location.origin}/api/search`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ searchTerm: trimmedTerm, userId: currentUserId }), // Send userId
+        body: JSON.stringify({ searchTerm: trimmedTerm, userId: currentUserId }),
       });
       if (!response.ok) throw new Error(await response.text());
       setDisplayedSessions(await response.json());
     } catch (error) {
       console.error("Error fetching search results:", error); setDisplayedSessions([]);
     } finally { setIsSearching(false); }
-  }, [chatSessions]); // chatSessions dependency is fine
+  }, [chatSessions]);
 
-  // This needs to be updated if App passes currentUser.uid or similar
-  // For now, assuming App.tsx handles passing the correct userId to the API call
-  // For simplicity here, I'll remove the userId argument from debouncedSearch as Sidebar doesn't have it directly.
-  // The search API will require userId. App.tsx should manage this.
-  // This is a temporary simplification for the Sidebar component.
-  // A better approach would be for performSearch to be passed from App.tsx or for App.tsx to manage search results.
 
   const debouncedSearch = useMemo(() => debounce((term: string) => {
-    // We need userId here. This highlights a potential prop drilling or state management improvement needed.
-    // For now, this search might not work correctly if it depends on a userId that Sidebar doesn't have.
-    // The API /api/search now *requires* userId.
-    // Let's assume for now App.tsx will filter sessions based on search term and pass filtered list.
-    // Or, this search input would need to trigger a function in App.tsx.
-    // For this change, I'll filter client-side if no proper userId propagation for search.
+    // Client-side filtering as currently implemented.
+    // If API search is desired, call: performSearch(term, ownerUID);
     const lowerTerm = term.toLowerCase();
     if (!lowerTerm) {
         setDisplayedSessions(chatSessions);
@@ -175,14 +168,14 @@ const Sidebar: React.FC<SidebarProps> = ({
             chatSessions.filter(s => s.title.toLowerCase().includes(lowerTerm) || (s.firstMessageTextForTitle || "").toLowerCase().includes(lowerTerm))
         );
     }
-    setIsSearching(false); // Simplified client-side search
-  }, 300), [chatSessions]);
+    setIsSearching(false);
+  }, 300), [chatSessions, ownerUID, performSearch]); // ownerUID and performSearch added if performSearch is to be used
 
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const term = e.target.value;
     setSearchTerm(term);
-    setIsSearching(true); // Indicate searching
+    setIsSearching(true); 
     debouncedSearch(term);
   };
 
@@ -251,7 +244,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       <div
-        className={`sidebar fixed top-0 left-0 h-full w-52 sm:w-60 bg-[#2D2A32] text-[#EAE6F0] p-4 z-40 transform ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`sidebar fixed top-0 left-0 h-full w-52 sm:w-60 bg-[#2D2A32] text-[#EAE6F0] p-4 z-40 transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out`}
         role="dialog" aria-modal="true" aria-hidden={!isOpen}
       >
         <div className="flex flex-col h-full">
@@ -289,7 +282,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {/* Chat List Area */}
-          <div className="flex-grow overflow-y-auto px-1 mb-1"> {/* Reduced bottom margin */}
+          <div className="flex-grow overflow-y-auto px-1 mb-1 sidebar-chat-list-scroll-container"> {/* Reduced bottom margin, added class for styling scrollbar */}
             {isSearching ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Searching...</p>
               : isLoading && !searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Loading chats...</p>
                 : displayedSessions.length > 0 ? (
@@ -323,14 +316,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           {/* User Info and Logout at the bottom */}
           <div className="mt-auto border-t border-[#393641] pt-3 pb-1">
-            <div className="flex items-center justify-between p-1.5 rounded-lg hover:bg-[#3c3a43]">
+            <div className="flex items-center justify-between p-1.5 rounded-lg hover:bg-[#3c3a43] transition-colors duration-150">
                 <div className="flex items-center min-w-0">
                     <IconUser className="w-5 h-5 text-[#A09CB0] mr-2.5 flex-shrink-0" />
                     <span className="text-sm text-[#EAE6F0] truncate font-medium">{userName}</span>
                 </div>
                 <button
                     onClick={onLogout}
-                    className="ml-2 text-xs text-[#A09CB0] hover:text-[#FF8DC7] p-1 rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7]"
+                    className="ml-2 text-xs text-[#A09CB0] hover:text-[#FF8DC7] p-1 rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#2D2A32]"
                     aria-label="Logout"
                 >
                     Logout
