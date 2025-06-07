@@ -1,25 +1,25 @@
 
 import { initializeApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  collection, 
-  query, 
-  orderBy, 
-  getDocs, 
-  Timestamp, 
-  addDoc, 
-  serverTimestamp, 
+import {
+  getFirestore,
+  collection,
+  query,
+  orderBy,
+  getDocs,
+  Timestamp,
+  addDoc,
+  serverTimestamp,
   getDoc,
   doc,
   updateDoc,
-  writeBatch, 
-  where, // Already at the top
-  limit // Added for fetching the most recent summary
-} from 'firebase/firestore'; 
+  writeBatch,
+  where,
+  limit
+} from 'firebase/firestore';
 
-import { firebaseConfig } from './firebaseConfig.js'; 
-import { ChatSession, Message, SenderType } from '../types'; // StoredSessionSummary will be imported from types.ts
-import type { StoredSessionSummary } from '../types'; // Import the updated interface
+import { firebaseConfig } from './firebaseConfig.js';
+import { ChatSession, Message, SenderType } from '../types';
+import type { StoredSessionSummary } from '../types';
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -28,7 +28,6 @@ const CHAT_SESSIONS_COLLECTION = 'chat_sessions';
 const MESSAGES_SUBCOLLECTION = 'messages';
 const USER_MEMORIES_COLLECTION = 'user_memories';
 const SESSION_SUMMARIES_SUBCOLLECTION = 'session_summaries';
-const DEFAULT_USER_ID = "default_user"; // Centralize default user ID
 
 const convertMessageTimestamp = (messageData: any): Message => {
   const timestampField = messageData.timestamp;
@@ -39,9 +38,17 @@ const convertMessageTimestamp = (messageData: any): Message => {
   } as Message;
 };
 
-export const getChatSessions = async (): Promise<ChatSession[]> => {
+export const getChatSessions = async (userId: string): Promise<ChatSession[]> => {
+  if (!userId) {
+    console.warn("[firebaseService] getChatSessions called without userId.");
+    return [];
+  }
   try {
-    const sessionsQuery = query(collection(db, CHAT_SESSIONS_COLLECTION), orderBy('createdAt', 'desc'));
+    const sessionsQuery = query(
+      collection(db, CHAT_SESSIONS_COLLECTION),
+      where('userId', '==', userId), // Filter by userId
+      orderBy('createdAt', 'desc')
+    );
     const querySnapshot = await getDocs(sessionsQuery);
     return querySnapshot.docs.map(docSnapshot => {
       const data = docSnapshot.data();
@@ -54,202 +61,229 @@ export const getChatSessions = async (): Promise<ChatSession[]> => {
       } as ChatSession;
     });
   } catch (error) {
-    console.error("Error fetching chat sessions:", error);
+    console.error("Error fetching chat sessions for user:", userId, error);
     throw error;
   }
 };
 
-export const getMessagesForSession = async (sessionId: string): Promise<Message[]> => {
+export const getMessagesForSession = async (userId: string, sessionId: string): Promise<Message[]> => {
+  if (!userId || !sessionId) {
+    console.warn("[firebaseService] getMessagesForSession called without userId or sessionId.");
+    return [];
+  }
   try {
+    // Optional: First verify the session belongs to the user if rules don't cover cross-access fully
+    // const sessionDoc = await getDoc(doc(db, CHAT_SESSIONS_COLLECTION, sessionId));
+    // if (!sessionDoc.exists() || sessionDoc.data()?.userId !== userId) {
+    //   console.error(`[firebaseService] Attempt to access session ${sessionId} not belonging to user ${userId}`);
+    //   return [];
+    // }
+
     const messagesQuery = query(
       collection(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION),
       orderBy('timestamp', 'asc')
     );
     const querySnapshot = await getDocs(messagesQuery);
-    return querySnapshot.docs.map(docSnapshot => 
+    return querySnapshot.docs.map(docSnapshot =>
       convertMessageTimestamp({ id: docSnapshot.id, ...docSnapshot.data() })
     );
   } catch (error) {
-    console.error(`Error fetching messages for session ${sessionId}:`, error);
+    console.error(`Error fetching messages for session ${sessionId}, user ${userId}:`, error);
     throw error;
   }
 };
 
 export const createChatSessionInFirestore = async (
-  title: string, 
-  firstMessageText: string 
-  ): Promise<ChatSession> => { 
+  userId: string,
+  title: string,
+  firstMessageText: string
+): Promise<ChatSession> => {
+  if (!userId) {
+    throw new Error("[firebaseService] createChatSessionInFirestore called without userId.");
+  }
   try {
     const newSessionRef = await addDoc(collection(db, CHAT_SESSIONS_COLLECTION), {
       title,
-      createdAt: serverTimestamp(), 
+      createdAt: serverTimestamp(),
       firstMessageTextForTitle: firstMessageText,
-      userId: DEFAULT_USER_ID, // Assuming new chats are for the default user
+      userId: userId, // Store the userId
     });
 
     const docSnap = await getDoc(newSessionRef);
     if (docSnap.exists()) {
-        const data = docSnap.data();
-        return {
-            id: newSessionRef.id,
-            title: data.title,
-            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(), 
-            firstMessageTextForTitle: data.firstMessageTextForTitle,
-            userId: data.userId,
-        } as ChatSession;
+      const data = docSnap.data();
+      return {
+        id: newSessionRef.id,
+        title: data.title,
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+        firstMessageTextForTitle: data.firstMessageTextForTitle,
+        userId: data.userId,
+      } as ChatSession;
     } else {
-        throw new Error("Failed to create and retrieve chat session from Firestore");
+      throw new Error("Failed to create and retrieve chat session from Firestore");
     }
   } catch (error) {
-    console.error("Error creating new chat session:", error);
+    console.error("Error creating new chat session for user:", userId, error);
     throw error;
   }
 };
 
 export const addMessageToFirestore = async (
+  userId: string, // Not strictly needed if session already verified, but good for consistency
   sessionId: string,
   messageData: { text: string; sender: SenderType }
 ): Promise<Message> => {
+  if (!userId || !sessionId) {
+     throw new Error("[firebaseService] addMessageToFirestore called without userId or sessionId.");
+  }
   try {
     const messageRef = await addDoc(
       collection(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION),
       {
         ...messageData,
-        timestamp: serverTimestamp(), 
+        timestamp: serverTimestamp(),
         feedback: null,
+        // userId: userId, // Optionally store userId on messages too for very specific rules
       }
     );
     const docSnap = await getDoc(messageRef);
     if (docSnap.exists()) {
-        return convertMessageTimestamp({ id: messageRef.id, ...docSnap.data() });
+      return convertMessageTimestamp({ id: messageRef.id, ...docSnap.data() });
     } else {
-         throw new Error("Failed to add and retrieve message from Firestore");
+      throw new Error("Failed to add and retrieve message from Firestore");
     }
   } catch (error) {
-    console.error(`Error adding message to session ${sessionId}:`, error);
+    console.error(`Error adding message to session ${sessionId} for user ${userId}:`, error);
     throw error;
   }
 };
 
 export const updateMessageInFirestore = async (
+  userId: string, // For verification if needed
   sessionId: string,
   messageId: string,
   newText: string
 ): Promise<void> => {
+  if (!userId || !sessionId || !messageId) {
+     throw new Error("[firebaseService] updateMessageInFirestore called without userId, sessionId, or messageId.");
+  }
   try {
     const messageRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION, messageId);
-    await updateDoc(messageRef, { 
+    await updateDoc(messageRef, {
       text: newText,
-      timestamp: serverTimestamp() 
+      timestamp: serverTimestamp()
     });
-    console.log(`Message ${messageId} in session ${sessionId} updated successfully.`);
   } catch (error) {
-    console.error(`Error updating message ${messageId} in session ${sessionId}:`, error);
+    console.error(`Error updating message ${messageId} in session ${sessionId} for user ${userId}:`, error);
     throw error;
   }
 };
 
 export const updateMessageFeedbackInFirestore = async (
+  userId: string, // For verification
   sessionId: string,
   messageId: string,
   feedback: 'good' | 'bad' | null
 ): Promise<void> => {
+   if (!userId || !sessionId || !messageId) {
+     throw new Error("[firebaseService] updateMessageFeedbackInFirestore called without crucial IDs.");
+  }
   try {
     const messageRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION, messageId);
     await updateDoc(messageRef, { feedback });
-    console.log(`Feedback for message ${messageId} in session ${sessionId} updated to ${feedback}.`);
   } catch (error) {
-    console.error(`Error updating feedback for message ${messageId} in session ${sessionId}:`, error);
+    console.error(`Error updating feedback for message ${messageId} (user ${userId}):`, error);
     throw error;
   }
 };
 
-export const updateChatSessionTitleInFirestore = async (sessionId: string, newTitle: string): Promise<void> => {
+export const updateChatSessionTitleInFirestore = async (userId: string, sessionId: string, newTitle: string): Promise<void> => {
+  if (!userId || !sessionId) {
+     throw new Error("[firebaseService] updateChatSessionTitleInFirestore called without userId or sessionId.");
+  }
   try {
     const sessionRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId);
+    // Optional: Verify ownership before update if rules are not sufficient or for proactive check
+    // const sessionSnap = await getDoc(sessionRef);
+    // if (!sessionSnap.exists() || sessionSnap.data()?.userId !== userId) throw new Error("Permission denied or session not found.");
     await updateDoc(sessionRef, { title: newTitle });
   } catch (error) {
-    console.error(`Error updating title for session ${sessionId}:`, error);
+    console.error(`Error updating title for session ${sessionId} (user ${userId}):`, error);
     throw error;
   }
 };
 
-export const deleteChatSessionFromFirestore = async (sessionId: string): Promise<void> => {
+export const deleteChatSessionFromFirestore = async (userId: string, sessionId: string): Promise<void> => {
+  if (!userId || !sessionId) {
+    throw new Error("[firebaseService] deleteChatSessionFromFirestore called without userId or sessionId.");
+  }
   try {
     const batch = writeBatch(db);
 
-    // Delete associated session summaries
-    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, DEFAULT_USER_ID);
+    // Verify session ownership before starting delete
+    const sessionDocRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId);
+    const sessionDocSnap = await getDoc(sessionDocRef);
+    if (!sessionDocSnap.exists() || sessionDocSnap.data()?.userId !== userId) {
+        console.error(`[firebaseService] Attempt to delete session ${sessionId} not belonging to user ${userId} or session not found.`);
+        throw new Error("Permission denied or session not found for deletion.");
+    }
+
+    // Delete associated session summaries (now under user_memories/{userId}/...)
+    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId); // Path to user's memory
     const summariesColRef = collection(userMemoryDocRef, SESSION_SUMMARIES_SUBCOLLECTION);
     const summariesQuery = query(summariesColRef, where("sessionId", "==", sessionId));
     const summariesSnapshot = await getDocs(summariesQuery);
 
-    if (!summariesSnapshot.empty) {
-        summariesSnapshot.forEach(summaryDoc => {
-            batch.delete(summaryDoc.ref);
-        });
-        console.log(`Marked ${summariesSnapshot.docs.length} summary/summaries for session ${sessionId} for deletion.`);
-    } else {
-        console.log(`No associated session summaries found for session ${sessionId} to delete.`);
-    }
+    summariesSnapshot.forEach(summaryDoc => batch.delete(summaryDoc.ref));
 
-    // Delete messages in the chat session
     const messagesPath = collection(db, CHAT_SESSIONS_COLLECTION, sessionId, MESSAGES_SUBCOLLECTION);
-    const messagesQuery = query(messagesPath); // No order needed for deletion
-    const messagesSnapshot = await getDocs(messagesQuery);
+    const messagesSnapshot = await getDocs(query(messagesPath));
+    messagesSnapshot.forEach(messageDoc => batch.delete(messageDoc.ref));
 
-    if (!messagesSnapshot.empty) {
-      messagesSnapshot.forEach(messageDoc => {
-        batch.delete(messageDoc.ref);
-      });
-      console.log(`Marked ${messagesSnapshot.docs.length} messages for session ${sessionId} for deletion.`);
-    }
-    
-    // Delete the main chat session document
-    const sessionRef = doc(db, CHAT_SESSIONS_COLLECTION, sessionId);
-    batch.delete(sessionRef);
-    console.log(`Marked main chat session document ${sessionId} for deletion.`);
-
+    batch.delete(sessionDocRef);
     await batch.commit();
-    console.log(`Successfully committed deletions for chat session ${sessionId}, its messages, and associated summaries.`);
-
   } catch (error) {
-    console.error(`Error deleting chat session ${sessionId} and its associated data:`, error);
+    console.error(`Error deleting chat session ${sessionId} for user ${userId}:`, error);
     throw error;
   }
 };
 
-// Renamed and updated to include contentHash
 export const addSessionSummaryWithEmbeddingAndHash = async (
   userId: string,
   sessionId: string,
   summaryText: string,
   embeddingVector: number[],
-  contentHash: string // New parameter
+  contentHash: string
 ): Promise<void> => {
+  if (!userId) {
+    throw new Error("[firebaseService] addSessionSummaryWithEmbeddingAndHash called without userId.");
+  }
   try {
-    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId);
+    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId); // Use dynamic userId
     const summariesColRef = collection(userMemoryDocRef, SESSION_SUMMARIES_SUBCOLLECTION);
     await addDoc(summariesColRef, {
       sessionId,
       summaryText,
       embeddingVector,
-      contentHash, // Store the hash
+      contentHash,
       createdAt: serverTimestamp(),
+      // userId: userId, // Implicitly part of the path, but can be added for explicit querying
     });
-    console.log(`Session summary, embedding, and hash for session ${sessionId} (user ${userId}) added successfully.`);
   } catch (error) {
-    console.error(`Error adding session summary, embedding, and hash for session ${sessionId} (user ${userId}):`, error);
+    console.error(`Error adding session summary for session ${sessionId} (user ${userId}):`, error);
   }
 };
 
-// Updated to fetch contentHash
 export const getAllSessionSummariesWithEmbeddings = async (userId: string): Promise<StoredSessionSummary[]> => {
+  if (!userId) {
+     console.warn("[firebaseService] getAllSessionSummariesWithEmbeddings called without userId.");
+     return [];
+  }
   try {
-    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId);
+    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId); // Use dynamic userId
     const summariesColRef = collection(userMemoryDocRef, SESSION_SUMMARIES_SUBCOLLECTION);
-    const summariesQuery = query(summariesColRef, orderBy('createdAt', 'desc')); 
-    
+    const summariesQuery = query(summariesColRef, orderBy('createdAt', 'desc'));
+
     const querySnapshot = await getDocs(summariesQuery);
     return querySnapshot.docs.map(docSnapshot => {
       const data = docSnapshot.data();
@@ -259,24 +293,28 @@ export const getAllSessionSummariesWithEmbeddings = async (userId: string): Prom
         summaryText: data.summaryText,
         embeddingVector: data.embeddingVector,
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
-        contentHash: data.contentHash, // Fetch contentHash
+        contentHash: data.contentHash,
+        // userId: data.userId || userId, // Ensure userId is present
       } as StoredSessionSummary;
     });
   } catch (error) {
-    console.error(`Error fetching session summaries with embeddings for user ${userId}:`, error);
-    return []; 
+    console.error(`Error fetching session summaries for user ${userId}:`, error);
+    return [];
   }
 };
 
-// New function to get the most recent summary for a specific session ID
 export const getMostRecentSummaryForSession = async (userId: string, sessionId: string): Promise<StoredSessionSummary | null> => {
+  if (!userId || !sessionId) {
+     console.warn("[firebaseService] getMostRecentSummaryForSession called without userId or sessionId.");
+     return null;
+  }
   try {
-    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId);
+    const userMemoryDocRef = doc(db, USER_MEMORIES_COLLECTION, userId); // Use dynamic userId
     const summariesColRef = collection(userMemoryDocRef, SESSION_SUMMARIES_SUBCOLLECTION);
     const q = query(
-      summariesColRef, 
-      where("sessionId", "==", sessionId), 
-      orderBy('createdAt', 'desc'), 
+      summariesColRef,
+      where("sessionId", "==", sessionId),
+      orderBy('createdAt', 'desc'),
       limit(1)
     );
     const querySnapshot = await getDocs(q);
@@ -290,6 +328,7 @@ export const getMostRecentSummaryForSession = async (userId: string, sessionId: 
         embeddingVector: data.embeddingVector,
         createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
         contentHash: data.contentHash,
+        // userId: data.userId || userId,
       } as StoredSessionSummary;
     }
     return null;
