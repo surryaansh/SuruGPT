@@ -1,8 +1,11 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import OpenAI from 'openai';
-import { getAllSessionSummariesWithEmbeddings } from '../services/firebaseService.js';
+// Removed: import { getAllSessionSummariesWithEmbeddings } from '../services/firebaseService.js';
 import type { StoredSessionSummary } from '../types.js';
+import { initializeApp, getApps, cert, App as AdminApp } from 'firebase-admin/app';
+import { getFirestore as getAdminFirestore, Timestamp as AdminTimestamp } from 'firebase-admin/firestore';
+
 
 const API_KEY = process.env.OPENAI_API_KEY;
 let openai: OpenAI | null = null;
@@ -12,6 +15,34 @@ if (API_KEY) {
 } else {
     console.error("CRITICAL_ERROR: OPENAI_API_KEY environment variable is not set. OpenAI functionality will be disabled.");
 }
+
+// Firebase Admin SDK Initialization
+let adminApp: AdminApp;
+const serviceAccountString = process.env.FIREBASE_ADMIN_SDK_CONFIG;
+
+if (serviceAccountString) {
+    try {
+        const serviceAccount = JSON.parse(serviceAccountString);
+        if (!getApps().length) {
+            adminApp = initializeApp({
+                credential: cert(serviceAccount)
+            });
+            console.log("Firebase Admin SDK initialized successfully in /api/chat.");
+        } else {
+            adminApp = getApps()[0];
+            console.log("Firebase Admin SDK already initialized in /api/chat.");
+        }
+    } catch (e: any) {
+        console.error("CRITICAL_ERROR: Failed to parse FIREBASE_ADMIN_SDK_CONFIG or initialize Firebase Admin SDK in /api/chat.", e.message);
+    }
+} else {
+    console.error("CRITICAL_ERROR: FIREBASE_ADMIN_SDK_CONFIG environment variable is not set. Firestore summary reading in /api/chat will fail or use fallback.");
+}
+
+const dbAdmin = adminApp! ? getAdminFirestore(adminApp) : null;
+const USER_MEMORIES_COLLECTION = 'user_memories';
+const SESSION_SUMMARIES_SUBCOLLECTION = 'session_summaries';
+
 
 const DEFAULT_OPENAI_SYSTEM_PROMPT_BACKEND = "You are SuruGPT, a helpful and friendly AI assistant. Keep your responses concise and delightful, like a sprinkle of magic! ✨";
 const MAX_SEMANTIC_SUMMARIES_TO_INJECT = 1;
@@ -29,6 +60,40 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
     return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
+// Admin SDK version of getAllSessionSummariesWithEmbeddings
+async function getAllSessionSummariesWithEmbeddingsAdmin(userId: string): Promise<StoredSessionSummary[]> {
+  if (!dbAdmin) {
+     console.error("Admin Firestore not initialized in getAllSessionSummariesWithEmbeddingsAdmin (/api/chat).");
+     return [];
+  }
+  if (!userId) {
+     console.warn("[/api/chat] getAllSessionSummariesWithEmbeddingsAdmin called without userId.");
+     return [];
+  }
+  try {
+    const summariesColRef = dbAdmin.collection(USER_MEMORIES_COLLECTION).doc(userId).collection(SESSION_SUMMARIES_SUBCOLLECTION);
+    const summariesQuery = summariesColRef.orderBy('createdAt', 'desc'); // Using Admin SDK query
+
+    const querySnapshot = await summariesQuery.get();
+    return querySnapshot.docs.map(docSnapshot => {
+      const data = docSnapshot.data();
+      const createdAt = data.createdAt; // This will be a Firestore Timestamp from Admin SDK
+      return {
+        id: docSnapshot.id,
+        sessionId: data.sessionId,
+        summaryText: data.summaryText,
+        embeddingVector: data.embeddingVector,
+        createdAt: createdAt instanceof AdminTimestamp ? createdAt.toDate() : new Date(createdAt),
+        contentHash: data.contentHash,
+      } as StoredSessionSummary;
+    });
+  } catch (error) {
+    console.error(`[/api/chat] Error fetching admin session summaries for user ${userId}:`, error);
+    return []; // Return empty on error to allow chat to proceed without context
+  }
+}
+
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'GET') {
         console.log("/api/chat: GET request received (warm-up ping).");
@@ -44,6 +109,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.error("/api/chat: OpenAI client not initialized. OPENAI_API_KEY missing.");
         return res.status(500).json({ error: 'OpenAI API key not configured.' });
     }
+    
+    // Check if dbAdmin is initialized for semantic memory feature, but allow chat to proceed if not.
+    if (!dbAdmin) {
+        console.warn("/api/chat: Firebase Admin SDK not initialized. Semantic memory retrieval will be skipped.");
+    }
+
 
     const body = req.body;
     if (!body || typeof body !== 'object') {
@@ -52,10 +123,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { messages: messagesFromClient, userId } = body as {
         messages: OpenAI.Chat.ChatCompletionMessageParam[],
-        userId?: string // Added userId from client
+        userId?: string
     };
 
-    if (!userId || typeof userId !== 'string') { // Validate userId
+    if (!userId || typeof userId !== 'string') {
         console.error("/api/chat: Invalid or missing 'userId' in request body.", body);
         return res.status(400).json({ error: 'Invalid request body: "userId" string is required.' });
     }
@@ -63,7 +134,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!messagesFromClient || !Array.isArray(messagesFromClient) || messagesFromClient.length === 0) {
         return res.status(400).json({ error: 'Invalid request body: "messages" array is required.' });
     }
-    // ... (message validation remains the same)
     const validRoles = ['system', 'user', 'assistant', 'tool'];
     for (const msg of messagesFromClient) {
         if (!msg || typeof msg.role !== 'string' || !validRoles.includes(msg.role) || typeof msg.content !== 'string') {
@@ -81,7 +151,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     if (isFirstUserTurn) {
         console.log(`/api/chat (User: ${userId}): First user turn. Skipping semantic memory retrieval.`);
-    } else if (lastUserMessage && lastUserMessage.content && typeof lastUserMessage.content === 'string') {
+    } else if (dbAdmin && lastUserMessage && lastUserMessage.content && typeof lastUserMessage.content === 'string') { // Check dbAdmin
         try {
             console.log(`/api/chat (User: ${userId}): Generating embedding for query:`, lastUserMessage.content);
             const queryEmbeddingResponse = await openai.embeddings.create({
@@ -90,9 +160,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const queryEmbedding = queryEmbeddingResponse?.data?.[0]?.embedding;
 
             if (queryEmbedding) {
-                // Use the provided userId to fetch summaries
-                const allSummaries: StoredSessionSummary[] = await getAllSessionSummariesWithEmbeddings(userId);
-                console.log(`/api/chat (User: ${userId}): Found ${allSummaries.length} stored summaries.`);
+                // Use the admin version to fetch summaries
+                const allSummaries: StoredSessionSummary[] = await getAllSessionSummariesWithEmbeddingsAdmin(userId);
+                console.log(`/api/chat (User: ${userId}): Found ${allSummaries.length} stored summaries via Admin SDK.`);
 
                 if (allSummaries.length > 0) {
                     const similarities = allSummaries
@@ -113,8 +183,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
         } catch (error) {
             console.error(`/api/chat (User: ${userId}): Error during semantic memory retrieval:`, error);
+            // Don't let memory retrieval failure stop the chat
         }
+    } else if (!dbAdmin) {
+        console.warn(`/api/chat (User: ${userId}): Firebase Admin SDK not available. Skipping semantic memory retrieval.`);
     }
+
 
     if (messagesForOpenAI.length > 0 && messagesForOpenAI[0].role === 'system') {
         if (relevantMemoryContext) messagesForOpenAI[0].content += relevantMemoryContext;
