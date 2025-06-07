@@ -1,39 +1,69 @@
-import React from 'react';
-
-// IconHeart import removed as hearts are no longer used here.
+import React, { useEffect, useRef } from 'react';
 
 const WelcomeMessage: React.FC = () => {
+  const heartsContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const container = heartsContainerRef.current;
+    if (!container) return;
+
+    const numHearts = 15; // Number of hearts
+    const hearts: HTMLElement[] = [];
+
+    for (let i = 0; i < numHearts; i++) {
+      const heart = document.createElement('span');
+      heart.classList.add('heart-float');
+      heart.textContent = '💜'; 
+      heart.style.left = `${Math.random() * 100}%`;
+      heart.style.animationDuration = `${Math.random() * 3 + 4}s`; // 4s to 7s
+      heart.style.animationDelay = `${Math.random() * 3}s`;
+      heart.style.fontSize = `${Math.random() * 10 + 10}px`; // 10px to 20px
+      heart.style.filter = `blur(${Math.random() * 1.5}px)`;
+      container.appendChild(heart);
+      hearts.push(heart);
+    }
+
+    return () => {
+      hearts.forEach(heart => heart.remove());
+    };
+  }, []);
+
   return (
-    // Simplified container: centers the Giphy content.
-    // Removed py-8, flex-grow, text-center, px-4, overflow-hidden as they are not needed for just the GIF.
-    <div className="flex flex-col items-center">
-      {/* Giphy Embed Container */}
-      <div 
-        // Applied ~20% size reduction:
-        // w-48 (192px) -> w-[154px] (192 * 0.8 = 153.6)
-        // h-40 (160px) -> h-[128px] (160 * 0.8 = 128)
-        // sm:w-64 (256px) -> sm:w-[205px] (256 * 0.8 = 204.8)
-        // sm:h-52 (208px) -> sm:h-[166px] (208 * 0.8 = 166.4)
-        // Reduced bottom margin from mb-6 to mb-4 as text below is removed.
-        className="relative mb-4 animate-fadeInSlideUp w-[154px] h-[128px] sm:w-[205px] sm:h-[166px]"
-        style={{ animationDelay: '0.1s' }}
+    // Main container for WelcomeMessage. It's positioned by App.tsx.
+    // It will center its children (Giphy, Greeting) horizontally.
+    <div className="flex flex-col items-center w-full">
+      {/* Hearts Background - absolute, covers this component's area */}
+      <div
+        ref={heartsContainerRef}
+        className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none z-0"
+        aria-hidden="true"
       >
-        <iframe 
-          src="https://giphy.com/embed/BnX3LZNpuI2oUJHac0" 
-          width="100%" 
-          height="100%" 
-          style={{ border: '0' }} 
-          frameBorder="0" 
-          className="giphy-embed" 
+        {/* Hearts are dynamically added here */}
+      </div>
+
+      {/* Giphy Embed Container - relative, z-10 for layering */}
+      <div
+        className="relative z-10 mb-3 w-[154px] h-[128px] sm:w-[205px] sm:h-[166px]" // Reduced Giphy size by ~20%
+        style={{ animationDelay: '0.1s' }} // Existing animation
+      >
+        <iframe
+          src="https://giphy.com/embed/BnX3LZNpuI2oUJHac0"
+          width="100%"
+          height="100%"
+          style={{ border: '0' }}
+          frameBorder="0"
+          className="giphy-embed"
           allowFullScreen
           title="Cute Giphy Embed"
         ></iframe>
         {/* Transparent overlay to prevent Giphy hover effects */}
         <div className="absolute inset-0 z-[1]"></div>
       </div>
-      
-      {/* Removed Giphy link paragraph */}
-      {/* Removed h1 greeting and p descriptive text */}
+
+      {/* Greeting Text - relative, z-10 for layering */}
+      <p className="relative z-10 text-lg sm:text-xl font-medium text-[#EAE6F0] my-2">
+        What can I help you with my cutu?
+      </p>
     </div>
   );
 };
