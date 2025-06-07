@@ -964,7 +964,7 @@ const App: React.FC = () => {
             onRequestDeleteConfirmation={handleRequestDeleteConfirmation}
             onRenameChatSession={handleRenameChatSession}
             isLoading={isSessionsLoading && !initialLoadAndRestoreAttemptCompleteRef.current}
-            onRequestLogoutConfirmation={handleRequestLogoutConfirmation}
+            onLogout={handleRequestLogoutConfirmation}
             userName={DISPLAY_NAME}
             ownerUID={currentUser.uid}
           />
