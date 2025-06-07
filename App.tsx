@@ -640,8 +640,9 @@ const App: React.FC = () => {
             <div className="flex-grow flex flex-col justify-center items-center p-4">
               {/* This 'relative' container will be centered. Its height is primarily based on ChatInputBar. */}
               <div className="relative w-full max-w-2xl">
-                {/* WelcomeMessage (Giphy) positioned above the ChatInputBar */}
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2">
+                {/* WelcomeMessage (Giphy, Greeting, Hearts BG) positioned above the ChatInputBar */}
+                {/* The w-full here ensures WelcomeMessage has the space to center its own content. */}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-full">
                   <WelcomeMessage />
                 </div>
                 {/* ChatInputBar itself. Its presence in the 'relative' container defines the centered block. */}
