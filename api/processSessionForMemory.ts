@@ -66,22 +66,20 @@ async function getMostRecentSummaryForSessionAdmin(userId: string, sessionId: st
         return null;
     }
     try {
-        const summariesColRef = dbAdmin.collection(USER_MEMORIES_COLLECTION).doc(userId).collection(SESSION_SUMMARIES_SUBCOLLECTION);
-        const snapshot = await summariesColRef
-            .where("sessionId", "==", sessionId)
-            .orderBy('createdAt', 'desc')
-            .limit(1)
-            .get();
+        const summaryDocRef = dbAdmin.collection(USER_MEMORIES_COLLECTION).doc(userId).collection(SESSION_SUMMARIES_SUBCOLLECTION).doc(sessionId);
+        const docSnapshot = await summaryDocRef.get();
 
-        if (snapshot.empty) {
+        if (!docSnapshot.exists) {
             return null;
         }
-        const docData = snapshot.docs[0].data();
+        const docData = docSnapshot.data();
+        if (!docData) return null; // Should not happen if exists, but good practice
+
         const createdAt = docData.createdAt; // This will be a Firestore Timestamp from Admin SDK
 
         return {
-            id: snapshot.docs[0].id,
-            sessionId: docData.sessionId,
+            id: docSnapshot.id, // which is sessionId
+            sessionId: docData.sessionId, // Stored for consistency, also sessionId
             summaryText: docData.summaryText,
             embeddingVector: docData.embeddingVector,
             createdAt: createdAt instanceof AdminTimestamp ? createdAt.toDate() : new Date(createdAt), // Convert Admin SDK Timestamp
@@ -106,18 +104,19 @@ async function addSessionSummaryWithEmbeddingAndHashAdmin(
         throw new Error("Admin Firestore not available.");
     }
     try {
-        const summariesColRef = dbAdmin.collection(USER_MEMORIES_COLLECTION).doc(userId).collection(SESSION_SUMMARIES_SUBCOLLECTION);
-        await summariesColRef.add({
-            sessionId,
+        const summaryDocRef = dbAdmin.collection(USER_MEMORIES_COLLECTION).doc(userId).collection(SESSION_SUMMARIES_SUBCOLLECTION).doc(sessionId);
+        
+        await summaryDocRef.set({
+            sessionId, // Store sessionId in the document for query consistency if needed elsewhere
             summaryText,
             embeddingVector,
             contentHash,
             createdAt: FieldValue.serverTimestamp(), // Use Admin SDK FieldValue
-        });
-        console.log(`Admin summary added for session ${sessionId}, user ${userId}`);
+        }, { merge: true }); // Use merge:true to update if exists, create if not
+
+        console.log(`Admin summary added/updated for session ${sessionId}, user ${userId}`);
     } catch (error) {
-        console.error(`Error adding admin session summary for session ${sessionId} (user ${userId}):`, error);
-        // Rethrow or handle as appropriate for the API response
+        console.error(`Error adding/updating admin session summary for session ${sessionId} (user ${userId}):`, error);
         throw error;
     }
 }
@@ -180,7 +179,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const sessionSummarizationUserPrompt = `Conversation Transcript:\n---\n${fullConversationTextForSummary}\n---\nCompact Memory Entry (1-2 sentences for future recall):`;
 
         const summaryCompletion = await openai.chat.completions.create({
-            model: 'gpt-4o-mini', // Changed from gpt-4.1-nano
+            model: 'gpt-4o-mini', 
             messages: [
                 { role: 'system', content: sessionSummarizationSystemPrompt },
                 { role: 'user', content: sessionSummarizationUserPrompt }
@@ -205,13 +204,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
     } catch (error: any) {
         console.error(`/api/processSessionForMemory (User: ${userId}, Session: ${sessionId}): Error:`, error);
-        // Check if the error is an OpenAI API error to provide more specific feedback
         if (error instanceof OpenAI.APIError) {
             console.error(`OpenAI API Error Details: Status=${error.status}, Message=${error.message}`);
-             // Don't return detailed OpenAI errors to client, but signal server-side issue
             return res.status(500).json({ message: "Session processed, but an error occurred with AI service during summary/embedding."});
         }
-         // For other errors, including Firestore errors from admin SDK calls
         return res.status(500).json({ message: "Session processed, but a server-side error occurred during processing.", details: error.message });
     }
 
