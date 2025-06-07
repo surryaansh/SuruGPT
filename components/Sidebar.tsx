@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { IconLayoutSidebar, IconHeart, IconSearch, IconPencil, IconEllipsisVertical, IconTrash, IconNewChat, IconUser } from '../constants'; // Added IconUser
+import { IconLayoutSidebar, IconHeart, IconSearch, IconPencil, IconEllipsisVertical, IconTrash, IconNewChat } from '../constants'; // IconUser removed
 import { ChatSession } from '../types';
 
 interface SidebarProps {
@@ -15,7 +15,7 @@ interface SidebarProps {
   isLoading?: boolean;
   onLogout: () => void; 
   userName: string; 
-  ownerUID: string; // Added ownerUID prop
+  ownerUID: string;
 }
 
 interface GroupedChatSessions {
@@ -116,7 +116,7 @@ const ChatSessionItem: React.FC<ChatSessionItemProps> = React.memo(({
 const Sidebar: React.FC<SidebarProps> = ({
   isOpen, onClose, onNewChat, chatSessions, activeChatId, onSelectChat,
   onRequestDeleteConfirmation, onRenameChatSession, isLoading,
-  onLogout, userName, ownerUID // Destructure ownerUID
+  onLogout, userName, ownerUID 
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [displayedSessions, setDisplayedSessions] = useState<ChatSession[]>(chatSessions);
@@ -136,8 +136,6 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (!searchTerm.trim()) setDisplayedSessions(chatSessions);
   }, [chatSessions, searchTerm]);
 
-  // This performSearch function demonstrates how ownerUID could be used if API search is implemented.
-  // The current debouncedSearch uses client-side filtering.
   const performSearch = useCallback(async (term: string, currentUserId: string) => {
     const trimmedTerm = term.trim();
     if (!trimmedTerm) { setDisplayedSessions(chatSessions); setIsSearching(false); return; }
@@ -158,8 +156,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 
   const debouncedSearch = useMemo(() => debounce((term: string) => {
-    // Client-side filtering as currently implemented.
-    // If API search is desired, call: performSearch(term, ownerUID);
     const lowerTerm = term.toLowerCase();
     if (!lowerTerm) {
         setDisplayedSessions(chatSessions);
@@ -169,7 +165,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         );
     }
     setIsSearching(false);
-  }, 300), [chatSessions, ownerUID, performSearch]); // ownerUID and performSearch added if performSearch is to be used
+  }, 300), [chatSessions, ownerUID, performSearch]); 
 
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -271,7 +267,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {/* Chat List Area */}
-          <div className="flex-grow overflow-y-auto px-1 mb-1 sidebar-chat-list-scroll-container"> {/* Reduced bottom margin, added class for styling scrollbar */}
+          <div className="flex-grow overflow-y-auto px-1 mb-1 sidebar-chat-list-scroll-container">
             {isSearching ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Searching...</p>
               : isLoading && !searchTerm.trim() ? <p className="text-xs text-[#A09CB0] px-1 py-1.5 text-center">Loading chats...</p>
                 : displayedSessions.length > 0 ? (
@@ -307,11 +303,11 @@ const Sidebar: React.FC<SidebarProps> = ({
           <div className="mt-auto border-t border-[#393641] pt-3 pb-1">
             <div className="flex items-center justify-between p-1.5 rounded-lg hover:bg-[#3c3a43] transition-colors duration-150">
                 <div className="flex items-center min-w-0">
-                    <IconUser className="w-5 h-5 text-[#A09CB0] mr-2.5 flex-shrink-0" />
+                    <IconHeart className="w-5 h-5 text-[#FFD1DC] mr-2.5 flex-shrink-0" /> {/* Changed IconUser to IconHeart and updated classes */}
                     <span className="text-sm text-[#EAE6F0] truncate font-medium">{userName}</span>
                 </div>
                 <button
-                    onClick={onLogout}
+                    onClick={onLogout} // This prop correctly calls handleRequestLogoutConfirmation from App.tsx
                     className="ml-2 text-xs text-[#A09CB0] hover:text-[#FF8DC7] p-1 rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-[#FF8DC7] focus-visible:ring-offset-1 focus-visible:ring-offset-[#2D2A32]"
                     aria-label="Logout"
                 >
