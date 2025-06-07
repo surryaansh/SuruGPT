@@ -234,6 +234,22 @@
     }
     /* Add more if needed for more buttons */
 
+    /* Animation for main app fade-in-up after login */
+    @keyframes fadeInUpMainApplication {
+      from {
+        opacity: 0;
+        transform: translateY(20px); /* Start slightly lower */
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .animate-fadeInUp-main-app {
+      animation: fadeInUpMainApplication 0.5s ease-out forwards;
+    }
+
   </style>
 <script type="importmap">
 {
@@ -245,7 +261,8 @@
     "@vercel/node": "https://esm.sh/@vercel/node@^5.1.16",
     "openai": "https://esm.sh/openai@^4.103.0",
     "@google/genai": "https://esm.sh/@google/genai@^1.0.1",
-    "@firebase/firestore": "https://esm.sh/@firebase/firestore@^4.7.16"
+    "@firebase/firestore": "https://esm.sh/@firebase/firestore@^4.7.16",
+    "firebase-admin/": "https://esm.sh/firebase-admin@^13.4.0/"
   }
 }
 </script>
