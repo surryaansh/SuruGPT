@@ -21,7 +21,7 @@ const WelcomeMessage: React.FC = () => {
     <div className="flex flex-col items-center w-full">
       {/* Giphy Embed Container - relative, z-10 for layering */}
       <div
-        className="relative z-10 mb-3 w-[154px] h-[128px] sm:w-[205px] sm:h-[166px] flex items-center justify-center"
+        className="relative z-10 mb-2 w-[154px] h-[128px] sm:w-[205px] sm:h-[166px] flex items-center justify-center" // Changed mb-3 to mb-2
         style={{ animationDelay: '0.1s' }} // Existing animation
       >
         {/* Render iframe only when src is set, control opacity for fade-in */}
@@ -50,7 +50,7 @@ const WelcomeMessage: React.FC = () => {
       </div>
 
       {/* Greeting Text - relative, z-10 for layering */}
-      <p className="relative z-10 text-lg sm:text-xl font-normal text-[#EAE6F0] my-2 text-center px-4">
+      <p className="relative z-10 text-lg sm:text-xl font-normal text-[#EAE6F0] my-1 text-center px-4"> {/* Changed my-2 to my-1 */}
         {currentGreeting}
       </p>
     </div>
