@@ -33,7 +33,7 @@ import { IconHeart, IconLogout, IconTrash } from './constants'; // Changed from 
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 
-const DESIGNATED_OWNER_EMAIL = "lilquee.master@gmail.com";
+const DESIGNATED_OWNER_EMAIL = "mehtamanvi29oct@gmail.com";
 const DISPLAY_NAME = "Minnie";
 
 
@@ -915,7 +915,7 @@ const App: React.FC = () => {
           />
           <div className="absolute inset-0 z-[1]" aria-hidden="true"></div> 
         </div>
-        <h1 className="text-3xl font-semibold mb-3">Hello my cutu {DISPLAY_NAME}!</h1>
+        <h1 className="text-3xl font-semibold mb-3">Welcome back, {DISPLAY_NAME}!</h1>
         <p className="text-md text-[#A09CB0] mb-8">Please enter your password to continue.</p>
         <form onSubmit={handleLogin} className="w-full max-w-sm space-y-6">
           <div>
