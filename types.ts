@@ -33,8 +33,8 @@ export interface ChatSession {
 // This interface is used in firebaseService.ts for fetching summaries
 // and needs to be consistent with the data structure in Firestore.
 export interface StoredSessionSummary {
-  id: string; // Firestore document ID of the summary entry
-  sessionId: string; // Original chat session ID
+  id: string; // This will be the sessionId, also the Firestore document ID of the summary.
+  sessionId: string; // Original chat session ID, redundant if id is sessionId but good for type clarity.
   summaryText: string;
   embeddingVector: number[];
   createdAt: Date;
