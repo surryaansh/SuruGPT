@@ -730,24 +730,12 @@ const App: React.FC = () => {
       <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#2E2B36] transition-all duration-300 ease-in-out ${(isSidebarOpen && isDesktopView) ? 'md:ml-60' : 'ml-0'}`}>
         <Header onToggleSidebar={handleToggleSidebar} onNewChat={handleNewChat} />
         <main className="flex-grow flex flex-col overflow-hidden bg-[#2E2B36]">
-          {mainContentCurrentState === 'INITIALIZING' && (
-            <div className="flex-grow flex items-center justify-center">
-              <p className="text-[#A09CB0] text-lg animate-pulse">Initializing SuruGPT...</p>
-            </div>
-          )}
-          {mainContentCurrentState === 'SESSIONS_LOADING' && (
-            <div className="flex-grow flex items-center justify-center">
-              <p className="text-[#A09CB0] text-lg animate-pulse">Loading sessions...</p>
-            </div>
-          )}
-          {mainContentCurrentState === 'RESTORING_SESSION' && (
-            <div className="flex-grow flex items-center justify-center">
-              <p className="text-[#A09CB0] text-lg animate-pulse">Restoring your session...</p>
-            </div>
-          )}
-          {mainContentCurrentState === 'MESSAGES_LOADING' && (
-            <div className="flex-grow flex items-center justify-center">
-              <p className="text-[#A09CB0] text-lg animate-pulse">Loading chat...</p>
+          {(mainContentCurrentState === 'INITIALIZING' ||
+            mainContentCurrentState === 'SESSIONS_LOADING' ||
+            mainContentCurrentState === 'RESTORING_SESSION' ||
+            mainContentCurrentState === 'MESSAGES_LOADING') && (
+            <div className="flex-grow">
+              {/* This area will be blank during these loading states */}
             </div>
           )}
           {mainContentCurrentState === 'NEW_CHAT_EXPERIENCE' && (
