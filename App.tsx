@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Message, SenderType, ChatSession } from './types';
 import Header from './components/Header';
-// import WelcomeMessage from './components/WelcomeMessage'; // Removed import
+import WelcomeMessage from './components/WelcomeMessage'; // Restored import
 import ChatMessageList from './components/ChatMessageList';
 import ChatInputBar from './components/ChatInputBar';
 import Sidebar from './components/Sidebar';
@@ -637,8 +637,8 @@ const App: React.FC = () => {
           )}
           {!isMessagesLoading && isNewChatExperience ? (
             <div className="flex-grow flex flex-col justify-center items-center p-4">
-              {/* WelcomeMessage component removed */}
-              <div className="w-full max-w-2xl"> {/* Removed mt-6 sm:mt-8 for better centering */}
+              <WelcomeMessage />
+              <div className="w-full max-w-2xl">
                 <ChatInputBar 
                     onSendMessage={handleSendMessage} 
                     isLoading={isLoadingAiResponse} 
