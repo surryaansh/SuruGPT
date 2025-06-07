@@ -220,8 +220,11 @@ const App: React.FC = () => {
       return;
     }
 
+    // This check is primarily for the inactivity timer.
+    // If we're explicitly processing a session due to navigation or new chat start,
+    // activeChatIdRef.current might be different or null.
     if (endedSessionId === activeChatIdRef.current && isLoadingAiResponseRef.current) {
-      console.log(`[App][processEndedSessionForMemory] Skipped memory update for session ${endedSessionId} because it is currently loading an AI response.`);
+      console.log(`[App][processEndedSessionForMemory] Skipped memory update for session ${endedSessionId} because it is currently the active chat and loading an AI response.`);
       return;
     }
 
@@ -424,6 +427,8 @@ const App: React.FC = () => {
 
             const persistedChatIdForUiRestoreFromReload = reloadState?.isReloading ? reloadState.activeChatIdForReload : null;
             const idFromLastBrowserClose = initialPersistedIdFromLocalStorageRef.current;
+            console.log(`[App] Initial Load (User: ${currentUser.uid}): idFromLastBrowserClose = ${idFromLastBrowserClose}`);
+
 
             if (persistedChatIdForUiRestoreFromReload && sessions.some(s => s.id === persistedChatIdForUiRestoreFromReload)) {
                 console.log(`[App] Initial Load (User: ${currentUser.uid}): Page reload detected for session ${persistedChatIdForUiRestoreFromReload}.`);
@@ -432,7 +437,8 @@ const App: React.FC = () => {
                     console.log(`[App] Initial Load (User: ${currentUser.uid}): Processing reloaded session ${persistedChatIdForUiRestoreFromReload} for memory.`);
                     await processEndedSessionForMemory(currentUser.uid, persistedChatIdForUiRestoreFromReload, messagesForReloadedSession);
                 }
-                previousActiveSessionIdToProcessOnNewChatRef.current = null; // Reloaded session processed, no need for delayed processing.
+                previousActiveSessionIdToProcessOnNewChatRef.current = null; 
+                console.log(`[App] Initial Load (User: ${currentUser.uid}): Cleared previousActiveSessionIdToProcessOnNewChatRef due to reload.`);
                 await handleSelectChat(persistedChatIdForUiRestoreFromReload);
             } else {
                 console.log(`[App] Initial Load (User: ${currentUser.uid}): Fresh app open or invalid reload state.`);
@@ -442,9 +448,14 @@ const App: React.FC = () => {
                 console.log(`[App] Initial Load (User: ${currentUser.uid}): App starting in new chat state.`);
 
                 if (idFromLastBrowserClose && sessions.some(s => s.id === idFromLastBrowserClose)) {
-                    console.log(`[App] Initial Load (User: ${currentUser.uid}): Session ${idFromLastBrowserClose} (from last browser close) will be processed for memory upon sending the first message in this new chat experience.`);
+                    console.log(`[App] Initial Load (User: ${currentUser.uid}): Session ${idFromLastBrowserClose} (from last browser close) identified. Will be processed for memory upon sending the first message in this new chat experience.`);
                     previousActiveSessionIdToProcessOnNewChatRef.current = idFromLastBrowserClose;
                 } else {
+                    if (idFromLastBrowserClose) {
+                        console.log(`[App] Initial Load (User: ${currentUser.uid}): Session ${idFromLastBrowserClose} (from last browser close) was not found in current sessions list or was null. Not queueing for memory processing.`);
+                    } else {
+                        console.log(`[App] Initial Load (User: ${currentUser.uid}): No 'idFromLastBrowserClose' found. Not queueing any session for memory processing.`);
+                    }
                     previousActiveSessionIdToProcessOnNewChatRef.current = null; 
                 }
                 resetAiContextWithSystemPrompt(undefined, globalContextSummary);
@@ -617,21 +628,21 @@ const App: React.FC = () => {
       return;
     }
 
-    // Process previous session IF this is the start of a new chat flow after app reopen
     if (!activeChatId && previousActiveSessionIdToProcessOnNewChatRef.current && currentUser) {
         const sessionToSummarize = previousActiveSessionIdToProcessOnNewChatRef.current;
-        console.log(`[App][handleSendMessage] First message in new chat. Processing previous session ${sessionToSummarize} for memory.`);
+        console.log(`[App][handleSendMessage] First message in new chat. Attempting to process previous session ${sessionToSummarize} for memory.`);
         try {
             const messagesForOldSession = await getMessagesForSession(currentUser.uid, sessionToSummarize);
             if (messagesForOldSession.length > 0) {
+                console.log(`[App][handleSendMessage] Fetched ${messagesForOldSession.length} messages for old session ${sessionToSummarize}. Processing...`);
                 await processEndedSessionForMemory(currentUser.uid, sessionToSummarize, messagesForOldSession);
             } else {
-                console.log(`[App][handleSendMessage] Previous session ${sessionToSummarize} had no messages to process.`);
+                console.log(`[App][handleSendMessage] Previous session ${sessionToSummarize} had no messages, skipping memory processing.`);
             }
         } catch (error) {
             console.error(`[App][handleSendMessage] Error processing previous session ${sessionToSummarize} for memory:`, error);
         } finally {
-            previousActiveSessionIdToProcessOnNewChatRef.current = null; // Clear after attempt
+            previousActiveSessionIdToProcessOnNewChatRef.current = null; 
             console.log(`[App][handleSendMessage] Cleared previousActiveSessionIdToProcessOnNewChatRef after processing attempt for ${sessionToSummarize}.`);
         }
     }
@@ -803,10 +814,11 @@ const App: React.FC = () => {
         heartElement.className = 'heart-float'; 
         heartElement.style.left = `${Math.random() * 95}%`; 
 
-        const size = Math.random() * 20 + 10; 
+        const size = Math.random() * 10 + 5; // Reduced size range (5px to 15px)
         heartElement.style.width = `${size}px`;
         heartElement.style.height = `${size}px`;
         heartElement.style.color = '#FF8DC7'; 
+        heartElement.style.filter = 'blur(1px)'; // Added blur effect
 
         heartElement.innerHTML = heartBaseSVG; 
 
