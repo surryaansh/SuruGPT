@@ -1,7 +1,16 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { greetings } from '../greetings'; // Import the new greetings list
 
 const WelcomeMessage: React.FC = () => {
+  const [currentGreeting, setCurrentGreeting] = useState('');
+
+  useEffect(() => {
+    // Select a random greeting when the component mounts
+    const randomIndex = Math.floor(Math.random() * greetings.length);
+    setCurrentGreeting(greetings[randomIndex]);
+  }, []); // Empty dependency array ensures this runs only on mount
+
   return (
     // Main container for WelcomeMessage. It's positioned by App.tsx.
     // It will center its children (Giphy, Greeting) horizontally.
@@ -26,8 +35,8 @@ const WelcomeMessage: React.FC = () => {
       </div>
 
       {/* Greeting Text - relative, z-10 for layering */}
-      <p className="relative z-10 text-lg sm:text-xl font-normal text-[#EAE6F0] my-2">
-        What can I help you with my cutu?
+      <p className="relative z-10 text-lg sm:text-xl font-normal text-[#EAE6F0] my-2 text-center px-4">
+        {currentGreeting}
       </p>
     </div>
   );
