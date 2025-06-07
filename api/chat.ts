@@ -1,7 +1,6 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import OpenAI from 'openai';
-// Removed: import { getAllSessionSummariesWithEmbeddings } from '../services/firebaseService.js';
 import type { StoredSessionSummary } from '../types.js';
 import { initializeApp, getApps, cert, App as AdminApp } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore, Timestamp as AdminTimestamp } from 'firebase-admin/firestore';
@@ -72,15 +71,17 @@ async function getAllSessionSummariesWithEmbeddingsAdmin(userId: string): Promis
   }
   try {
     const summariesColRef = dbAdmin.collection(USER_MEMORIES_COLLECTION).doc(userId).collection(SESSION_SUMMARIES_SUBCOLLECTION);
-    const summariesQuery = summariesColRef.orderBy('createdAt', 'desc'); // Using Admin SDK query
+    // This query is for fetching *all* relevant summaries, ordered by creation date to pick the latest/most relevant.
+    // The index for this on (createdAt DESC) for session_summaries subcollection group is still needed.
+    const summariesQuery = summariesColRef.orderBy('createdAt', 'desc');
 
     const querySnapshot = await summariesQuery.get();
     return querySnapshot.docs.map(docSnapshot => {
       const data = docSnapshot.data();
       const createdAt = data.createdAt; // This will be a Firestore Timestamp from Admin SDK
       return {
-        id: docSnapshot.id,
-        sessionId: data.sessionId,
+        id: docSnapshot.id, // This is the sessionId because summary doc ID is now sessionId
+        sessionId: data.sessionId, // This field is also sessionId, stored for clarity/consistency
         summaryText: data.summaryText,
         embeddingVector: data.embeddingVector,
         createdAt: createdAt instanceof AdminTimestamp ? createdAt.toDate() : new Date(createdAt),
@@ -110,7 +111,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(500).json({ error: 'OpenAI API key not configured.' });
     }
     
-    // Check if dbAdmin is initialized for semantic memory feature, but allow chat to proceed if not.
     if (!dbAdmin) {
         console.warn("/api/chat: Firebase Admin SDK not initialized. Semantic memory retrieval will be skipped.");
     }
@@ -151,7 +151,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     if (isFirstUserTurn) {
         console.log(`/api/chat (User: ${userId}): First user turn. Skipping semantic memory retrieval.`);
-    } else if (dbAdmin && lastUserMessage && lastUserMessage.content && typeof lastUserMessage.content === 'string') { // Check dbAdmin
+    } else if (dbAdmin && lastUserMessage && lastUserMessage.content && typeof lastUserMessage.content === 'string') { 
         try {
             console.log(`/api/chat (User: ${userId}): Generating embedding for query:`, lastUserMessage.content);
             const queryEmbeddingResponse = await openai.embeddings.create({
@@ -160,7 +160,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const queryEmbedding = queryEmbeddingResponse?.data?.[0]?.embedding;
 
             if (queryEmbedding) {
-                // Use the admin version to fetch summaries
                 const allSummaries: StoredSessionSummary[] = await getAllSessionSummariesWithEmbeddingsAdmin(userId);
                 console.log(`/api/chat (User: ${userId}): Found ${allSummaries.length} stored summaries via Admin SDK.`);
 
@@ -183,7 +182,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
         } catch (error) {
             console.error(`/api/chat (User: ${userId}): Error during semantic memory retrieval:`, error);
-            // Don't let memory retrieval failure stop the chat
         }
     } else if (!dbAdmin) {
         console.warn(`/api/chat (User: ${userId}): Firebase Admin SDK not available. Skipping semantic memory retrieval.`);
