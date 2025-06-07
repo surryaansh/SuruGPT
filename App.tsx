@@ -756,7 +756,7 @@ const App: React.FC = () => {
               >
               </div>
               <div className="relative w-full max-w-2xl z-10">
-                <div className="absolute bottom-[calc(100%+1.5rem)] left-1/2 -translate-x-1/2 w-full">
+                <div className="absolute bottom-[calc(100%+1rem)] left-1/2 -translate-x-1/2 w-full"> {/* Changed 1.5rem to 1rem */}
                   <WelcomeMessage />
                 </div>
                 <ChatInputBar
