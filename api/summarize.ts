@@ -13,8 +13,14 @@ if (API_KEY) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method === 'GET') {
+    // Handle warm-up ping
+    console.log("/api/summarize: GET request received (warm-up ping).");
+    return res.status(200).json({ message: "API is warm." });
+  }
+
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
+    res.setHeader('Allow', 'POST, GET');
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
@@ -68,4 +74,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 }
-
