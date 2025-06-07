@@ -624,7 +624,7 @@ const App: React.FC = () => {
       for (let i = 0; i < numHearts; i++) {
         const heart = document.createElement('span');
         heart.classList.add('heart-float');
-        heart.textContent = '❤︎'; 
+        heart.textContent = '♥'; 
         heart.style.color = '#FF8DC7'; 
         heart.style.left = `${Math.random() * 100}%`;
         heart.style.animationDuration = `${Math.random() * 5 + 5}s`; // 5s to 10s
@@ -680,7 +680,7 @@ const App: React.FC = () => {
               
               {/* Content container (WelcomeMessage + ChatInputBar), must be above hearts */}
               <div className="relative w-full max-w-2xl z-10">
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-full">
+                <div className="absolute bottom-[calc(100%+1.5rem)] left-1/2 -translate-x-1/2 w-full">
                   <WelcomeMessage />
                 </div>
                 <ChatInputBar
