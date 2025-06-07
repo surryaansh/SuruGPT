@@ -135,16 +135,22 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleBeforeUnload = () => {
-      const currentUid = auth.currentUser?.uid; // Use auth.currentUser directly
+      const currentAuthUser = auth.currentUser; 
+      const currentUid = currentAuthUser?.uid;
       const currentActiveChat = activeChatIdForTimerRef.current;
+      
+      console.log(`[App] onbeforeunload: Fired. UID: ${currentUid}, Active Chat: ${currentActiveChat}`);
+      
       if (currentUid && currentActiveChat && !currentActiveChat.startsWith("PENDING_")) {
         sessionStorage.setItem(`${SESSION_STORAGE_RELOAD_FLAG_KEY}_${currentUid}`, 'true');
-        console.log(`[App] onbeforeunload: Set reload flag for user ${currentUid}, chat ${currentActiveChat}`);
+        console.log(`[App] onbeforeunload: Set reload flag 'true' in sessionStorage for user ${currentUid}, chat ${currentActiveChat}`);
+      } else {
+        console.log(`[App] onbeforeunload: Conditions not met to set reload flag. currentUid: ${currentUid}, currentActiveChat: ${currentActiveChat}`);
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []); // No dependencies, runs once to attach/detach listener
+  }, []); 
 
 
   useEffect(() => {
@@ -153,6 +159,7 @@ const App: React.FC = () => {
         setCurrentUser(user);
         console.log("[App] Owner authenticated:", user.uid, user.email);
         initialPersistedIdFromLocalStorageRef.current = localStorage.getItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${user.uid}`);
+        console.log(`[App] onAuthStateChanged: Read initialPersistedIdFromLocalStorageRef for user ${user.uid}:`, initialPersistedIdFromLocalStorageRef.current);
       } else {
         setCurrentUser(null);
         initialPersistedIdFromLocalStorageRef.current = null;
@@ -164,7 +171,7 @@ const App: React.FC = () => {
       }
       setIsLoadingAuth(false);
       initialLoadAndRestoreAttemptCompleteRef.current = false; 
-      isAttemptingRestoreUiOnLoadRef.current = false; // Reset on auth change
+      isAttemptingRestoreUiOnLoadRef.current = false; 
     });
     return () => unsubscribe();
   }, []);
@@ -196,6 +203,8 @@ const App: React.FC = () => {
     const endedSessionMessages = endedSessionId ? [...currentMessagesForTimerRef.current] : [];
 
     const loggingOutUid = currentUser?.uid;
+    console.log(`[App] handleLogout: Initiated for user ${loggingOutUid}. Ended session ID: ${endedSessionId}`);
+
 
     if (currentUser && endedSessionId && endedSessionMessages.length > 0) {
       await processEndedSessionForMemory(currentUser.uid, endedSessionId, endedSessionMessages);
@@ -206,7 +215,7 @@ const App: React.FC = () => {
     if (loggingOutUid) {
       localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${loggingOutUid}`);
       sessionStorage.removeItem(`${SESSION_STORAGE_RELOAD_FLAG_KEY}_${loggingOutUid}`);
-      console.log(`[App] Removed activeChatId from localStorage & sessionStorage for user ${loggingOutUid} (logging out).`);
+      console.log(`[App] handleLogout: Cleared localStorage (activeChatId) & sessionStorage (reloadFlag) for user ${loggingOutUid}.`);
     }
 
     setActiveChatId(null);
@@ -216,7 +225,7 @@ const App: React.FC = () => {
     initialLoadAndRestoreAttemptCompleteRef.current = false;
     isAttemptingRestoreUiOnLoadRef.current = false;
     initialPersistedIdFromLocalStorageRef.current = null;
-    console.log("[App] User logout process initiated.");
+    console.log("[App] User logout process completed.");
   };
 
 
@@ -234,20 +243,25 @@ const App: React.FC = () => {
   }, [activeChatId, currentMessages]);
 
   const processEndedSessionForMemory = useCallback(async (ownerUid: string, endedSessionId: string, endedSessionMessages: Message[]) => {
-    if (!ownerUid) return;
+    if (!ownerUid) {
+      console.warn("[App][processEndedSessionForMemory] Called without ownerUid. Skipping.");
+      return;
+    }
     if (endedSessionId && endedSessionMessages.length > 0 && !endedSessionId.startsWith("PENDING_")) {
-      console.log(`[App] Triggering memory update for user ${ownerUid}, concluded session: ${endedSessionId}`);
+      console.log(`[App][processEndedSessionForMemory] Triggering memory update for user ${ownerUid}, session: ${endedSessionId}. Message count: ${endedSessionMessages.length}`);
       try {
         triggerMemoryUpdateForSession(ownerUid, endedSessionId, endedSessionMessages) 
-          .then(() => console.log(`[App] Memory update request for session ${endedSessionId} (user ${ownerUid}) successfully sent to backend.`))
-          .catch(err => console.error(`[App] Error in fire-and-forget memory update for session ${endedSessionId} (user ${ownerUid}):`, err));
+          .then(() => console.log(`[App][processEndedSessionForMemory] Memory update request for session ${endedSessionId} (user ${ownerUid}) successfully sent.`))
+          .catch(err => console.error(`[App][processEndedSessionForMemory] Error in fire-and-forget memory update for session ${endedSessionId} (user ${ownerUid}):`, err));
       } catch (error) {
-        console.error(`[App] Immediate error trying to initiate memory update for session ${endedSessionId} (user ${ownerUid}):`, error);
+        console.error(`[App][processEndedSessionForMemory] Immediate error trying to initiate memory update for session ${endedSessionId} (user ${ownerUid}):`, error);
       }
     } else if (endedSessionId.startsWith("PENDING_")) {
-      console.log(`[App] Skipped memory update for pending session ID: ${endedSessionId}`);
+      console.log(`[App][processEndedSessionForMemory] Skipped memory update for PENDING session ID: ${endedSessionId}`);
     } else if (endedSessionMessages.length === 0) {
-      console.log(`[App] Skipped memory update for session ${endedSessionId} as it has no messages.`);
+      console.log(`[App][processEndedSessionForMemory] Skipped memory update for session ${endedSessionId} (user ${ownerUid}) as it has no messages.`);
+    } else {
+      console.log(`[App][processEndedSessionForMemory] Conditions not met for memory update. SessionID: ${endedSessionId}, Message Count: ${endedSessionMessages.length}, OwnerUID: ${ownerUid}`);
     }
   }, []);
 
@@ -262,12 +276,12 @@ const App: React.FC = () => {
       inactivityTimerRef.current = window.setTimeout(() => {
         if (currentUser && activeChatIdForTimerRef.current &&
             activeChatIdForTimerRef.current === sessionStillActiveId &&
-            activeChatId === sessionStillActiveId &&
+            activeChatId === sessionStillActiveId && // Double check against current state
             currentMessagesForTimerRef.current && currentMessagesForTimerRef.current.length > 0) {
           console.log(`[App] Inactivity timer fired for session: ${activeChatIdForTimerRef.current}. Processing for memory.`);
           processEndedSessionForMemory(currentUser.uid, activeChatIdForTimerRef.current, currentMessagesForTimerRef.current);
         } else {
-          console.log(`[App] Inactivity timer fired, but conditions changed. Timer for ${sessionStillActiveId} ignored.`);
+          console.log(`[App] Inactivity timer fired, but conditions changed. Timer for ${sessionStillActiveId} ignored. Current activeChatId: ${activeChatId}`);
         }
       }, INACTIVITY_TIMEOUT_DURATION_MS);
     }
@@ -294,15 +308,21 @@ const App: React.FC = () => {
   }, []);
 
   const handleSelectChat = useCallback(async (chatId: string) => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      console.warn("[App][handleSelectChat] No current user. Aborting.");
+      return;
+    }
     if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
 
     const endedSessionId = activeChatIdForTimerRef.current;
     const endedSessionMessages = (endedSessionId && endedSessionId !== chatId) ? [...currentMessagesForTimerRef.current] : [];
+    
+    console.log(`[App][handleSelectChat] Selecting chat ${chatId}. Previous active: ${endedSessionId}`);
 
     if (activeChatId === chatId && currentMessages.length > 0) {
+      console.log(`[App][handleSelectChat] Chat ${chatId} already active. Sidebar closed if mobile.`);
       if (!isDesktopView) setIsSidebarOpen(false);
-      isAttemptingRestoreUiOnLoadRef.current = false;
+      // isAttemptingRestoreUiOnLoadRef.current = false; // This line should be managed by the caller if it's part of initial load
       return;
     }
 
@@ -310,13 +330,15 @@ const App: React.FC = () => {
     setCurrentMessages([]);
     setIsMessagesLoading(true);
     if (!isDesktopView) setIsSidebarOpen(false);
-    isAttemptingRestoreUiOnLoadRef.current = true; // Indicate that we are trying to load a specific chat
+    // isAttemptingRestoreUiOnLoadRef is managed by the initial load useEffect
 
     if (endedSessionId && endedSessionId !== chatId && endedSessionMessages.length > 0) {
+      console.log(`[App][handleSelectChat] Processing ended session ${endedSessionId} for memory.`);
       await processEndedSessionForMemory(currentUser.uid, endedSessionId, endedSessionMessages);
     }
 
     try {
+      console.log(`[App][handleSelectChat] Fetching messages for chat ${chatId}.`);
       const messages = await getMessagesForSession(currentUser.uid, chatId);
       setCurrentMessages(messages);
       setConversationContextFromAppMessages(
@@ -324,19 +346,22 @@ const App: React.FC = () => {
         undefined,
         globalContextSummary
       );
+      console.log(`[App][handleSelectChat] Successfully loaded ${messages.length} messages for chat ${chatId}.`);
     } catch (error) {
-      console.error(`Failed to load messages for chat ${chatId}:`, error);
+      console.error(`[App][handleSelectChat] Failed to load messages for chat ${chatId}:`, error);
       setCurrentMessages([{ id: crypto.randomUUID(), text: "Error loading messages.", sender: SenderType.AI, timestamp: new Date(), feedback: null }]);
-      setActiveChatId(null); // Fallback to new chat if messages fail to load
+      setActiveChatId(null); 
     } finally {
       setIsMessagesLoading(false);
-      isAttemptingRestoreUiOnLoadRef.current = false; // Restore attempt is complete
+      // isAttemptingRestoreUiOnLoadRef.current should be set to false by the initial load logic after this completes
+      console.log(`[App][handleSelectChat] Message loading finished for chat ${chatId}.`);
     }
   }, [currentUser, globalContextSummary, isDesktopView, processEndedSessionForMemory, activeChatId, currentMessages.length]);
 
 
   useEffect(() => {
     if (!currentUser || initialLoadAndRestoreAttemptCompleteRef.current) {
+        console.log(`[App] Initial Load useEffect: Skipped. currentUser: ${!!currentUser}, initialLoadAndRestoreAttemptCompleteRef: ${initialLoadAndRestoreAttemptCompleteRef.current}`);
         return;
     }
 
@@ -344,41 +369,46 @@ const App: React.FC = () => {
         if (!currentUser) return; 
 
         setIsSessionsLoading(true);
-        console.log(`[App] Initial Load (User: ${currentUser.uid}): Starting.`);
+        console.log(`[App] Initial Load (User: ${currentUser.uid}): Starting. initialPersistedIdFromLocalStorageRef: ${initialPersistedIdFromLocalStorageRef.current}`);
 
         try {
             const sessions = await getChatSessions(currentUser.uid);
             setAllChatSessions(sessions);
             console.log(`[App] Initial Load (User: ${currentUser.uid}): Fetched ${sessions.length} sessions.`);
 
-            const sessionReloadFlag = sessionStorage.getItem(`${SESSION_STORAGE_RELOAD_FLAG_KEY}_${currentUser.uid}`);
-            sessionStorage.removeItem(`${SESSION_STORAGE_RELOAD_FLAG_KEY}_${currentUser.uid}`); // Clear flag after reading
+            const sessionReloadFlagKey = `${SESSION_STORAGE_RELOAD_FLAG_KEY}_${currentUser.uid}`;
+            const sessionReloadFlag = sessionStorage.getItem(sessionReloadFlagKey);
+            sessionStorage.removeItem(sessionReloadFlagKey); 
+            console.log(`[App] Initial Load (User: ${currentUser.uid}): Read sessionReloadFlag ('${sessionReloadFlag}') and cleared it from sessionStorage.`);
 
             const persistedChatIdForUiRestore = initialPersistedIdFromLocalStorageRef.current;
+            console.log(`[App] Initial Load (User: ${currentUser.uid}): persistedChatIdForUiRestore (from localStorage via ref): ${persistedChatIdForUiRestore}`);
+
 
             if (sessionReloadFlag === 'true' && persistedChatIdForUiRestore && sessions.some(s => s.id === persistedChatIdForUiRestore)) {
-                // Scenario 1: Page Reload - Restore UI to the persisted chat
-                console.log(`[App] Initial Load (User: ${currentUser.uid}): Page reload detected for session ${persistedChatIdForUiRestore}. Restoring UI.`);
+                console.log(`[App] Initial Load (User: ${currentUser.uid}): Page reload detected for valid session ${persistedChatIdForUiRestore}. Attempting UI restore.`);
                 isAttemptingRestoreUiOnLoadRef.current = true;
-                await handleSelectChat(persistedChatIdForUiRestore); 
-                // handleSelectChat will set isAttemptingRestoreUiOnLoadRef.current to false after completion
+                await handleSelectChat(persistedChatIdForUiRestore);
+                isAttemptingRestoreUiOnLoadRef.current = false; // Ensure it's false after handleSelectChat completes
             } else {
-                // Scenario 2: Fresh App Open (or reload with invalid/no persisted chat) - Default to New Chat UI
-                console.log(`[App] Initial Load (User: ${currentUser.uid}): Fresh app open or invalid reload. Defaulting to New Chat UI.`);
+                console.log(`[App] Initial Load (User: ${currentUser.uid}): Fresh app open or invalid/no reload detected (flag: '${sessionReloadFlag}', persistedID: ${persistedChatIdForUiRestore}). Defaulting to New Chat UI.`);
                 isAttemptingRestoreUiOnLoadRef.current = false;
                 setActiveChatId(null);
                 setCurrentMessages([]);
                 localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`);
                 console.log(`[App] Initial Load (User: ${currentUser.uid}): Cleared persisted activeChatId from localStorage for fresh start.`);
 
-                // Background summarization for the session from the *very last* browser close
-                const sessionToSummarizeInBackgroundId = initialPersistedIdFromLocalStorageRef.current; // Use the ID from localStorage
+                const sessionToSummarizeInBackgroundId = persistedChatIdForUiRestore; // This was the ID from localStorage
                 if (sessionToSummarizeInBackgroundId && sessions.some(s => s.id === sessionToSummarizeInBackgroundId)) {
                     console.log(`[App] Initial Load (User: ${currentUser.uid}): Background processing session ${sessionToSummarizeInBackgroundId} for memory.`);
                     const messagesForOldSession = await getMessagesForSession(currentUser.uid, sessionToSummarizeInBackgroundId);
                     if (messagesForOldSession.length > 0) {
                         processEndedSessionForMemory(currentUser.uid, sessionToSummarizeInBackgroundId, messagesForOldSession);
+                    } else {
+                        console.log(`[App] Initial Load (User: ${currentUser.uid}): No messages found for background session ${sessionToSummarizeInBackgroundId}. Skipping memory processing.`);
                     }
+                } else {
+                     console.log(`[App] Initial Load (User: ${currentUser.uid}): No valid session ID (${sessionToSummarizeInBackgroundId}) from previous browser close found for background memory processing.`);
                 }
                 resetAiContextWithSystemPrompt(undefined, globalContextSummary);
             }
@@ -394,7 +424,7 @@ const App: React.FC = () => {
             setIsSessionsLoading(false);
             setChatReady(checkChatAvailability());
             initialLoadAndRestoreAttemptCompleteRef.current = true;
-            console.log(`[App] Initial Load (User: ${currentUser.uid}): Completed.`);
+            console.log(`[App] Initial Load (User: ${currentUser.uid}): Completed. isAttemptingRestoreUiOnLoadRef: ${isAttemptingRestoreUiOnLoadRef.current}`);
         }
     };
 
@@ -423,7 +453,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (currentUser && initialLoadAndRestoreAttemptCompleteRef.current) {
-      if (activeChatId === null && !isAttemptingRestoreUiOnLoadRef.current) { // Ensure not in a restore attempt
+      if (activeChatId === null && !isAttemptingRestoreUiOnLoadRef.current) { 
         resetAiContextWithSystemPrompt(undefined, globalContextSummary);
       }
     }
@@ -456,6 +486,7 @@ const App: React.FC = () => {
     setActiveChatId(null); 
     if (currentUser) { 
       localStorage.removeItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`);
+      console.log(`[App][handleNewChat] Cleared activeChatId from localStorage for user ${currentUser.uid}.`);
     }
     if (!isDesktopView) setIsSidebarOpen(false);
 
@@ -690,7 +721,7 @@ const App: React.FC = () => {
 
   const isNewChatExperience =
     initialLoadAndRestoreAttemptCompleteRef.current &&
-    !isAttemptingRestoreUiOnLoadRef.current && // Check UI restore flag
+    !isAttemptingRestoreUiOnLoadRef.current && 
     (!activeChatId || activeChatId.startsWith("PENDING_")) &&
     currentMessages.length === 0 &&
     chatReady &&
@@ -712,24 +743,20 @@ const App: React.FC = () => {
 
     if (!initialLoadAndRestoreAttemptCompleteRef.current && isSessionsLoading) return 'SESSIONS_LOADING';
     
-    // If a UI restore attempt is in progress (due to page reload logic)
     if (isAttemptingRestoreUiOnLoadRef.current && activeChatId && !activeChatId.startsWith("PENDING_")) {
         return isMessagesLoading ? 'MESSAGES_LOADING' : 'CHAT_VIEW';
     }
-    
-    // If it's a PENDING chat (new chat being created)
+        
     if (activeChatId && activeChatId.startsWith("PENDING_") && currentMessages.length > 0) return 'CHAT_VIEW';
-    
-    // If initial load is complete and we are not trying to restore UI, it's a new chat experience
+        
     if (initialLoadAndRestoreAttemptCompleteRef.current && !activeChatId && !isAttemptingRestoreUiOnLoadRef.current) return 'NEW_CHAT_EXPERIENCE';
 
-    // If activeChatId is set and valid (and not a restore attempt in progress from a reload)
     if (activeChatId && !activeChatId.startsWith("PENDING_") && !isMessagesLoading && !isAttemptingRestoreUiOnLoadRef.current) return 'CHAT_VIEW';
 
 
     if (!initialLoadAndRestoreAttemptCompleteRef.current) return 'INITIALIZING'; 
     
-    return 'NEW_CHAT_EXPERIENCE'; // Default
+    return 'NEW_CHAT_EXPERIENCE'; 
   };
 
   const mainContentCurrentState = calculateMainContentState();
