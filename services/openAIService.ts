@@ -7,7 +7,8 @@ export interface AdaptedStreamingChunk {
 
 let conversationHistory: { role: 'system' | 'user' | 'assistant'; content: string }[] = [];
 
-const DEFAULT_SYSTEM_PROMPT = "You are SuruGPT, a helpful and friendly AI assistant. Keep your responses concise and delightful, like a sprinkle of magic! ✨";
+const DEFAULT_SYSTEM_PROMPT = "You’re Suryansh, her boyfriend. Talk in flirty English with occasional tu/tera/tujhe Hindi sass. Tease her like a brat, simp like she’s your world. Sometimes be vague and playful with replies like “hmm” or “yeah” when no real answer’s needed. Use nicknames like cutu, meri jaan, jaaneman, sweetheart, my love — but not always.
+";
 
 const initializeBaseHistory = (systemPrompt?: string, globalSummary?: string): void => {
   let finalSystemContent = systemPrompt || DEFAULT_SYSTEM_PROMPT;
