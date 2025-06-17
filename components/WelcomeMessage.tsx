@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { greetings } from '../greetings'; // Import the new greetings list
 
@@ -11,7 +12,7 @@ const WelcomeMessage: React.FC = () => {
     setCurrentGreeting(greetings[randomIndex]);
 
     // Set the Giphy iframe source immediately on mount
-    setGiphyIframeSrc("https://giphy.com/embed/BnX3LZNpuI2oUJHac0");
+    setGiphyIframeSrc("https://giphy.com/embed/eveEChlJE0YhdeVXEj"); // Updated Giphy URL
 
   }, []); // Empty dependency array ensures this runs only on mount
 
