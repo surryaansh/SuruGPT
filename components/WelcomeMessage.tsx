@@ -35,11 +35,10 @@ const WelcomeMessage: React.FC = () => {
               opacity: giphyIframeSrc ? 1 : 0, // Opacity depends on src being set
               transition: 'opacity 0.4s ease-in-out'
             }}
-            frameBorder="0"
             className="giphy-embed"
             allowFullScreen
             title="Cute Giphy Embed"
-            loading="lazy" 
+            
           />
         )}
         
