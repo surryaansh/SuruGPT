@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { firebaseConfig } from './services/firebaseConfig'; // Ensure this has your actual config
@@ -901,17 +902,15 @@ const App: React.FC = () => {
   if (mainContentCurrentState === 'LOGIN_SCREEN') {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-[#2E2B36] text-[#EAE6F0] p-4">
-        <div className="relative w-36 h-36 mb-5">
+        <div className="relative w-40 h-40 mb-6"> {/* Adjusted size and margin */}
           <iframe
-            src="https://giphy.com/embed/4RysKNcCH6XQosC3K8"
+            src="https://giphy.com/embed/xX1PKy7MVU4xUvQ7bL"
             width="100%"
             height="100%"
             style={{ border: '0' }}
-            
             className="giphy-embed"
             allowFullScreen
             title="Login Animation"
-            
           />
           <div className="absolute inset-0 z-[1]" aria-hidden="true"></div> 
         </div>
