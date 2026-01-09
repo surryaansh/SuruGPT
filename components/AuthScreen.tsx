@@ -3,8 +3,7 @@ import {
   getAuth, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
-  updateProfile,
-  fetchSignInMethodsForEmail
+  updateProfile
 } from 'firebase/auth';
 
 interface AuthScreenProps {
@@ -24,40 +23,18 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
 
   const auth = getAuth();
 
-  // Reset error when switching views
   useEffect(() => {
     setError(null);
   }, [view]);
 
-  const handleEmailSubmit = async (e: React.FormEvent) => {
+  const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (!email.includes('@')) {
         setError("Please enter a valid email.");
         return;
     }
-    
-    setLoading(true);
-    try {
-      // Check if user exists
-      const methods = await fetchSignInMethodsForEmail(auth, email);
-      if (methods.length === 0) {
-        setError("No account found with this email. Try signing up!");
-        setLoading(false);
-        return;
-      }
-      setView('login-password');
-    } catch (err: any) {
-      console.error("Auth check error:", err);
-      // Fallback: Proceed anyway if API is restricted, login step will catch it
-      if (err.code === 'auth/admin-restricted-operation') {
-        setView('login-password');
-      } else {
-        setError("Something went wrong. Please try again.");
-      }
-    } finally {
-      setLoading(false);
-    }
+    setView('login-password');
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -68,10 +45,14 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
       await signInWithEmailAndPassword(auth, email, password);
       onAuthSuccess();
     } catch (err: any) {
-      if (err.code === 'auth/wrong-password') {
-        setError('Incorrect password. Try again?');
-      } else if (err.code === 'auth/user-not-found') {
+      console.error("Login error code:", err.code);
+      if (err.code === 'auth/user-not-found') {
         setError('No account found with this email.');
+      } else if (err.code === 'auth/wrong-password') {
+        setError('Incorrect password. Try again?');
+      } else if (err.code === 'auth/invalid-credential') {
+        // Modern Firebase returns this for both wrong password AND missing user
+        setError('Invalid credentials. Double check your email or sign up!');
       } else {
         setError('Something went wrong. Please check your credentials.');
       }
@@ -97,7 +78,11 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
       await updateProfile(userCredential.user, { displayName: displayName });
       onAuthSuccess();
     } catch (err: any) {
-      setError(err.message || 'Failed to create account.');
+      if (err.code === 'auth/email-already-in-use') {
+        setError('This email is already registered. Try logging in!');
+      } else {
+        setError(err.message || 'Failed to create account.');
+      }
     } finally {
       setLoading(false);
     }
@@ -112,15 +97,12 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
   return (
     <div className={containerClass}>
       <div className={cardClass}>
-        {/* Decorative background blur */}
         <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#FF8DC7] opacity-10 blur-3xl rounded-full"></div>
         <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-[#FF8DC7] opacity-10 blur-3xl rounded-full"></div>
 
-        {/* Giphy Header */}
         <div className="relative w-32 h-32 mx-auto mb-6">
           {view === 'welcome' && <iframe src="https://giphy.com/embed/eveEChlJE0YhdeVXEj" width="100%" height="100%" style={{ border: '0' }} className="giphy-embed pointer-events-none" allowFullScreen title="Welcome" />}
-          {view.startsWith('signup') && <iframe src="https://giphy.com/embed/xX1PKy7MVU4xUvQ7bL" width="100%" height="100%" style={{ border: '0' }} className="giphy-embed pointer-events-none" allowFullScreen title="Signup" />}
-          {view.startsWith('login') && <iframe src="https://giphy.com/embed/xX1PKy7MVU4xUvQ7bL" width="100%" height="100%" style={{ border: '0' }} className="giphy-embed pointer-events-none" allowFullScreen title="Login" />}
+          {(view.startsWith('signup') || view.startsWith('login')) && <iframe src="https://giphy.com/embed/xX1PKy7MVU4xUvQ7bL" width="100%" height="100%" style={{ border: '0' }} className="giphy-embed pointer-events-none" allowFullScreen title="Auth" />}
           <div className="absolute inset-0 z-10"></div>
         </div>
 
@@ -151,9 +133,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
               autoFocus 
             />
             {error && <p className="text-xs text-[#FF6B6B] mb-4">{error}</p>}
-            <button type="submit" disabled={loading} className={buttonClass}>
-              {loading ? 'Checking...' : 'Next'}
-            </button>
+            <button type="submit" className={buttonClass}>Next</button>
             <div onClick={() => setView('welcome')} className={backButtonClass}>Actually, take me back</div>
           </form>
         )}
