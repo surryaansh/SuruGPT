@@ -3,7 +3,8 @@ import {
   getAuth, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
-  updateProfile
+  updateProfile,
+  fetchSignInMethodsForEmail
 } from 'firebase/auth';
 
 interface AuthScreenProps {
@@ -28,13 +29,35 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
     setError(null);
   }, [view]);
 
-  const handleEmailSubmit = (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     if (!email.includes('@')) {
         setError("Please enter a valid email.");
         return;
     }
-    setView('login-password');
+    
+    setLoading(true);
+    try {
+      // Check if user exists
+      const methods = await fetchSignInMethodsForEmail(auth, email);
+      if (methods.length === 0) {
+        setError("No account found with this email. Try signing up!");
+        setLoading(false);
+        return;
+      }
+      setView('login-password');
+    } catch (err: any) {
+      console.error("Auth check error:", err);
+      // Fallback: Proceed anyway if API is restricted, login step will catch it
+      if (err.code === 'auth/admin-restricted-operation') {
+        setView('login-password');
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -128,7 +151,9 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
               autoFocus 
             />
             {error && <p className="text-xs text-[#FF6B6B] mb-4">{error}</p>}
-            <button type="submit" className={buttonClass}>Next</button>
+            <button type="submit" disabled={loading} className={buttonClass}>
+              {loading ? 'Checking...' : 'Next'}
+            </button>
             <div onClick={() => setView('welcome')} className={backButtonClass}>Actually, take me back</div>
           </form>
         )}
