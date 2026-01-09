@@ -120,6 +120,21 @@
     .animate-fadeInSlideUp {
       animation: fadeInSlideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
+
+    /* Chat Title Generation Animation */
+    @keyframes titleSlideIn {
+      from {
+        opacity: 0;
+        transform: translateX(-5px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+    .animate-titleUpdate {
+      animation: titleSlideIn 0.4s ease-out forwards;
+    }
     
     /* Blinking animation for text cursor */
     @keyframes blink {
@@ -278,11 +293,9 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
 <body class="antialiased">
   <div id="root"></div>
   <script type="module" src="/bundle.js"></script>
-<script type="module" src="/index.tsx"></script>
 </body>
 </html>
