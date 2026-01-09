@@ -106,7 +106,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         className="bg-transparent border-none outline-none w-full" 
                       />
                     ) : (
-                      <span className="truncate flex-grow">{chat.title}</span>
+                      <span key={chat.title} className="truncate flex-grow animate-titleUpdate">{chat.title}</span>
                     )}
                     <button onClick={e => openMenu(e, chat)} className="opacity-0 group-hover:opacity-100 p-1 hover:text-[#FF8DC7] transition-all"><IconEllipsisVertical className="w-3 h-3" /></button>
                   </div>
