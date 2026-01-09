@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Timestamp } from 'firebase/firestore';
 import { IconLayoutSidebar, IconHeart, IconSearch, IconPencil, IconEllipsisVertical, IconTrash, IconNewChat } from '../constants';
 import { ChatSession } from '../types';
@@ -11,6 +11,7 @@ interface SidebarProps {
   onRequestDeleteConfirmation: (sessionId: string, sessionTitle: string) => void;
   onRenameChatSession: (sessionId: string, newTitle: string) => Promise<void>;
   isLoading?: boolean; onLogout: () => void;
+  onRequestNameChange: () => void; // New prop
   userName: string; ownerUID: string;
 }
 
@@ -31,7 +32,7 @@ const groupSessions = (sessions: ChatSession[]) => {
 const Sidebar: React.FC<SidebarProps> = ({
   isOpen, onClose, onNewChat, chatSessions, activeChatId, onSelectChat,
   onRequestDeleteConfirmation, onRenameChatSession,
-  onLogout, userName
+  onLogout, onRequestNameChange, userName
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filtered, setFiltered] = useState(chatSessions);
@@ -41,7 +42,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [editTitle, setEditTitle] = useState('');
   
   const menuRef = useRef<HTMLDivElement>(null);
-  const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   useEffect(() => { setFiltered(chatSessions); }, [chatSessions]);
 
@@ -99,12 +99,20 @@ const Sidebar: React.FC<SidebarProps> = ({
               </div>
             ))}
           </div>
-          <div className="mt-auto border-t border-[#393641] pt-3 flex items-center justify-between">
-            <div className="flex items-center truncate">
-              <IconHeart className="w-4 h-4 text-[#FFD1DC] mr-2" />
-              <span className="text-xs truncate font-medium">{userName}</span>
+          <div className="mt-auto border-t border-[#393641] pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <button 
+                onClick={onRequestNameChange}
+                className="group/name flex items-center truncate flex-grow p-1 rounded-lg hover:bg-[#4A4754] transition-all"
+                title="Click to change name"
+              >
+                <IconHeart className="w-4 h-4 text-[#FFD1DC] mr-2 flex-shrink-0" />
+                <span className="text-xs truncate font-medium group-hover/name:text-[#FF8DC7]">{userName}</span>
+              </button>
             </div>
-            <button onClick={onLogout} className="text-[10px] text-[#A09CB0] hover:text-[#FF8DC7]">Logout</button>
+            <div className="flex justify-end">
+              <button onClick={onLogout} className="text-[10px] text-[#A09CB0] hover:text-[#FF8DC7] px-1">Logout</button>
+            </div>
           </div>
         </div>
       </div>
