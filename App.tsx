@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { getAuth, onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { initializeApp } from 'firebase/app';
@@ -55,7 +54,6 @@ const App: React.FC = () => {
   const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
   const [allChatSessions, setAllChatSessions] = useState<ChatSession[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const [globalContextSummary] = useState('');
 
   // UI State
   const [isLoadingAiResponse, setIsLoadingAiResponse] = useState(false);
@@ -116,11 +114,11 @@ const App: React.FC = () => {
     try {
       const messages = await getMessagesForSession(currentUser.uid, chatId);
       setCurrentMessages(messages);
-      setConversationContextFromAppMessages(messages, undefined, globalContextSummary);
+      setConversationContextFromAppMessages(messages);
     } catch (error) {
       console.error("Failed to load messages:", error);
     }
-  }, [currentUser, activeChatId, currentMessages, globalContextSummary, isDesktopView, processMemory]);
+  }, [currentUser, activeChatId, currentMessages, isDesktopView, processMemory]);
 
   const handleSendMessage = useCallback(async (text: string) => {
     if (!currentUser || !text.trim()) return;
@@ -146,7 +144,7 @@ const App: React.FC = () => {
       setIsLoadingAiResponse(true);
 
       try {
-        startNewOpenAIChatSession(undefined, globalContextSummary);
+        startNewOpenAIChatSession();
         const fallbackTitle = generateFallbackTitle(text);
         
         let newSession;
@@ -197,7 +195,7 @@ const App: React.FC = () => {
         console.error("Failed to send message:", error);
       }
     }
-  }, [currentUser, activeChatId, globalContextSummary, processMemory]);
+  }, [currentUser, activeChatId, processMemory]);
 
   const streamAiResponse = async (text: string, sessionId: string) => {
     if (!currentUser) return;
@@ -235,7 +233,7 @@ const App: React.FC = () => {
 
   const handleNewChat = () => {
     if (currentUser && activeChatId) processMemory(currentUser.uid, activeChatId, currentMessages);
-    startNewOpenAIChatSession(undefined, globalContextSummary);
+    startNewOpenAIChatSession();
     setActiveChatId(null);
     setCurrentMessages([]);
     if (!isDesktopView) setIsSidebarOpen(false);
