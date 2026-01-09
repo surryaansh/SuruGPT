@@ -90,7 +90,8 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
 
   const containerClass = "flex flex-col items-center justify-center h-screen bg-[#2E2B36] text-[#EAE6F0] p-6 text-center";
   const cardClass = "w-full max-w-sm bg-[#393641] p-8 rounded-3xl shadow-2xl border border-[#4A4754] animate-scaleIn relative overflow-hidden";
-  const inputClass = "appearance-none block w-full px-5 py-3.5 bg-[#4A4754] border border-[#5A5666] rounded-2xl shadow-sm placeholder-[#A09CB0] focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] text-[#EAE6F0] transition-all text-sm mb-4";
+  // text-base (16px) is required to prevent iOS zoom
+  const inputClass = "appearance-none block w-full px-5 py-3.5 bg-[#4A4754] border border-[#5A5666] rounded-2xl shadow-sm placeholder-[#A09CB0] focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] text-[#EAE6F0] transition-all text-base mb-4";
   const buttonClass = "w-full flex justify-center items-center py-3.5 px-4 rounded-2xl text-sm font-semibold text-white bg-[#FF8DC7] hover:bg-opacity-90 disabled:opacity-50 shadow-lg transition-all active:scale-95";
   const backButtonClass = "mt-6 text-xs text-[#A09CB0] hover:text-[#FF8DC7] transition-colors cursor-pointer";
 
