@@ -139,10 +139,9 @@ const App: React.FC = () => {
       timestamp: new Date() 
     };
 
-    if (!activeChatId) {
+    if (!activeChatId || activeChatId.startsWith("PENDING_")) {
       // --- STARTING A NEW CHAT ---
-      const tempId = `PENDING_${generateId()}`;
-      setActiveChatId(tempId);
+      if (!activeChatId) setActiveChatId(`PENDING_${generateId()}`);
       setCurrentMessages([userMessage]);
       setIsLoadingAiResponse(true);
 
@@ -150,16 +149,18 @@ const App: React.FC = () => {
         startNewOpenAIChatSession(undefined, globalContextSummary);
         const fallbackTitle = generateFallbackTitle(text);
         
-        // Use a try-catch specifically for Firestore to handle permission errors
         let newSession;
         try {
           newSession = await createChatSessionInFirestore(currentUser.uid, fallbackTitle, text);
         } catch (fsError: any) {
           console.error("Firestore Creation Error:", fsError);
-          // DON'T revert to Welcome screen. Show error in chat list.
+          const errorText = fsError.message?.includes("permissions") 
+            ? "I couldn't start this chat! It looks like there's a permission issue in the database rules. 🔒"
+            : "I had a bit of trouble connecting to the database. Try sending your message again? ✨";
+            
           setCurrentMessages(prev => [...prev, {
             id: generateId(),
-            text: "I couldn't start this chat in the database. Please check your Firestore Security Rules! (Error: " + (fsError.message || "Access Denied") + ")",
+            text: errorText,
             sender: SenderType.AI,
             timestamp: new Date()
           }]);
@@ -180,10 +181,10 @@ const App: React.FC = () => {
                 updateChatSessionTitleInFirestore(currentUser.uid, newSession.id, betterTitle);
                 setAllChatSessions(prev => prev.map(s => s.id === newSession.id ? { ...s, title: betterTitle } : s));
             }
-        }).catch(e => console.warn("Title gen background error:", e));
+        }).catch(e => console.warn("Title gen error:", e));
 
       } catch (error) {
-        console.error("Failed to initiate new chat session:", error);
+        console.error("General app error during chat init:", error);
         setIsLoadingAiResponse(false);
       }
     } else {
@@ -214,13 +215,11 @@ const App: React.FC = () => {
         }
         if (accumulated.trim()) {
           await addMessageToFirestore(currentUser.uid, sessionId, { text: accumulated, sender: SenderType.AI });
-        } else {
-          setCurrentMessages(prev => prev.map(m => m.id === aiId ? { ...m, text: "I'm here, but my words got lost! Can you try again? ✨" } : m));
         }
       }
     } catch (error) {
       console.error("Streaming error:", error);
-      setCurrentMessages(prev => prev.map(m => m.id === aiId ? { ...m, text: "Wait, I had a little hiccup! Can you try sending that again?" } : m));
+      setCurrentMessages(prev => prev.map(m => m.id === aiId ? { ...m, text: "I'm sorry, I had a little trouble thinking just now. Try again? ✨" } : m));
     } finally {
       setIsLoadingAiResponse(false);
     }
@@ -254,7 +253,8 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!activeChatId && currentMessages.length === 0 && heartsContainerRef.current) {
         const container = heartsContainerRef.current;
-        const color = currentUser?.email?.toLowerCase() === DESIGNATED_OWNER_EMAIL.toLowerCase() ? '#FF8DC7' : '#FFD1DC';
+        const isMinnie = currentUser?.email?.toLowerCase() === DESIGNATED_OWNER_EMAIL.toLowerCase();
+        const color = isMinnie ? '#FF8DC7' : '#FFD1DC';
         for (let i = 0; i < 15; i++) {
             const heart = document.createElement('span');
             heart.className = 'heart-float';
@@ -307,9 +307,9 @@ const App: React.FC = () => {
                 messages={currentMessages}
                 isLoadingAiResponse={isLoadingAiResponse}
                 onCopyText={(txt) => navigator.clipboard.writeText(txt)}
-                onRateResponse={(mid, rate) => updateMessageFeedbackInFirestore(currentUser.uid, activeChatId!, mid, rate)}
+                onRateResponse={(mid, rate) => updateMessageFeedbackInFirestore(currentUser.uid, activeChatId!.startsWith('PENDING') ? "" : activeChatId!, mid, rate)}
                 onRetryResponse={(mid, prompt) => handleSendMessage(prompt)}
-                onSaveEdit={(mid, txt) => updateMessageInFirestore(currentUser.uid, activeChatId!, mid, txt)}
+                onSaveEdit={(mid, txt) => updateMessageInFirestore(currentUser.uid, activeChatId!.startsWith('PENDING') ? "" : activeChatId!, mid, txt)}
               />
               <ChatInputBar onSendMessage={handleSendMessage} isLoading={isLoadingAiResponse} isChatAvailable={chatReady} isCentered={false} />
             </>
