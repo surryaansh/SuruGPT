@@ -39,7 +39,6 @@ const auth = getAuth(firebaseApp);
 const DESIGNATED_OWNER_EMAIL = "mehtamanvi29oct@gmail.com";
 const LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY = 'surugpt_activeChatId_owner';
 
-// Safer ID generator to prevent crashes in some browser environments
 const generateId = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -74,12 +73,9 @@ const App: React.FC = () => {
   const heartsContainerRef = useRef<HTMLDivElement>(null);
   const previousActiveSessionIdToProcessOnNewChatRef = useRef<string | null>(null);
 
-  // Determine Display Name
   const userDisplayName = currentUser?.email?.toLowerCase() === DESIGNATED_OWNER_EMAIL.toLowerCase() 
     ? "Minnie" 
     : (currentUser?.displayName || "Friend");
-
-  // --- Auth & Lifecycle ---
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -106,22 +102,17 @@ const App: React.FC = () => {
     } catch (e) { console.error("Memory error:", e); }
   }, []);
 
-  // --- Handlers ---
-
   const handleSelectChat = useCallback(async (chatId: string) => {
     if (!currentUser) return;
     if (activeChatId === chatId) {
         if (!isDesktopView) setIsSidebarOpen(false);
         return;
     }
-
     if (activeChatId && currentMessages.length > 0) {
         processMemory(currentUser.uid, activeChatId, currentMessages);
     }
-
     setActiveChatId(chatId);
     if (!isDesktopView) setIsSidebarOpen(false);
-
     try {
       const messages = await getMessagesForSession(currentUser.uid, chatId);
       setCurrentMessages(messages);
@@ -134,7 +125,6 @@ const App: React.FC = () => {
   const handleSendMessage = useCallback(async (text: string) => {
     if (!currentUser || !text.trim()) return;
     
-    // Process memory for the previous session if needed
     if (!activeChatId && previousActiveSessionIdToProcessOnNewChatRef.current) {
         const oldId = previousActiveSessionIdToProcessOnNewChatRef.current;
         const oldMsgs = await getMessagesForSession(currentUser.uid, oldId);
@@ -151,44 +141,50 @@ const App: React.FC = () => {
 
     if (!activeChatId) {
       // --- STARTING A NEW CHAT ---
-      const tempSessionId = `PENDING_${generateId()}`;
-      setActiveChatId(tempSessionId);
+      const tempId = `PENDING_${generateId()}`;
+      setActiveChatId(tempId);
       setCurrentMessages([userMessage]);
       setIsLoadingAiResponse(true);
 
       try {
-        // 1. Reset AI state
         startNewOpenAIChatSession(undefined, globalContextSummary);
-
-        // 2. Create the session in Firestore
         const fallbackTitle = generateFallbackTitle(text);
-        const newSession = await createChatSessionInFirestore(currentUser.uid, fallbackTitle, text);
         
-        // 3. Update session mapping
+        // Use a try-catch specifically for Firestore to handle permission errors
+        let newSession;
+        try {
+          newSession = await createChatSessionInFirestore(currentUser.uid, fallbackTitle, text);
+        } catch (fsError: any) {
+          console.error("Firestore Creation Error:", fsError);
+          // DON'T revert to Welcome screen. Show error in chat list.
+          setCurrentMessages(prev => [...prev, {
+            id: generateId(),
+            text: "I couldn't start this chat in the database. Please check your Firestore Security Rules! (Error: " + (fsError.message || "Access Denied") + ")",
+            sender: SenderType.AI,
+            timestamp: new Date()
+          }]);
+          setIsLoadingAiResponse(false);
+          return;
+        }
+        
         setActiveChatId(newSession.id);
         setAllChatSessions(prev => [newSession, ...prev]);
         localStorage.setItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`, newSession.id);
         
-        // 4. Record real user message in Firestore
         const finalUserMsg = await addMessageToFirestore(currentUser.uid, newSession.id, { text, sender: SenderType.USER });
         setCurrentMessages([finalUserMsg]);
-
-        // 5. Start AI stream
         await streamAiResponse(text, newSession.id);
 
-        // 6. Generate a better title in background
         generateChatTitle(text, currentUser.uid).then(betterTitle => {
             if (betterTitle && betterTitle !== fallbackTitle) {
                 updateChatSessionTitleInFirestore(currentUser.uid, newSession.id, betterTitle);
                 setAllChatSessions(prev => prev.map(s => s.id === newSession.id ? { ...s, title: betterTitle } : s));
             }
-        }).catch(e => console.warn("Title gen error:", e));
+        }).catch(e => console.warn("Title gen background error:", e));
 
       } catch (error) {
         console.error("Failed to initiate new chat session:", error);
         setIsLoadingAiResponse(false);
-        setActiveChatId(null);
-        setCurrentMessages([]);
       }
     } else {
       // --- CONTINUING EXISTING CHAT ---
@@ -206,8 +202,6 @@ const App: React.FC = () => {
     if (!currentUser) return;
     setIsLoadingAiResponse(true);
     const aiId = generateId();
-    
-    // Add AI placeholder message
     setCurrentMessages(prev => [...prev, { id: aiId, text: '', sender: SenderType.AI, timestamp: new Date(), feedback: null }]);
 
     let accumulated = '';
@@ -218,16 +212,15 @@ const App: React.FC = () => {
           accumulated += chunk.text || '';
           setCurrentMessages(prev => prev.map(m => m.id === aiId ? { ...m, text: accumulated } : m));
         }
-        
         if (accumulated.trim()) {
           await addMessageToFirestore(currentUser.uid, sessionId, { text: accumulated, sender: SenderType.AI });
         } else {
-          setCurrentMessages(prev => prev.map(m => m.id === aiId ? { ...m, text: "Wait, I didn't get that. Say it again? ✨" } : m));
+          setCurrentMessages(prev => prev.map(m => m.id === aiId ? { ...m, text: "I'm here, but my words got lost! Can you try again? ✨" } : m));
         }
       }
     } catch (error) {
       console.error("Streaming error:", error);
-      setCurrentMessages(prev => prev.map(m => m.id === aiId ? { ...m, text: "I had a tiny glitch! Could you try sending that again?" } : m));
+      setCurrentMessages(prev => prev.map(m => m.id === aiId ? { ...m, text: "Wait, I had a little hiccup! Can you try sending that again?" } : m));
     } finally {
       setIsLoadingAiResponse(false);
     }
@@ -249,8 +242,6 @@ const App: React.FC = () => {
     if (!isDesktopView) setIsSidebarOpen(false);
   };
 
-  // --- Effects ---
-
   useEffect(() => {
     if (currentUser && isSessionsLoading) {
       getChatSessions(currentUser.uid).then(sessions => {
@@ -260,7 +251,6 @@ const App: React.FC = () => {
     }
   }, [currentUser, isSessionsLoading]);
 
-  // Hearts Animation
   useEffect(() => {
     if (!activeChatId && currentMessages.length === 0 && heartsContainerRef.current) {
         const container = heartsContainerRef.current;
