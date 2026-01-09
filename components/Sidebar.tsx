@@ -1,5 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+// FIX: Added Timestamp import to correctly handle Firestore date types in the UI
+import { Timestamp } from 'firebase/firestore';
 import { IconLayoutSidebar, IconHeart, IconSearch, IconPencil, IconEllipsisVertical, IconTrash, IconNewChat } from '../constants'; // IconUser removed
 import { ChatSession } from '../types';
 
@@ -44,7 +46,9 @@ const groupChatSessionsByDate = (sessions: ChatSession[]): GroupedChatSessions[]
 
   const groups: { [key: string]: ChatSession[] } = { Today: [], Yesterday: [], 'Previous 7 days': [], 'Previous 30 days': [], Older: [] };
   sessions.forEach(session => {
-    const sessionDate = session.createdAt instanceof Date ? session.createdAt : new Date(session.createdAt);
+    // FIX: session.createdAt can be either a JavaScript Date or a Firestore Timestamp.
+    // The Date constructor does not accept a Timestamp object. We must call .toDate() on Timestamps.
+    const sessionDate = session.createdAt instanceof Date ? session.createdAt : (session.createdAt as Timestamp).toDate();
     const sessionDay = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate());
     if (sessionDay.getTime() === today.getTime()) groups.Today.push(session);
     else if (sessionDay.getTime() === yesterday.getTime()) groups.Yesterday.push(session);
