@@ -11,14 +11,13 @@ import ChatMessageList from './components/ChatMessageList';
 import ChatInputBar from './components/ChatInputBar';
 import Sidebar from './components/Sidebar';
 import ConfirmationDialog from './components/ConfirmationDialog';
-import LoginScreen from './components/LoginScreen';
 import LoadingScreen from './components/LoadingScreen';
+import AuthScreen from './components/AuthScreen';
 
 import { generateChatTitle } from './services/chatTitleService';
 import {
   sendMessageStream,
   isChatAvailable as checkChatAvailability,
-  startNewOpenAIChatSession,
   setConversationContextFromAppMessages,
   triggerMemoryUpdateForSession
 } from './services/openAIService';
@@ -31,16 +30,12 @@ import {
   deleteChatSessionFromFirestore,
   updateMessageFeedbackInFirestore,
 } from './services/firebaseService';
-import { IconLogout, IconTrash } from './constants';
 
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 
 const DESIGNATED_OWNER_EMAIL = "mehtamanvi29oct@gmail.com";
-const DISPLAY_NAME = "Minnie";
-const INACTIVITY_TIMEOUT_DURATION_MS = 1 * 60 * 1000;
 const LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY = 'surugpt_activeChatId_owner';
-const SESSION_STORAGE_RELOAD_STATE_KEY = 'surugpt_reloadState';
 
 const App: React.FC = () => {
   // Auth State
@@ -68,20 +63,27 @@ const App: React.FC = () => {
 
   // Animation Refs
   const heartsContainerRef = useRef<HTMLDivElement>(null);
-  const inactivityTimerRef = useRef<number | null>(null);
   const previousActiveSessionIdToProcessOnNewChatRef = useRef<string | null>(null);
+
+  // Determine Display Name
+  const userDisplayName = currentUser?.email === DESIGNATED_OWNER_EMAIL 
+    ? "Minnie" 
+    : (currentUser?.displayName || "Friend");
 
   // --- Auth & Lifecycle ---
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user && user.email === DESIGNATED_OWNER_EMAIL) {
+      if (user) {
         setCurrentUser(user);
         const storedId = localStorage.getItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${user.uid}`);
         previousActiveSessionIdToProcessOnNewChatRef.current = storedId;
+        setIsSessionsLoading(true);
       } else {
         setCurrentUser(null);
-        if (user) signOut(auth);
+        setAllChatSessions([]);
+        setActiveChatId(null);
+        setCurrentMessages([]);
       }
       setIsLoadingAuth(false);
     });
@@ -124,7 +126,6 @@ const App: React.FC = () => {
   const handleSendMessage = useCallback(async (text: string) => {
     if (!currentUser) return;
     
-    // Process previous session memory if starting a fresh chat
     if (!activeChatId && previousActiveSessionIdToProcessOnNewChatRef.current) {
         const oldId = previousActiveSessionIdToProcessOnNewChatRef.current;
         const oldMsgs = await getMessagesForSession(currentUser.uid, oldId);
@@ -179,8 +180,6 @@ const App: React.FC = () => {
         processMemory(currentUser.uid, activeChatId, currentMessages);
     }
     await signOut(auth);
-    setActiveChatId(null);
-    setCurrentMessages([]);
     setIsLogoutConfirmationOpen(false);
   };
 
@@ -213,14 +212,19 @@ const App: React.FC = () => {
             heart.style.left = `${Math.random() * 100}%`;
             heart.style.animationDuration = `${5 + Math.random() * 5}s`;
             heart.style.animationDelay = `${Math.random() * 5}s`;
+            if (currentUser?.email === DESIGNATED_OWNER_EMAIL) {
+               heart.style.color = '#FF8DC7';
+            } else {
+               heart.style.color = '#FFD1DC';
+            }
             container.appendChild(heart);
         }
         return () => { container.innerHTML = ''; };
     }
-  }, [activeChatId, currentMessages]);
+  }, [activeChatId, currentMessages, currentUser]);
 
   if (isLoadingAuth) return <LoadingScreen />;
-  if (!currentUser) return <LoginScreen designatedEmail={DESIGNATED_OWNER_EMAIL} displayName={DISPLAY_NAME} onLoginSuccess={() => {}} />;
+  if (!currentUser) return <AuthScreen designatedOwnerEmail={DESIGNATED_OWNER_EMAIL} onAuthSuccess={() => {}} />;
 
   return (
     <div className="flex flex-col h-full bg-[#2E2B36] overflow-hidden animate-fadeInUpSlightly">
@@ -234,7 +238,7 @@ const App: React.FC = () => {
         onRequestDeleteConfirmation={(id, title) => { setSessionToConfirmDelete({ id, title }); setIsDeleteConfirmationOpen(true); }}
         onRenameChatSession={async (id, title) => {}}
         onLogout={() => setIsLogoutConfirmationOpen(true)}
-        userName={DISPLAY_NAME}
+        userName={userDisplayName}
         ownerUID={currentUser.uid}
       />
       <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#2E2B36] transition-all duration-300 ${(isSidebarOpen && isDesktopView) ? 'md:ml-60' : 'ml-0'}`}>
@@ -277,7 +281,7 @@ const App: React.FC = () => {
       />
       <ConfirmationDialog
         isOpen={isLogoutConfirmationOpen} onClose={() => setIsLogoutConfirmationOpen(false)}
-        title="Log Out" message={`Are you sure, ${DISPLAY_NAME}?`}
+        title="Log Out" message={`Are you sure you want to log out, ${userDisplayName}?`}
         onConfirm={handleLogout} confirmButtonText="Log Out"
       />
     </div>
