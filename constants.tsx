@@ -105,8 +105,6 @@ export const IconTrash: React.FC<{ className?: string }> = ({ className = "w-5 h
   </svg>
 );
 
-export const IconAI = IconSuru;
-
 export const IconClipboardDocumentList: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
   <svg 
     xmlns="http://www.w3.org/2000/svg" 
