@@ -1,0 +1,5 @@
+{
+  "name": "SuruGPT Chat (OpenAI)",
+  "description": "A web application that replicates a modern chat UI, powered by the OpenAI API for conversational AI. It features a clean, dark-themed interface for sending messages and receiving streamed responses.",
+  "prompt": ""
+}

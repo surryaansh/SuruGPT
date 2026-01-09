@@ -1,0 +1,24 @@
+{
+  "name": "surugpt-chat-openai-vercel",
+  "version": "1.0.0",
+  "description": "SuruGPT Chat with OpenAI on Vercel",
+  "type": "module",
+  "scripts": {
+    "build": "mkdir -p dist && esbuild index.tsx --bundle --outfile=dist/bundle.js --jsx=automatic --loader:.ts=tsx --platform=browser --define:process.env.NODE_ENV='\"production\"' --minify && cp index.html dist/index.html",
+    "dev": "esbuild index.tsx --bundle --outfile=dist/bundle.js --jsx=automatic --loader:.ts=tsx --platform=browser --servedir=. --watch"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "firebase": "^10.12.4",
+    "openai": "^4.53.0",
+    "firebase-admin": "^12.2.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.23.0",
+    "typescript": "^5.5.4",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vercel/node": "^3.2.4"
+  }
+}
