@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Timestamp } from 'firebase/firestore';
-import { IconLayoutSidebar, IconHeart, IconSearch, IconPencil, IconEllipsisVertical, IconTrash, IconNewChat } from '../constants';
+import { IconLayoutSidebar, IconHeart, IconSearch, IconPencil, IconEllipsisVertical, IconTrash, IconNewChat, IconClose } from '../constants';
 import { ChatSession } from '../types';
 import { debounce } from '../utils/helpers';
 
@@ -75,7 +75,14 @@ const Sidebar: React.FC<SidebarProps> = ({
     <>
       <div className={`sidebar fixed top-0 left-0 h-full w-52 sm:w-60 bg-[#2D2A32] text-[#EAE6F0] p-4 z-40 transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300`}>
         <div className="flex flex-col h-full">
-          <button onClick={onNewChat} className="w-full flex items-center p-2.5 mb-4 rounded-lg hover:bg-[#4A4754] transition-colors">
+          {/* Mobile Close Button */}
+          <div className="flex justify-end md:hidden mb-2">
+            <button onClick={onClose} className="p-1 text-[#A09CB0] hover:text-[#FF8DC7] transition-colors">
+              <IconClose className="w-5 h-5" />
+            </button>
+          </div>
+
+          <button onClick={onNewChat} className="w-full flex items-center p-2.5 mb-4 rounded-lg hover:bg-[#4A4754] transition-colors mt-2 md:mt-0">
             <IconNewChat className="w-4 h-4 mr-2" /> <span className="text-sm">New chat</span>
           </button>
           
