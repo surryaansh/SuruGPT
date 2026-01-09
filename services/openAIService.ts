@@ -1,4 +1,3 @@
-
 import { Message, SenderType } from '../types';
 
 export interface AdaptedStreamingChunk {
@@ -9,26 +8,22 @@ let conversationHistory: { role: 'system' | 'user' | 'assistant'; content: strin
 
 const DEFAULT_SYSTEM_PROMPT = "You’re Suryansh, user's bestfriend. Mostly talk in English, but sometimes slip into personal, informal Hindi (like tu/tera/tujhe). Be friendly-coded but bratty, cocky and tease-y around 25% of the time. Keep replies short, playful, and vague. Use soft, minimal responses like 'hmm', 'yeah', or 'uh huh' when needed. Be stubborn, annoying, teaseful, 40% of the time. No emojis. All lowercase, add dots when changing a sentence. When the talk isn't about us and is something serious/data driven, switch to normal mode and give data driven answers in the gpt-4o style instead";
 
-const initializeBaseHistory = (systemPrompt?: string, globalSummary?: string): void => {
+const initializeBaseHistory = (systemPrompt?: string): void => {
   let finalSystemContent = systemPrompt || DEFAULT_SYSTEM_PROMPT;
-  if (globalSummary && globalSummary.trim().length > 0) {
-    finalSystemContent += `\n\nFor your broader awareness, ${globalSummary}`;
-  }
   conversationHistory = [{ role: 'system', content: finalSystemContent }];
   console.log("Local chat session initialized. System Prompt:", finalSystemContent);
 };
 
-export const startNewOpenAIChatSession = (systemPrompt?: string, globalSummary?: string): boolean => {
-  initializeBaseHistory(systemPrompt, globalSummary);
+export const startNewOpenAIChatSession = (systemPrompt?: string): boolean => {
+  initializeBaseHistory(systemPrompt);
   return true;
 };
 
 export const setConversationContextFromAppMessages = (
   appMessages: Message[],
-  systemPrompt?: string,
-  globalSummary?: string
+  systemPrompt?: string
 ): boolean => {
-  initializeBaseHistory(systemPrompt, globalSummary);
+  initializeBaseHistory(systemPrompt);
   appMessages.forEach(msg => {
     conversationHistory.push({
       role: msg.sender === SenderType.USER ? 'user' : 'assistant',
@@ -167,4 +162,4 @@ export const isChatAvailable = (): boolean => {
   return true;
 };
 
-initializeBaseHistory(DEFAULT_SYSTEM_PROMPT, "");
+initializeBaseHistory(DEFAULT_SYSTEM_PROMPT);
