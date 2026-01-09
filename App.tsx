@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getAuth, onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signOut, updateProfile, User } from 'firebase/auth';
 import { initializeApp } from 'firebase/app';
 import { firebaseConfig } from './services/firebaseConfig';
 
@@ -9,6 +9,7 @@ import ChatMessageList from './components/ChatMessageList';
 import ChatInputBar from './components/ChatInputBar';
 import Sidebar from './components/Sidebar';
 import ConfirmationDialog from './components/ConfirmationDialog';
+import NameChangeDialog from './components/NameChangeDialog';
 import LoadingScreen from './components/LoadingScreen';
 import AuthScreen from './components/AuthScreen';
 
@@ -28,9 +29,12 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
+  
+  // Dialog States
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
   const [sessionToConfirmDelete, setSessionToConfirmDelete] = useState<{ id: string, title: string } | null>(null);
   const [isLogoutConfirmationOpen, setIsLogoutConfirmationOpen] = useState(false);
+  const [isNameChangeOpen, setIsNameChangeOpen] = useState(false);
 
   const {
     currentMessages, setCurrentMessages,
@@ -45,7 +49,10 @@ const App: React.FC = () => {
   } = useChat(currentUser);
 
   const heartsContainerRef = useRef<HTMLDivElement>(null);
-  const userDisplayName = currentUser?.displayName || "Friend";
+
+  // Derive display name reactively
+  const userDisplayName = currentUser?.displayName || 
+    (currentUser?.email ? currentUser.email.split('@')[0] : "Friend");
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -54,6 +61,17 @@ const App: React.FC = () => {
     });
     return () => unsubscribe();
   }, []);
+
+  const handleUpdateName = async (newName: string) => {
+    if (!auth.currentUser) return;
+    try {
+      await updateProfile(auth.currentUser, { displayName: newName });
+      // Force a re-render of the current user object to update derived values
+      setCurrentUser({ ...auth.currentUser });
+    } catch (error) {
+      console.error("Failed to update profile name:", error);
+    }
+  };
 
   const handleLogout = async () => {
     if (currentUser && activeChatId) processMemory(currentUser.uid, activeChatId, currentMessages);
@@ -94,6 +112,7 @@ const App: React.FC = () => {
           setAllChatSessions(prev => prev.map(s => s.id === id ? { ...s, title } : s));
         }}
         onLogout={() => setIsLogoutConfirmationOpen(true)}
+        onRequestNameChange={() => setIsNameChangeOpen(true)}
         userName={userDisplayName} ownerUID={currentUser.uid}
       />
       <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#2E2B36] transition-all duration-300 ${(isSidebarOpen && window.innerWidth >= 768) ? 'md:ml-60' : 'ml-0'}`}>
@@ -137,6 +156,12 @@ const App: React.FC = () => {
         isOpen={isLogoutConfirmationOpen} onClose={() => setIsLogoutConfirmationOpen(false)}
         title="Log Out" message={`Are you sure you want to log out, ${userDisplayName}?`}
         onConfirm={handleLogout} confirmButtonText="Log Out"
+      />
+      <NameChangeDialog
+        isOpen={isNameChangeOpen}
+        onClose={() => setIsNameChangeOpen(false)}
+        onSave={handleUpdateName}
+        currentName={userDisplayName}
       />
     </div>
   );
