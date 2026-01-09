@@ -39,6 +39,14 @@ const auth = getAuth(firebaseApp);
 const DESIGNATED_OWNER_EMAIL = "mehtamanvi29oct@gmail.com";
 const LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY = 'surugpt_activeChatId_owner';
 
+// Safer ID generator to prevent crashes in some browser environments
+const generateId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `id-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+};
+
 const App: React.FC = () => {
   // Auth State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -48,14 +56,13 @@ const App: React.FC = () => {
   const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
   const [allChatSessions, setAllChatSessions] = useState<ChatSession[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const [globalContextSummary, setGlobalContextSummary] = useState('');
+  const [globalContextSummary] = useState('');
 
   // UI State
   const [isLoadingAiResponse, setIsLoadingAiResponse] = useState(false);
   const [isSessionsLoading, setIsSessionsLoading] = useState(true);
-  const [isMessagesLoading, setIsMessagesLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
-  const [isDesktopView, setIsDesktopView] = useState(window.innerWidth >= 768);
+  const [isDesktopView] = useState(window.innerWidth >= 768);
   const [chatReady] = useState(checkChatAvailability());
 
   // Dialog State
@@ -68,7 +75,7 @@ const App: React.FC = () => {
   const previousActiveSessionIdToProcessOnNewChatRef = useRef<string | null>(null);
 
   // Determine Display Name
-  const userDisplayName = currentUser?.email === DESIGNATED_OWNER_EMAIL 
+  const userDisplayName = currentUser?.email?.toLowerCase() === DESIGNATED_OWNER_EMAIL.toLowerCase() 
     ? "Minnie" 
     : (currentUser?.displayName || "Friend");
 
@@ -113,7 +120,6 @@ const App: React.FC = () => {
     }
 
     setActiveChatId(chatId);
-    setIsMessagesLoading(true);
     if (!isDesktopView) setIsSidebarOpen(false);
 
     try {
@@ -122,15 +128,13 @@ const App: React.FC = () => {
       setConversationContextFromAppMessages(messages, undefined, globalContextSummary);
     } catch (error) {
       console.error("Failed to load messages:", error);
-    } finally {
-      setIsMessagesLoading(false);
     }
   }, [currentUser, activeChatId, currentMessages, globalContextSummary, isDesktopView, processMemory]);
 
   const handleSendMessage = useCallback(async (text: string) => {
-    if (!currentUser) return;
+    if (!currentUser || !text.trim()) return;
     
-    // Process memory for the previous session if we were just starting a new chat but switched
+    // Process memory for the previous session if needed
     if (!activeChatId && previousActiveSessionIdToProcessOnNewChatRef.current) {
         const oldId = previousActiveSessionIdToProcessOnNewChatRef.current;
         const oldMsgs = await getMessagesForSession(currentUser.uid, oldId);
@@ -138,45 +142,50 @@ const App: React.FC = () => {
         previousActiveSessionIdToProcessOnNewChatRef.current = null;
     }
 
+    const userMessage: Message = { 
+      id: generateId(), 
+      text, 
+      sender: SenderType.USER, 
+      timestamp: new Date() 
+    };
+
     if (!activeChatId) {
       // --- STARTING A NEW CHAT ---
-      const tempMsgId = crypto.randomUUID();
-      // 1. Immediately show user message in UI with a temporary pending ID
-      const tempId = `PENDING_${crypto.randomUUID()}`;
-      setActiveChatId(tempId);
-      setCurrentMessages([{ id: tempMsgId, text, sender: SenderType.USER, timestamp: new Date() }]);
+      const tempSessionId = `PENDING_${generateId()}`;
+      setActiveChatId(tempSessionId);
+      setCurrentMessages([userMessage]);
       setIsLoadingAiResponse(true);
 
       try {
-        // 2. Initialize AI history for a fresh start
+        // 1. Reset AI state
         startNewOpenAIChatSession(undefined, globalContextSummary);
 
-        // 3. Create the session in Firestore quickly with a fallback title
+        // 2. Create the session in Firestore
         const fallbackTitle = generateFallbackTitle(text);
         const newSession = await createChatSessionInFirestore(currentUser.uid, fallbackTitle, text);
         
-        // 4. Update state with real session ID
+        // 3. Update session mapping
         setActiveChatId(newSession.id);
         setAllChatSessions(prev => [newSession, ...prev]);
         localStorage.setItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`, newSession.id);
         
-        // 5. Replace temp user message with Firestore message (or just keep it and add AI response)
+        // 4. Record real user message in Firestore
         const finalUserMsg = await addMessageToFirestore(currentUser.uid, newSession.id, { text, sender: SenderType.USER });
         setCurrentMessages([finalUserMsg]);
 
-        // 6. Start AI Response
+        // 5. Start AI stream
         await streamAiResponse(text, newSession.id);
 
-        // 7. Background: Improve the title if possible
+        // 6. Generate a better title in background
         generateChatTitle(text, currentUser.uid).then(betterTitle => {
-            if (betterTitle !== fallbackTitle) {
+            if (betterTitle && betterTitle !== fallbackTitle) {
                 updateChatSessionTitleInFirestore(currentUser.uid, newSession.id, betterTitle);
                 setAllChatSessions(prev => prev.map(s => s.id === newSession.id ? { ...s, title: betterTitle } : s));
             }
-        });
+        }).catch(e => console.warn("Title gen error:", e));
 
       } catch (error) {
-        console.error("Failed to start new chat:", error);
+        console.error("Failed to initiate new chat session:", error);
         setIsLoadingAiResponse(false);
         setActiveChatId(null);
         setCurrentMessages([]);
@@ -196,9 +205,9 @@ const App: React.FC = () => {
   const streamAiResponse = async (text: string, sessionId: string) => {
     if (!currentUser) return;
     setIsLoadingAiResponse(true);
-    const aiId = crypto.randomUUID();
+    const aiId = generateId();
     
-    // Add empty AI message placeholder
+    // Add AI placeholder message
     setCurrentMessages(prev => [...prev, { id: aiId, text: '', sender: SenderType.AI, timestamp: new Date(), feedback: null }]);
 
     let accumulated = '';
@@ -213,12 +222,12 @@ const App: React.FC = () => {
         if (accumulated.trim()) {
           await addMessageToFirestore(currentUser.uid, sessionId, { text: accumulated, sender: SenderType.AI });
         } else {
-          setCurrentMessages(prev => prev.map(m => m.id === aiId ? { ...m, text: "I'm sorry, I couldn't think of anything to say. Try again? ✨" } : m));
+          setCurrentMessages(prev => prev.map(m => m.id === aiId ? { ...m, text: "Wait, I didn't get that. Say it again? ✨" } : m));
         }
       }
     } catch (error) {
-      console.error("AI Response Error:", error);
-      setCurrentMessages(prev => prev.map(m => m.id === aiId ? { ...m, text: "Wait, I had a little hiccup! Can you try sending that again?" } : m));
+      console.error("Streaming error:", error);
+      setCurrentMessages(prev => prev.map(m => m.id === aiId ? { ...m, text: "I had a tiny glitch! Could you try sending that again?" } : m));
     } finally {
       setIsLoadingAiResponse(false);
     }
@@ -234,7 +243,6 @@ const App: React.FC = () => {
 
   const handleNewChat = () => {
     if (currentUser && activeChatId) processMemory(currentUser.uid, activeChatId, currentMessages);
-    // Reset AI service context for the new chat
     startNewOpenAIChatSession(undefined, globalContextSummary);
     setActiveChatId(null);
     setCurrentMessages([]);
@@ -256,6 +264,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!activeChatId && currentMessages.length === 0 && heartsContainerRef.current) {
         const container = heartsContainerRef.current;
+        const color = currentUser?.email?.toLowerCase() === DESIGNATED_OWNER_EMAIL.toLowerCase() ? '#FF8DC7' : '#FFD1DC';
         for (let i = 0; i < 15; i++) {
             const heart = document.createElement('span');
             heart.className = 'heart-float';
@@ -263,11 +272,7 @@ const App: React.FC = () => {
             heart.style.left = `${Math.random() * 100}%`;
             heart.style.animationDuration = `${5 + Math.random() * 5}s`;
             heart.style.animationDelay = `${Math.random() * 5}s`;
-            if (currentUser?.email === DESIGNATED_OWNER_EMAIL) {
-               heart.style.color = '#FF8DC7';
-            } else {
-               heart.style.color = '#FFD1DC';
-            }
+            heart.style.color = color;
             container.appendChild(heart);
         }
         return () => { container.innerHTML = ''; };
