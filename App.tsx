@@ -1,258 +1,88 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { getAuth, onAuthStateChanged, signOut, User } from 'firebase/auth';
+import React, { useState, useEffect, useRef } from 'react';
+import { getAuth, onAuthStateChanged, signOut, updateProfile, User } from 'firebase/auth';
 import { initializeApp } from 'firebase/app';
 import { firebaseConfig } from './services/firebaseConfig';
 
-import { Message, SenderType, ChatSession } from './types';
 import Header from './components/Header';
 import WelcomeMessage from './components/WelcomeMessage';
 import ChatMessageList from './components/ChatMessageList';
 import ChatInputBar from './components/ChatInputBar';
 import Sidebar from './components/Sidebar';
 import ConfirmationDialog from './components/ConfirmationDialog';
+import NameChangeDialog from './components/NameChangeDialog';
 import LoadingScreen from './components/LoadingScreen';
 import AuthScreen from './components/AuthScreen';
 
-import { generateChatTitle, generateFallbackTitle } from './services/chatTitleService';
+import { useChat } from './hooks/useChat';
+import { isChatAvailable } from './services/openAIService';
 import {
-  sendMessageStream,
-  isChatAvailable as checkChatAvailability,
-  setConversationContextFromAppMessages,
-  triggerMemoryUpdateForSession,
-  startNewOpenAIChatSession
-} from './services/openAIService';
-import {
-  getChatSessions,
-  getMessagesForSession,
-  createChatSessionInFirestore,
-  addMessageToFirestore,
-  updateMessageInFirestore,
   deleteChatSessionFromFirestore,
   updateMessageFeedbackInFirestore,
+  updateMessageInFirestore,
   updateChatSessionTitleInFirestore,
 } from './services/firebaseService';
 
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 
-const DESIGNATED_OWNER_EMAIL = "mehtamanvi29oct@gmail.com";
-const LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY = 'surugpt_activeChatId_owner';
-
-const generateId = () => {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `id-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-};
-
 const App: React.FC = () => {
-  // Auth State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-
-  // Chat/Session State
-  const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
-  const [allChatSessions, setAllChatSessions] = useState<ChatSession[]>([]);
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
-
-  // UI State
-  const [isLoadingAiResponse, setIsLoadingAiResponse] = useState(false);
-  const [isSessionsLoading, setIsSessionsLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
-  const [isDesktopView] = useState(window.innerWidth >= 768);
-  const [chatReady] = useState(checkChatAvailability());
-
-  // Dialog State
+  
+  // Dialog States
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
   const [sessionToConfirmDelete, setSessionToConfirmDelete] = useState<{ id: string, title: string } | null>(null);
   const [isLogoutConfirmationOpen, setIsLogoutConfirmationOpen] = useState(false);
+  const [isNameChangeOpen, setIsNameChangeOpen] = useState(false);
 
-  // Animation Refs
+  const {
+    currentMessages, setCurrentMessages,
+    allChatSessions, setAllChatSessions,
+    activeChatId, setActiveChatId,
+    isLoadingAiResponse,
+    isSessionsLoading,
+    sendMessage,
+    startNewChat,
+    selectChat,
+    processMemory
+  } = useChat(currentUser);
+
   const heartsContainerRef = useRef<HTMLDivElement>(null);
-  const previousActiveSessionIdToProcessOnNewChatRef = useRef<string | null>(null);
 
-  const userDisplayName = currentUser?.email?.toLowerCase() === DESIGNATED_OWNER_EMAIL.toLowerCase() 
-    ? "Minnie" 
-    : (currentUser?.displayName || "Friend");
+  // Derive display name reactively
+  const userDisplayName = currentUser?.displayName || 
+    (currentUser?.email ? currentUser.email.split('@')[0] : "Friend");
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setCurrentUser(user);
-        const storedId = localStorage.getItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${user.uid}`);
-        previousActiveSessionIdToProcessOnNewChatRef.current = storedId;
-        setIsSessionsLoading(true);
-      } else {
-        setCurrentUser(null);
-        setAllChatSessions([]);
-        setActiveChatId(null);
-        setCurrentMessages([]);
-      }
+      setCurrentUser(user);
       setIsLoadingAuth(false);
     });
     return () => unsubscribe();
   }, []);
 
-  const processMemory = useCallback(async (uid: string, sid: string, msgs: Message[]) => {
-    if (!sid || sid.startsWith("PENDING_") || msgs.length === 0) return;
+  const handleUpdateName = async (newName: string) => {
+    if (!auth.currentUser) return;
     try {
-      await triggerMemoryUpdateForSession(uid, sid, msgs);
-    } catch (e) { console.error("Memory error:", e); }
-  }, []);
-
-  const handleSelectChat = useCallback(async (chatId: string) => {
-    if (!currentUser) return;
-    if (activeChatId === chatId) {
-        if (!isDesktopView) setIsSidebarOpen(false);
-        return;
-    }
-    if (activeChatId && currentMessages.length > 0) {
-        processMemory(currentUser.uid, activeChatId, currentMessages);
-    }
-    setActiveChatId(chatId);
-    if (!isDesktopView) setIsSidebarOpen(false);
-    try {
-      const messages = await getMessagesForSession(currentUser.uid, chatId);
-      setCurrentMessages(messages);
-      setConversationContextFromAppMessages(messages);
+      await updateProfile(auth.currentUser, { displayName: newName });
+      // Force a re-render of the current user object to update derived values
+      setCurrentUser({ ...auth.currentUser });
     } catch (error) {
-      console.error("Failed to load messages:", error);
-    }
-  }, [currentUser, activeChatId, currentMessages, isDesktopView, processMemory]);
-
-  const handleSendMessage = useCallback(async (text: string) => {
-    if (!currentUser || !text.trim()) return;
-    
-    if (!activeChatId && previousActiveSessionIdToProcessOnNewChatRef.current) {
-        const oldId = previousActiveSessionIdToProcessOnNewChatRef.current;
-        const oldMsgs = await getMessagesForSession(currentUser.uid, oldId);
-        processMemory(currentUser.uid, oldId, oldMsgs);
-        previousActiveSessionIdToProcessOnNewChatRef.current = null;
-    }
-
-    const userMessage: Message = { 
-      id: generateId(), 
-      text, 
-      sender: SenderType.USER, 
-      timestamp: new Date() 
-    };
-
-    if (!activeChatId || activeChatId.startsWith("PENDING_")) {
-      // --- STARTING A NEW CHAT ---
-      if (!activeChatId) setActiveChatId(`PENDING_${generateId()}`);
-      setCurrentMessages([userMessage]);
-      setIsLoadingAiResponse(true);
-
-      try {
-        startNewOpenAIChatSession();
-        const fallbackTitle = generateFallbackTitle(text);
-        
-        let newSession;
-        try {
-          newSession = await createChatSessionInFirestore(currentUser.uid, fallbackTitle, text);
-        } catch (fsError: any) {
-          console.error("Firestore Creation Error:", fsError);
-          const errorText = fsError.message?.includes("permissions") 
-            ? "I couldn't start this chat! It looks like there's a permission issue in the database rules. 🔒"
-            : "I had a bit of trouble connecting to the database. Try sending your message again? ✨";
-            
-          setCurrentMessages(prev => [...prev, {
-            id: generateId(),
-            text: errorText,
-            sender: SenderType.AI,
-            timestamp: new Date()
-          }]);
-          setIsLoadingAiResponse(false);
-          return;
-        }
-        
-        setActiveChatId(newSession.id);
-        setAllChatSessions(prev => [newSession, ...prev]);
-        localStorage.setItem(`${LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY}_${currentUser.uid}`, newSession.id);
-        
-        const finalUserMsg = await addMessageToFirestore(currentUser.uid, newSession.id, { text, sender: SenderType.USER });
-        setCurrentMessages([finalUserMsg]);
-        await streamAiResponse(text, newSession.id);
-
-        generateChatTitle(text, currentUser.uid).then(betterTitle => {
-            if (betterTitle && betterTitle !== fallbackTitle) {
-                updateChatSessionTitleInFirestore(currentUser.uid, newSession.id, betterTitle);
-                setAllChatSessions(prev => prev.map(s => s.id === newSession.id ? { ...s, title: betterTitle } : s));
-            }
-        }).catch(e => console.warn("Title gen error:", e));
-
-      } catch (error) {
-        console.error("General app error during chat init:", error);
-        setIsLoadingAiResponse(false);
-      }
-    } else {
-      // --- CONTINUING EXISTING CHAT ---
-      try {
-        const finalMsg = await addMessageToFirestore(currentUser.uid, activeChatId, { text, sender: SenderType.USER });
-        setCurrentMessages(prev => [...prev, finalMsg]);
-        await streamAiResponse(text, activeChatId);
-      } catch (error) {
-        console.error("Failed to send message:", error);
-      }
-    }
-  }, [currentUser, activeChatId, processMemory]);
-
-  const streamAiResponse = async (text: string, sessionId: string) => {
-    if (!currentUser) return;
-    setIsLoadingAiResponse(true);
-    const aiId = generateId();
-    setCurrentMessages(prev => [...prev, { id: aiId, text: '', sender: SenderType.AI, timestamp: new Date(), feedback: null }]);
-
-    let accumulated = '';
-    try {
-      const stream = await sendMessageStream(text, currentUser.uid);
-      if (stream) {
-        for await (const chunk of stream) {
-          accumulated += chunk.text || '';
-          setCurrentMessages(prev => prev.map(m => m.id === aiId ? { ...m, text: accumulated } : m));
-        }
-        if (accumulated.trim()) {
-          await addMessageToFirestore(currentUser.uid, sessionId, { text: accumulated, sender: SenderType.AI });
-        }
-      }
-    } catch (error) {
-      console.error("Streaming error:", error);
-      setCurrentMessages(prev => prev.map(m => m.id === aiId ? { ...m, text: "I'm sorry, I had a little trouble thinking just now. Try again? ✨" } : m));
-    } finally {
-      setIsLoadingAiResponse(false);
+      console.error("Failed to update profile name:", error);
     }
   };
 
   const handleLogout = async () => {
-    if (currentUser && activeChatId) {
-        processMemory(currentUser.uid, activeChatId, currentMessages);
-    }
+    if (currentUser && activeChatId) processMemory(currentUser.uid, activeChatId, currentMessages);
     await signOut(auth);
     setIsLogoutConfirmationOpen(false);
   };
 
-  const handleNewChat = () => {
-    if (currentUser && activeChatId) processMemory(currentUser.uid, activeChatId, currentMessages);
-    startNewOpenAIChatSession();
-    setActiveChatId(null);
-    setCurrentMessages([]);
-    if (!isDesktopView) setIsSidebarOpen(false);
-  };
-
-  useEffect(() => {
-    if (currentUser && isSessionsLoading) {
-      getChatSessions(currentUser.uid).then(sessions => {
-        setAllChatSessions(sessions);
-        setIsSessionsLoading(false);
-      });
-    }
-  }, [currentUser, isSessionsLoading]);
-
   useEffect(() => {
     if (!activeChatId && currentMessages.length === 0 && heartsContainerRef.current) {
         const container = heartsContainerRef.current;
-        const isMinnie = currentUser?.email?.toLowerCase() === DESIGNATED_OWNER_EMAIL.toLowerCase();
-        const color = isMinnie ? '#FF8DC7' : '#FFD1DC';
+        container.innerHTML = '';
         for (let i = 0; i < 15; i++) {
             const heart = document.createElement('span');
             heart.className = 'heart-float';
@@ -260,56 +90,60 @@ const App: React.FC = () => {
             heart.style.left = `${Math.random() * 100}%`;
             heart.style.animationDuration = `${5 + Math.random() * 5}s`;
             heart.style.animationDelay = `${Math.random() * 5}s`;
-            heart.style.color = color;
+            heart.style.color = '#FF8DC7';
             container.appendChild(heart);
         }
-        return () => { container.innerHTML = ''; };
     }
-  }, [activeChatId, currentMessages, currentUser]);
+  }, [activeChatId, currentMessages]);
 
   if (isLoadingAuth) return <LoadingScreen />;
-  if (!currentUser) return <AuthScreen designatedOwnerEmail={DESIGNATED_OWNER_EMAIL} onAuthSuccess={() => {}} />;
+  if (!currentUser) return <AuthScreen onAuthSuccess={() => {}} />;
 
   return (
     <div className="flex flex-col h-full bg-[#2E2B36] overflow-hidden animate-fadeInUpSlightly">
+      {/* Sidebar Overlay for Mobile */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-30 md:hidden sidebar-overlay animate-fadeIn"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        onNewChat={handleNewChat}
-        chatSessions={allChatSessions}
-        activeChatId={activeChatId}
-        onSelectChat={handleSelectChat}
+        isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)}
+        onNewChat={() => { startNewChat(); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
+        chatSessions={allChatSessions} activeChatId={activeChatId}
+        onSelectChat={(id) => { selectChat(id); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
         onRequestDeleteConfirmation={(id, title) => { setSessionToConfirmDelete({ id, title }); setIsDeleteConfirmationOpen(true); }}
         onRenameChatSession={async (id, title) => {
           await updateChatSessionTitleInFirestore(currentUser.uid, id, title);
           setAllChatSessions(prev => prev.map(s => s.id === id ? { ...s, title } : s));
         }}
         onLogout={() => setIsLogoutConfirmationOpen(true)}
-        userName={userDisplayName}
-        ownerUID={currentUser.uid}
+        onRequestNameChange={() => setIsNameChangeOpen(true)}
+        userName={userDisplayName} ownerUID={currentUser.uid}
       />
-      <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#2E2B36] transition-all duration-300 ${(isSidebarOpen && isDesktopView) ? 'md:ml-60' : 'ml-0'}`}>
-        <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} onNewChat={handleNewChat} isSidebarOpen={isSidebarOpen} />
+      <div className={`relative z-10 flex flex-col flex-grow h-full bg-[#2E2B36] transition-all duration-300 ${(isSidebarOpen && window.innerWidth >= 768) ? 'md:ml-60' : 'ml-0'}`}>
+        <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} onNewChat={startNewChat} isSidebarOpen={isSidebarOpen} />
         <main className="flex-grow flex flex-col overflow-hidden bg-[#2E2B36]">
           {!activeChatId && currentMessages.length === 0 ? (
             <div className="flex-grow flex flex-col justify-center items-center p-4 relative animate-fadeInContent">
               <div ref={heartsContainerRef} className="absolute inset-0 overflow-hidden pointer-events-none" />
               <div className="relative w-full max-w-2xl">
                 <div className="absolute bottom-[calc(100%+1rem)] left-1/2 -translate-x-1/2 w-full"><WelcomeMessage /></div>
-                <ChatInputBar onSendMessage={handleSendMessage} isLoading={isLoadingAiResponse} isChatAvailable={chatReady} isCentered={true} />
+                <ChatInputBar onSendMessage={sendMessage} isLoading={isLoadingAiResponse} isChatAvailable={isChatAvailable()} isCentered={true} />
               </div>
             </div>
           ) : (
             <>
               <ChatMessageList
-                messages={currentMessages}
-                isLoadingAiResponse={isLoadingAiResponse}
+                messages={currentMessages} isLoadingAiResponse={isLoadingAiResponse}
                 onCopyText={(txt) => navigator.clipboard.writeText(txt)}
-                onRateResponse={(mid, rate) => updateMessageFeedbackInFirestore(currentUser.uid, activeChatId!.startsWith('PENDING') ? "" : activeChatId!, mid, rate)}
-                onRetryResponse={(mid, prompt) => handleSendMessage(prompt)}
-                onSaveEdit={(mid, txt) => updateMessageInFirestore(currentUser.uid, activeChatId!.startsWith('PENDING') ? "" : activeChatId!, mid, txt)}
+                onRateResponse={(mid, rate) => updateMessageFeedbackInFirestore(currentUser.uid, activeChatId!, mid, rate)}
+                onRetryResponse={(mid, prompt) => sendMessage(prompt)}
+                onSaveEdit={(mid, txt) => updateMessageInFirestore(currentUser.uid, activeChatId!, mid, txt)}
               />
-              <ChatInputBar onSendMessage={handleSendMessage} isLoading={isLoadingAiResponse} isChatAvailable={chatReady} isCentered={false} />
+              <ChatInputBar onSendMessage={sendMessage} isLoading={isLoadingAiResponse} isChatAvailable={isChatAvailable()} isCentered={false} />
             </>
           )}
         </main>
@@ -330,6 +164,12 @@ const App: React.FC = () => {
         isOpen={isLogoutConfirmationOpen} onClose={() => setIsLogoutConfirmationOpen(false)}
         title="Log Out" message={`Are you sure you want to log out, ${userDisplayName}?`}
         onConfirm={handleLogout} confirmButtonText="Log Out"
+      />
+      <NameChangeDialog
+        isOpen={isNameChangeOpen}
+        onClose={() => setIsNameChangeOpen(false)}
+        onSave={handleUpdateName}
+        currentName={userDisplayName}
       />
     </div>
   );

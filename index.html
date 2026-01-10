@@ -120,6 +120,21 @@
     .animate-fadeInSlideUp {
       animation: fadeInSlideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
+
+    /* Chat Title Generation Animation */
+    @keyframes titleSlideIn {
+      from {
+        opacity: 0;
+        transform: translateX(-5px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+    .animate-titleUpdate {
+      animation: titleSlideIn 0.4s ease-out forwards;
+    }
     
     /* Blinking animation for text cursor */
     @keyframes blink {
@@ -272,7 +287,9 @@
     "@vercel/node": "https://esm.sh/@vercel/node@^5.1.16",
     "openai": "https://esm.sh/openai@^4.103.0",
     "@google/genai": "https://esm.sh/@google/genai@^1.0.1",
-    "firebase-admin/": "https://esm.sh/firebase-admin@^13.4.0/"
+    "firebase-admin/": "https://esm.sh/firebase-admin@^13.4.0/",
+    "path": "https://esm.sh/path@^0.12.7",
+    "vite": "https://esm.sh/vite@^7.3.1"
   }
 }
 </script>
