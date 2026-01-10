@@ -7,7 +7,7 @@ A personal chat interface built with React and TypeScript, featuring a long-term
 ## The Project
 Most AI wrappers are just pass-throughs to an API. With SuruGPT, I wanted to focus on Memory Pipelining: **Summarization** -> **Vector Embeddings** -> **Storage** -> **Context Retrieval** 
 
-I built this to explore how to give an LLM a "memory" of past interactions without bloating every single request with the entire chat history. Thus, vector embeddings are generated stored, and can be retrieved using each chat session's summary. 
+I built a custom **RAG (Retrieval-Augmented Generation)** pipeline that leverages vector search to inject relevant long-term memories into the model's context window, allowing for meaningful interactions.
 
 ## Technical Highlights
 
