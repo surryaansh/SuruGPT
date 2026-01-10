@@ -1,6 +1,6 @@
 # SuruGPT
 
-A personal RAG-based chat interface built with React and TypeScript, featuring a long-term memory system powered by vector embeddings and a customized "best friend" persona.
+A personal RAG-based chat interface built with React and TypeScript, featuring a long-term memory system powered by vector embeddings and a customized persona.
 
 **Live Demo:** [https://surugpt.com](https://surugpt.com)
 
