@@ -5,7 +5,8 @@ A personal chat interface built with React and TypeScript, featuring a long-term
 **Live Demo:** [https://surugpt.com](https://surugpt.com)
 
 ## The Project
-Most AI wrappers are just pass-throughs to an API. With SuruGPT, I wanted to focus on Memory Pipelining: **Summarization** -> **Vector Embeddings** -> **Storage** -> **Context Retrieval** 
+Most AI wrappers are just pass-throughs to an API. 
+With SuruGPT, I wanted to focus on RAG Memory Pipelining: **Summarization** -> **Vector Embeddings** -> **Storage** -> **Context Retrieval using Cosine Similarity** 
 
 I built a custom **RAG (Retrieval-Augmented Generation)** pipeline that leverages vector search to inject relevant long-term memories into the model's context window, allowing for meaningful interactions.
 
