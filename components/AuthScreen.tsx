@@ -1,21 +1,18 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
-  updateProfile,
-  fetchSignInMethodsForEmail 
+  updateProfile
 } from 'firebase/auth';
 
 interface AuthScreenProps {
   onAuthSuccess: () => void;
-  designatedOwnerEmail: string;
 }
 
 type AuthView = 'welcome' | 'login-email' | 'login-password' | 'signup-name' | 'signup-email' | 'signup-password';
 
-const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, designatedOwnerEmail }) => {
+const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess }) => {
   const [view, setView] = useState<AuthView>('welcome');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,13 +23,13 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, designatedOwnerE
 
   const auth = getAuth();
 
-  // Reset error when switching views
   useEffect(() => {
     setError(null);
   }, [view]);
 
   const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     if (!email.includes('@')) {
         setError("Please enter a valid email.");
         return;
@@ -48,10 +45,14 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, designatedOwnerE
       await signInWithEmailAndPassword(auth, email, password);
       onAuthSuccess();
     } catch (err: any) {
-      if (err.code === 'auth/wrong-password') {
-        setError('Incorrect password. Try again?');
-      } else if (err.code === 'auth/user-not-found') {
+      console.error("Login error code:", err.code);
+      if (err.code === 'auth/user-not-found') {
         setError('No account found with this email.');
+      } else if (err.code === 'auth/wrong-password') {
+        setError('Incorrect password. Try again?');
+      } else if (err.code === 'auth/invalid-credential') {
+        // Modern Firebase returns this for both wrong password AND missing user
+        setError('Invalid credentials. Double check your email or sign up!');
       } else {
         setError('Something went wrong. Please check your credentials.');
       }
@@ -77,7 +78,11 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, designatedOwnerE
       await updateProfile(userCredential.user, { displayName: displayName });
       onAuthSuccess();
     } catch (err: any) {
-      setError(err.message || 'Failed to create account.');
+      if (err.code === 'auth/email-already-in-use') {
+        setError('This email is already registered. Try logging in!');
+      } else {
+        setError(err.message || 'Failed to create account.');
+      }
     } finally {
       setLoading(false);
     }
@@ -85,24 +90,20 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, designatedOwnerE
 
   const containerClass = "flex flex-col items-center justify-center h-screen bg-[#2E2B36] text-[#EAE6F0] p-6 text-center";
   const cardClass = "w-full max-w-sm bg-[#393641] p-8 rounded-3xl shadow-2xl border border-[#4A4754] animate-scaleIn relative overflow-hidden";
-  const inputClass = "appearance-none block w-full px-5 py-3.5 bg-[#4A4754] border border-[#5A5666] rounded-2xl shadow-sm placeholder-[#A09CB0] focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] text-[#EAE6F0] transition-all text-sm mb-4";
+  // text-base (16px) is required to prevent iOS zoom
+  const inputClass = "appearance-none block w-full px-5 py-3.5 bg-[#4A4754] border border-[#5A5666] rounded-2xl shadow-sm placeholder-[#A09CB0] focus:outline-none focus:ring-2 focus:ring-[#FF8DC7] text-[#EAE6F0] transition-all text-base mb-4";
   const buttonClass = "w-full flex justify-center items-center py-3.5 px-4 rounded-2xl text-sm font-semibold text-white bg-[#FF8DC7] hover:bg-opacity-90 disabled:opacity-50 shadow-lg transition-all active:scale-95";
   const backButtonClass = "mt-6 text-xs text-[#A09CB0] hover:text-[#FF8DC7] transition-colors cursor-pointer";
-
-  const isMinnie = email.toLowerCase() === designatedOwnerEmail.toLowerCase();
 
   return (
     <div className={containerClass}>
       <div className={cardClass}>
-        {/* Decorative background blur */}
         <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#FF8DC7] opacity-10 blur-3xl rounded-full"></div>
         <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-[#FF8DC7] opacity-10 blur-3xl rounded-full"></div>
 
-        {/* Giphy Header */}
         <div className="relative w-32 h-32 mx-auto mb-6">
           {view === 'welcome' && <iframe src="https://giphy.com/embed/eveEChlJE0YhdeVXEj" width="100%" height="100%" style={{ border: '0' }} className="giphy-embed pointer-events-none" allowFullScreen title="Welcome" />}
-          {view.startsWith('signup') && <iframe src="https://giphy.com/embed/xX1PKy7MVU4xUvQ7bL" width="100%" height="100%" style={{ border: '0' }} className="giphy-embed pointer-events-none" allowFullScreen title="Signup" />}
-          {view.startsWith('login') && <iframe src="https://giphy.com/embed/xX1PKy7MVU4xUvQ7bL" width="100%" height="100%" style={{ border: '0' }} className="giphy-embed pointer-events-none" allowFullScreen title="Login" />}
+          {(view.startsWith('signup') || view.startsWith('login')) && <iframe src="https://giphy.com/embed/xX1PKy7MVU4xUvQ7bL" width="100%" height="100%" style={{ border: '0' }} className="giphy-embed pointer-events-none" allowFullScreen title="Auth" />}
           <div className="absolute inset-0 z-10"></div>
         </div>
 
@@ -140,9 +141,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, designatedOwnerE
 
         {view === 'login-password' && (
           <form onSubmit={handleLogin} className="animate-fadeInContent">
-            <h2 className="text-xl font-bold mb-1">
-              {isMinnie ? 'Welcome back, Minnie!' : 'Welcome back!'}
-            </h2>
+            <h2 className="text-xl font-bold mb-1">Welcome back!</h2>
             <p className="text-xs text-[#A09CB0] mb-6">Enter your password to unlock Suru.</p>
             <input 
               type="password" 
