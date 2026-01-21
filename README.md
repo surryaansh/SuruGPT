@@ -38,5 +38,3 @@ Handling the "end of a session" in a web app is tricky. I used the `navigator.se
 *   **Race Conditions:** Managing the transition between "Pending" session IDs and "Real" Firestore IDs during the first message stream.
 *   **Streaming UX:** Implementing a smooth typing effect and auto-scrolling that doesn't feel jumpy for the user.
 *   **Secure Admin Operations:** Moving deletion and renaming logic to the backend using the Firebase Admin SDK to ensure users can only modify their own data.
-
----
