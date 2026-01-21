@@ -40,4 +40,3 @@ Handling the "end of a session" in a web app is tricky. I used the `navigator.se
 *   **Secure Admin Operations:** Moving deletion and renaming logic to the backend using the Firebase Admin SDK to ensure users can only modify their own data.
 
 ---
-*Created by a soon-to-be grad looking for new opportunities. Feel free to reach out!*
