@@ -17,8 +17,6 @@ import { useChat } from './hooks/useChat';
 import { isChatAvailable } from './services/openAIService';
 import {
   deleteChatSessionFromFirestore,
-  updateMessageFeedbackInFirestore,
-  updateMessageInFirestore,
   updateChatSessionTitleInFirestore,
 } from './services/firebaseService';
 
@@ -45,7 +43,9 @@ const App: React.FC = () => {
     sendMessage,
     startNewChat,
     selectChat,
-    processMemory
+    processMemory,
+    updateFeedback,
+    editMessage
   } = useChat(currentUser);
 
   const heartsContainerRef = useRef<HTMLDivElement>(null);
@@ -139,9 +139,9 @@ const App: React.FC = () => {
               <ChatMessageList
                 messages={currentMessages} isLoadingAiResponse={isLoadingAiResponse}
                 onCopyText={(txt) => navigator.clipboard.writeText(txt)}
-                onRateResponse={(mid, rate) => updateMessageFeedbackInFirestore(currentUser.uid, activeChatId!, mid, rate)}
+                onRateResponse={updateFeedback}
                 onRetryResponse={(mid, prompt) => sendMessage(prompt)}
-                onSaveEdit={(mid, txt) => updateMessageInFirestore(currentUser.uid, activeChatId!, mid, txt)}
+                onSaveEdit={editMessage}
               />
               <ChatInputBar onSendMessage={sendMessage} isLoading={isLoadingAiResponse} isChatAvailable={isChatAvailable()} isCentered={false} />
             </>

@@ -14,7 +14,9 @@ import {
   getMessagesForSession,
   createChatSessionInFirestore,
   addMessageToFirestore,
-  updateChatSessionTitleInFirestore
+  updateChatSessionTitleInFirestore,
+  updateMessageInFirestore,
+  updateMessageFeedbackInFirestore
 } from '../services/firebaseService';
 
 const LOCAL_STORAGE_ACTIVE_CHAT_ID_KEY = 'surugpt_activeChatId_owner';
@@ -87,6 +89,42 @@ export function useChat(currentUser: User | null) {
     }
   };
 
+  const updateFeedback = useCallback(async (messageId: string, rating: 'good' | 'bad' | null) => {
+    if (!currentUser || !activeChatId) return;
+    
+    // Update local state first for instant feedback
+    setCurrentMessages(prev => prev.map(m => m.id === messageId ? { ...m, feedback: rating } : m));
+    
+    try {
+      await updateMessageFeedbackInFirestore(currentUser.uid, activeChatId, messageId, rating);
+    } catch (e) {
+      console.error("Feedback error:", e);
+    }
+  }, [currentUser, activeChatId]);
+
+  const editMessage = useCallback(async (messageId: string, newText: string) => {
+    if (!currentUser || !activeChatId || !newText.trim()) return;
+
+    // Find the index of the message being edited
+    const msgIndex = currentMessages.findIndex(m => m.id === messageId);
+    if (msgIndex === -1) return;
+
+    // Standard AI interaction: truncating conversation from the edit point
+    const truncatedMessages = currentMessages.slice(0, msgIndex + 1);
+    const updatedUserMsg = { ...truncatedMessages[msgIndex], text: newText };
+    truncatedMessages[msgIndex] = updatedUserMsg;
+
+    setCurrentMessages(truncatedMessages);
+    setConversationContextFromAppMessages(truncatedMessages);
+
+    try {
+      await updateMessageInFirestore(currentUser.uid, activeChatId, messageId, newText);
+      await streamAiResponse(newText, activeChatId, currentUser.uid);
+    } catch (e) {
+      console.error("Edit message error:", e);
+    }
+  }, [currentUser, activeChatId, currentMessages]);
+
   const sendMessage = useCallback(async (text: string) => {
     if (!currentUser || !text.trim()) return;
 
@@ -145,6 +183,8 @@ export function useChat(currentUser: User | null) {
     sendMessage,
     startNewChat,
     selectChat,
-    processMemory
+    processMemory,
+    updateFeedback,
+    editMessage
   };
 }
