@@ -105,11 +105,9 @@ export function useChat(currentUser: User | null) {
   const editMessage = useCallback(async (messageId: string, newText: string) => {
     if (!currentUser || !activeChatId || !newText.trim()) return;
 
-    // Find the index of the message being edited
     const msgIndex = currentMessages.findIndex(m => m.id === messageId);
     if (msgIndex === -1) return;
 
-    // Standard AI interaction: truncating conversation from the edit point
     const truncatedMessages = currentMessages.slice(0, msgIndex + 1);
     const updatedUserMsg = { ...truncatedMessages[msgIndex], text: newText };
     truncatedMessages[msgIndex] = updatedUserMsg;
@@ -128,11 +126,17 @@ export function useChat(currentUser: User | null) {
   const sendMessage = useCallback(async (text: string) => {
     if (!currentUser || !text.trim()) return;
 
+    // CRITICAL FIX: Handle legacy session memory processing WITHOUT awaiting it.
+    // If getMessagesForSession hangs (e.g. permission issue on old data), it won't block the new chat.
     if (!activeChatId && previousActiveSessionIdToProcessOnNewChatRef.current) {
         const oldId = previousActiveSessionIdToProcessOnNewChatRef.current;
-        const oldMsgs = await getMessagesForSession(currentUser.uid, oldId);
-        processMemory(currentUser.uid, oldId, oldMsgs);
         previousActiveSessionIdToProcessOnNewChatRef.current = null;
+        
+        getMessagesForSession(currentUser.uid, oldId).then(oldMsgs => {
+            if (oldMsgs && oldMsgs.length > 0) {
+                processMemory(currentUser.uid, oldId, oldMsgs);
+            }
+        }).catch(e => console.warn("[useChat] Legacy cleanup background failed:", e));
     }
 
     const userMessage: Message = { id: generateId(), text, sender: SenderType.USER, timestamp: new Date() };
@@ -159,7 +163,10 @@ export function useChat(currentUser: User | null) {
             setAllChatSessions(prev => prev.map(s => s.id === newSession.id ? { ...s, title: betterTitle } : s));
           }
         });
-      } catch (e) { setIsLoadingAiResponse(false); }
+      } catch (e) { 
+        console.error("New chat creation error:", e);
+        setIsLoadingAiResponse(false); 
+      }
     } else {
       const finalMsg = await addMessageToFirestore(currentUser.uid, activeChatId, { text, sender: SenderType.USER });
       setCurrentMessages(prev => [...prev, finalMsg]);
