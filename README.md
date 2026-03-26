@@ -13,7 +13,7 @@ It combines:
 - An **intent-driven agent layer** for decision-making  
 - A **custom RAG pipeline** for long-term memory  
 
-This allows the system to retrieve, filter, and inject relevant past context dynamically, enabling continuity across sessions without exceeding token limits.
+This allows the system to retrieve, filter, and inject relevant past context dynamically, enabling continuity across sessions without exceeding token limits and giving context everytime.
 
 **Core flow:**
 
@@ -34,8 +34,6 @@ This ensures responses are not just generated—but **orchestrated**.
 
 ### RAG Memory System
 
-RAG is a core part of the system, not an add-on.
-
 A custom pipeline enables long-term memory:
 
 - **Summarization:** Conversations are compressed at session end  
@@ -48,10 +46,7 @@ Retrieved memories are:
 - Filtered to avoid noise  
 - Injected into the prompt  
 
-This enables:
-- Continuity across sessions  
-- Efficient token usage  
-- Context grounded in past interactions  
+This enables continuity across sessions and efficient token usage  
 
 ## System Details
 
@@ -61,7 +56,7 @@ This enables:
 
 ## Tech Stack
 
-- **Frontend:** React 19, TypeScript, Tailwind CSS  
+- **Frontend:** React, TypeScript, Tailwind CSS  
 - **Backend:** Vercel Serverless Functions (Node.js)  
 - **Database & Auth:** Firebase Firestore, Firebase Auth  
 - **AI:**
