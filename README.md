@@ -7,7 +7,7 @@ Built with React and TypeScript.
 
 ## Overview
 
-Most AI apps are simple API wrappers. SuruGPT is designed as a system where **reasoning and memory work together**.
+Most AI chatbots are simple API wrappers. SuruGPT is designed as a system where **reasoning and memory work together**.
 
 It combines:
 - An **intent-driven agent layer** for decision-making  
