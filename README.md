@@ -1,40 +1,75 @@
 # SuruGPT
 
-Its not just any other chatbot. This is a RAG-based chat interface featuring a long-term memory system powered by vector embeddings and a customized persona.
-Built with React and Typescript.
+SuruGPT is an agentic GenAI system built around a tightly integrated **agent layer + RAG-based memory system** for context-aware, multi-step interactions.
 
+Built with React and TypeScript.  
 **Live Demo:** [https://surugpt.com](https://surugpt.com)
 
-## The Project
-Most AI wrappers are just pass-throughs to an API. With SuruGPT, I wanted to focus on Memory Pipelining:
+## Overview
 
-**Summarization** -> **Vector Embeddings** -> **Storage** -> **Context Retrieval using Cosine Similarity** 
+Most AI apps are simple API wrappers. SuruGPT is designed as a system where **reasoning and memory work together**.
 
-I built a custom **RAG (Retrieval-Augmented Generation)** pipeline that leverages vector search to inject relevant long-term memories into the model's context window, allowing for meaningful interactions.
+It combines:
+- An **intent-driven agent layer** for decision-making  
+- A **custom RAG pipeline** for long-term memory  
 
-## Technical Highlights
+This allows the system to retrieve, filter, and inject relevant past context dynamically, enabling continuity across sessions without exceeding token limits.
 
-### 🧠 Contextual Memory (Vector Search)
-To keep the AI's "memory" relevant without hitting token limits, I implemented a retrieval system using OpenAI's `text-embedding-3-small` model. 
-*   **Summarization:** When a session ends (or the tab closes), a serverless function generates a compact summary of the chat.
-*   **Vector Storage:** These summaries are stored as 1536-dimensional vectors in Firestore.
-*   **Retrieval:** When you send a new message, the app calculates the cosine similarity between your current query and past summaries to "remember" the most relevant context.
+**Core flow:**
 
-### ⚡ Persistence & Beacon API
-Handling the "end of a session" in a web app is tricky. I used the `navigator.sendBeacon` API to ensure that even if a user closes the tab abruptly, the current conversation is summarized and saved to long-term memory without delaying the UI.
+`User Input` → `Agent Reasoning` → `RAG Retrieval` → `Context Injection` → `Response`
 
-### 🎨 Custom UI/UX
-*   **Persona-Driven Design:** The UI uses a deep purple-gray and pink accent theme to match the "bratty/tease-y best friend" personality defined in the system prompts.
-*   **Smooth State Management:** Used custom hooks (`useChat`) to manage complex states like streaming chunks, session transitions, and optimistic UI updates for chat titles.
-*   **Responsive:** Fully mobile-friendly sidebar and input logic.
+## Architecture
+
+### Agent Layer
+
+The agent layer controls how the system thinks and acts:
+
+- Interprets user intent  
+- Decides when and how to retrieve memory  
+- Structures context before generation  
+- Uses JSON-structured outputs for controlled behavior and future tool invocation  
+
+This ensures responses are not just generated—but **orchestrated**.
+
+### RAG Memory System
+
+RAG is a core part of the system, not an add-on.
+
+A custom pipeline enables long-term memory:
+
+- **Summarization:** Conversations are compressed at session end  
+- **Embeddings:** Generated using `text-embedding-3-small`  
+- **Storage:** Stored as vectors in Firestore  
+- **Retrieval:** Cosine similarity used to fetch relevant past context  
+
+Retrieved memories are:
+- Ranked for relevance  
+- Filtered to avoid noise  
+- Injected into the prompt  
+
+This enables:
+- Continuity across sessions  
+- Efficient token usage  
+- Context grounded in past interactions  
+
+## System Details
+
+- Uses `navigator.sendBeacon` to persist memory on tab close without blocking UI  
+- Handles race conditions between temporary and persisted session IDs  
+- Streams responses with stable UI updates using custom state management (`useChat`)  
 
 ## Tech Stack
-*   **Frontend:** React 19, TypeScript, Tailwind CSS.
-*   **Backend:** Vercel Serverless Functions (Node.js).
-*   **Database & Auth:** Firebase Firestore (Admin SDK for secure transactions) and Firebase Auth.
-*   **AI:** OpenAI API (GPT-4o-mini for chat, Text-Embeddings-3 for memory).
 
-## Key Engineering Challenges I Solved
-*   **Race Conditions:** Managing the transition between "Pending" session IDs and "Real" Firestore IDs during the first message stream.
-*   **Streaming UX:** Implementing a smooth typing effect and auto-scrolling that doesn't feel jumpy for the user.
-*   **Secure Admin Operations:** Moving deletion and renaming logic to the backend using the Firebase Admin SDK to ensure users can only modify their own data.
+- **Frontend:** React 19, TypeScript, Tailwind CSS  
+- **Backend:** Vercel Serverless Functions (Node.js)  
+- **Database & Auth:** Firebase Firestore, Firebase Auth  
+- **AI:**
+  - GPT-4o-mini (generation)
+  - text-embedding-3-small (embeddings)
+
+## Key Challenges
+
+- Synchronizing session state during streaming  
+- Maintaining high-signal memory retrieval without context pollution  
+- Ensuring reliable persistence in a browser environment
